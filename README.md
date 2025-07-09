@@ -36,50 +36,95 @@ pip install slide
 ### Using Tyler
 
 ```python
+import asyncio
 from tyler import Agent
+from narrator import Thread, Message
 
-# Create an AI agent
-agent = Agent(
-    name="MyAgent",
-    instructions="You are a helpful assistant"
-)
+async def main():
+    # Create an AI agent
+    agent = Agent(
+        name="MyAgent",
+        purpose="You are a helpful assistant"
+    )
 
-# Chat with the agent
-response = agent.chat("Hello, how are you?")
-print(response)
+    # Create a thread and add a message
+    thread = Thread()
+    thread.add_message(Message(role="user", content="Hello, how are you?"))
+
+    # Process the thread
+    updated_thread, new_messages = await agent.go(thread)
+    
+    # Print the assistant's response
+    for message in new_messages:
+        if message.role == "assistant":
+            print(f"Assistant: {message.content}")
+
+asyncio.run(main())
 ```
 
 ### Using The Narrator
 
 ```python
-from narrator import ThreadStore
+import asyncio
+from narrator import ThreadStore, Thread, Message
 
-# Create a thread store for conversation management
-store = ThreadStore()
+async def main():
+    # Create a thread store for conversation management
+    store = await ThreadStore.create()
 
-# Save and retrieve conversations
-thread = store.create_thread("user123")
-thread.add_message("Hello!", role="user")
+    # Create and save a thread
+    thread = Thread(title="My Conversation")
+    thread.add_message(Message(role="user", content="Hello!"))
+    thread.add_message(Message(role="assistant", content="Hi there!"))
+    
+    # Save the thread
+    await store.save(thread)
+    
+    # Retrieve the thread
+    retrieved_thread = await store.get(thread.id)
+    print(f"Thread: {retrieved_thread.title}")
+    print(f"Messages: {len(retrieved_thread.messages)}")
+
+asyncio.run(main())
 ```
 
 ### Using Both Together
 
 ```python
+import asyncio
 from tyler import Agent
-from narrator import ThreadStore
+from narrator import ThreadStore, Thread, Message
 
-# Create persistent storage
-store = ThreadStore()
+async def main():
+    # Create persistent storage
+    store = await ThreadStore.create("sqlite+aiosqlite:///conversations.db")
 
-# Create an agent with conversation history
-agent = Agent(
-    name="PersistentAgent",
-    thread_store=store
-)
+    # Create an agent with persistent storage
+    agent = Agent(
+        name="PersistentAgent",
+        purpose="You are a helpful assistant with memory",
+        thread_store=store
+    )
 
-# Chat with persistent memory
-response = agent.chat("Remember this: my name is John")
-response = agent.chat("What's my name?")  # Will remember "John"
+    # Create a thread and add a message
+    thread = Thread(title="Persistent Conversation")
+    thread.add_message(Message(role="user", content="Remember this: my name is John"))
+    
+    # Process the first message
+    updated_thread, new_messages = await agent.go(thread)
+    
+    # Add another message to the same thread
+    thread.add_message(Message(role="user", content="What's my name?"))
+    
+    # Process the second message (will remember "John")
+    final_thread, final_messages = await agent.go(thread)
+    
+    # Print the assistant's response
+    for message in final_messages:
+        if message.role == "assistant":
+            print(f"Assistant: {message.content}")
+
+asyncio.run(main())
 ```
 
 ## Project Structure
