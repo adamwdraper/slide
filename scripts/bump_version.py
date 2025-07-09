@@ -21,9 +21,27 @@ def update_version_in_file(file_path, current_version, new_version, pattern=None
         print(f"Updated version in {file_path}")
     return True
 
-def bump_version(version_type='patch', dry_run=False):
+def bump_version(package_name, version_type='patch', dry_run=False):
+    # Validate package name
+    valid_packages = ['tyler', 'narrator', 'space-monkey']
+    if package_name not in valid_packages:
+        print(f"Package must be one of: {', '.join(valid_packages)}")
+        sys.exit(1)
+    
+    # Convert space-monkey to space_monkey for file path
+    package_dir = package_name.replace('-', '_')
+    
     pyproject_path = Path('pyproject.toml')
-    init_path = Path('tyler/__init__.py')
+    init_path = Path(f'{package_dir}/__init__.py')
+    
+    # Validate paths exist
+    if not pyproject_path.exists():
+        print(f"Could not find pyproject.toml in current directory")
+        sys.exit(1)
+    
+    if not init_path.exists():
+        print(f"Could not find {init_path}")
+        sys.exit(1)
     
     # Find current version in pyproject.toml
     content = pyproject_path.read_text()
@@ -62,11 +80,18 @@ def bump_version(version_type='patch', dry_run=False):
     return new_version
 
 if __name__ == '__main__':
+    if len(sys.argv) < 2:
+        print("Usage: python bump_version.py <package> [version_type] [--dry-run]")
+        print("Available packages: tyler, narrator, space-monkey")
+        print("Version types: major, minor, patch (default: patch)")
+        sys.exit(1)
+    
+    package_name = sys.argv[1]
     version_type = 'patch'
     dry_run = False
     
-    # Parse arguments
-    args = sys.argv[1:]
+    # Parse remaining arguments
+    args = sys.argv[2:]
     if '--dry-run' in args:
         dry_run = True
         args.remove('--dry-run')
@@ -78,6 +103,6 @@ if __name__ == '__main__':
         print("Version type must be one of: major, minor, patch")
         sys.exit(1)
         
-    new_version = bump_version(version_type, dry_run)
+    new_version = bump_version(package_name, version_type, dry_run)
     if dry_run:
         print(new_version)  # Only print version number for dry run 
