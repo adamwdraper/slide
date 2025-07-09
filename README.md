@@ -1,4 +1,4 @@
-# Slide 🎯
+# Slide 🐧
 
 A comprehensive toolkit for building AI agents with powerful conversation management and file storage capabilities.
 
