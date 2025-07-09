@@ -1,0 +1,18 @@
+{
+  "id": "api-reference/documents",
+  "title": "Documents Tools",
+  "description": "The Documents module provides specialized tools for processing and analyzing structured document formats like PDFs, CSVs, and JSON files.",
+  "source": "@site/docs/api-reference/documents.md",
+  "sourceDirName": "api-reference",
+  "slug": "/api-reference/documents",
+  "permalink": "/tyler/api-reference/documents",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/adamwdraper/tyler/tree/main/docs/docs/api-reference/documents.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 5,
+  "frontMatter": {
+    "sidebar_position": 5
+  }
+}

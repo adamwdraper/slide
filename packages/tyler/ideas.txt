@@ -1,0 +1,16 @@
+@pytest.mark.asyncio
+async def test_parallel_tool_calls():
+    """Test handling multiple tool calls that could be executed in parallel"""
+    # Test case where a single response returns multiple tool calls
+    # Verify they're processed in the correct order
+    # Ensure metrics are tracked properly for parallel execution
+
+@pytest.mark.asyncio
+async def test_tool_call_validation():
+    """Test validation of tool call arguments and handling of invalid arguments"""
+    # Test malformed tool call arguments
+    # Test missing required arguments
+    # Test type mismatches in arguments
+
+
+

@@ -1,0 +1,27 @@
+{
+  "id": "quickstart",
+  "title": "Quickstart",
+  "description": "This guide will help you install Tyler and create your first AI agent.",
+  "source": "@site/docs/quickstart.md",
+  "sourceDirName": ".",
+  "slug": "/quickstart",
+  "permalink": "/tyler/quickstart",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/adamwdraper/tyler/tree/main/docs/docs/quickstart.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 2,
+  "frontMatter": {
+    "sidebar_position": 2
+  },
+  "sidebar": "documentationSidebar",
+  "previous": {
+    "title": "Meet Tyler",
+    "permalink": "/tyler/"
+  },
+  "next": {
+    "title": "How Tyler works",
+    "permalink": "/tyler/how-it-works"
+  }
+}

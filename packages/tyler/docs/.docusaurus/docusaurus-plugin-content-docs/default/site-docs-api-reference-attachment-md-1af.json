@@ -1,0 +1,27 @@
+{
+  "id": "api-reference/attachment",
+  "title": "Attachment API",
+  "description": "The Attachment class represents files attached to messages in Tyler. It handles file content storage, processing, and retrieval, supporting both direct content storage and external file storage backends.",
+  "source": "@site/docs/api-reference/attachment.md",
+  "sourceDirName": "api-reference",
+  "slug": "/api-reference/attachment",
+  "permalink": "/tyler/api-reference/attachment",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/adamwdraper/tyler/tree/main/docs/docs/api-reference/attachment.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 4,
+  "frontMatter": {
+    "sidebar_position": 4
+  },
+  "sidebar": "referenceSidebar",
+  "previous": {
+    "title": "Message API",
+    "permalink": "/tyler/api-reference/message"
+  },
+  "next": {
+    "title": "FileStore API",
+    "permalink": "/tyler/api-reference/file-store"
+  }
+}

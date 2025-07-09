@@ -1,0 +1,217 @@
+{
+  "docusaurus-plugin-content-docs": {
+    "default": {
+      "path": "/tyler/",
+      "versions": [
+        {
+          "name": "current",
+          "label": "Next",
+          "isLast": true,
+          "path": "/tyler/",
+          "mainDocId": "intro",
+          "docs": [
+            {
+              "id": "api-reference/agent",
+              "path": "/tyler/api-reference/agent",
+              "sidebar": "referenceSidebar"
+            },
+            {
+              "id": "api-reference/attachment",
+              "path": "/tyler/api-reference/attachment",
+              "sidebar": "referenceSidebar"
+            },
+            {
+              "id": "api-reference/file-store",
+              "path": "/tyler/api-reference/file-store",
+              "sidebar": "referenceSidebar"
+            },
+            {
+              "id": "api-reference/index",
+              "path": "/tyler/api-reference/"
+            },
+            {
+              "id": "api-reference/mcp",
+              "path": "/tyler/api-reference/mcp",
+              "sidebar": "referenceSidebar"
+            },
+            {
+              "id": "api-reference/message",
+              "path": "/tyler/api-reference/message",
+              "sidebar": "referenceSidebar"
+            },
+            {
+              "id": "api-reference/registry",
+              "path": "/tyler/api-reference/registry"
+            },
+            {
+              "id": "api-reference/thread",
+              "path": "/tyler/api-reference/thread",
+              "sidebar": "referenceSidebar"
+            },
+            {
+              "id": "api-reference/thread-store",
+              "path": "/tyler/api-reference/thread-store",
+              "sidebar": "referenceSidebar"
+            },
+            {
+              "id": "built-in-tools",
+              "path": "/tyler/built-in-tools"
+            },
+            {
+              "id": "category/api-reference",
+              "path": "/tyler/category/api-reference"
+            },
+            {
+              "id": "category/examples",
+              "path": "/tyler/category/examples"
+            },
+            {
+              "id": "chat-with-tyler",
+              "path": "/tyler/chat-with-tyler",
+              "sidebar": "documentationSidebar"
+            },
+            {
+              "id": "configuration",
+              "path": "/tyler/configuration",
+              "sidebar": "referenceSidebar"
+            },
+            {
+              "id": "core-concepts",
+              "path": "/tyler/core-concepts",
+              "sidebar": "documentationSidebar"
+            },
+            {
+              "id": "examples/database-storage",
+              "path": "/tyler/examples/database-storage",
+              "sidebar": "documentationSidebar"
+            },
+            {
+              "id": "examples/file-storage",
+              "path": "/tyler/examples/file-storage",
+              "sidebar": "documentationSidebar"
+            },
+            {
+              "id": "examples/full-configuration",
+              "path": "/tyler/examples/full-configuration",
+              "sidebar": "documentationSidebar"
+            },
+            {
+              "id": "examples/index",
+              "path": "/tyler/examples/"
+            },
+            {
+              "id": "examples/interrupt-tools",
+              "path": "/tyler/examples/interrupt-tools",
+              "sidebar": "documentationSidebar"
+            },
+            {
+              "id": "examples/message-attachments",
+              "path": "/tyler/examples/message-attachments",
+              "sidebar": "documentationSidebar"
+            },
+            {
+              "id": "examples/streaming",
+              "path": "/tyler/examples/streaming",
+              "sidebar": "documentationSidebar"
+            },
+            {
+              "id": "examples/tools-streaming",
+              "path": "/tyler/examples/tools-streaming",
+              "sidebar": "documentationSidebar"
+            },
+            {
+              "id": "examples/using-tools",
+              "path": "/tyler/examples/using-tools",
+              "sidebar": "documentationSidebar"
+            },
+            {
+              "id": "how-it-works",
+              "path": "/tyler/how-it-works",
+              "sidebar": "documentationSidebar"
+            },
+            {
+              "id": "installation",
+              "path": "/tyler/installation"
+            },
+            {
+              "id": "intro",
+              "path": "/tyler/",
+              "sidebar": "documentationSidebar"
+            },
+            {
+              "id": "quickstart",
+              "path": "/tyler/quickstart",
+              "sidebar": "documentationSidebar"
+            },
+            {
+              "id": "tools/audio",
+              "path": "/tyler/tools/audio",
+              "sidebar": "documentationSidebar"
+            },
+            {
+              "id": "tools/command-line",
+              "path": "/tyler/tools/command-line",
+              "sidebar": "documentationSidebar"
+            },
+            {
+              "id": "tools/files",
+              "path": "/tyler/tools/files",
+              "sidebar": "documentationSidebar"
+            },
+            {
+              "id": "tools/image",
+              "path": "/tyler/tools/image",
+              "sidebar": "documentationSidebar"
+            },
+            {
+              "id": "tools/mcp",
+              "path": "/tyler/tools/mcp",
+              "sidebar": "documentationSidebar"
+            },
+            {
+              "id": "tools/notion",
+              "path": "/tyler/tools/notion",
+              "sidebar": "documentationSidebar"
+            },
+            {
+              "id": "tools/overview",
+              "path": "/tyler/tools/overview",
+              "sidebar": "documentationSidebar"
+            },
+            {
+              "id": "tools/slack",
+              "path": "/tyler/tools/slack",
+              "sidebar": "documentationSidebar"
+            },
+            {
+              "id": "tools/web",
+              "path": "/tyler/tools/web",
+              "sidebar": "documentationSidebar"
+            },
+            {
+              "id": "troubleshooting",
+              "path": "/tyler/troubleshooting",
+              "sidebar": "referenceSidebar"
+            }
+          ],
+          "draftIds": [],
+          "sidebars": {
+            "documentationSidebar": {
+              "link": {
+                "path": "/tyler/",
+                "label": "intro"
+              }
+            },
+            "referenceSidebar": {
+              "link": {
+                "path": "/tyler/configuration",
+                "label": "configuration"
+              }
+            }
+          }
+        }
+      ],
+      "breadcrumbs": true
+    }
+  }
+}

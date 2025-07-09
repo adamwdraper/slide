@@ -1,0 +1,343 @@
+/**
+ * Any CSS included here will be global. The classic template
+ * bundles Infima by default. Infima is a CSS framework designed to
+ * work well for content-centric websites.
+ */
+
+/* You can override the default Infima variables here. */
+:root {
+  --ifm-color-primary: #008080;
+  --ifm-color-primary-dark: #007373;
+  --ifm-color-primary-darker: #006666;
+  --ifm-color-primary-darkest: #005959;
+  --ifm-color-primary-light: #008D8D;
+  --ifm-color-primary-lighter: #009A9A;
+  --ifm-color-primary-lightest: #00A7A7;
+  --ifm-code-font-size: 95%;
+  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.1);
+  --ifm-h1-font-weight: 200;
+  --ifm-h2-font-weight: 200;
+  --ifm-h3-font-weight: 200;
+  --ifm-h4-font-weight: 200;
+  --ifm-h5-font-weight: 200;
+  --ifm-h6-font-weight: 200;
+  --ifm-heading-font-weight: 200;
+}
+
+/* For readability concerns, you should choose a lighter palette in dark mode. */
+[data-theme='dark'] {
+  --ifm-color-primary: #00D6D6;
+  --ifm-color-primary-dark: #00C4C4;
+  --ifm-color-primary-darker: #00B3B3;
+  --ifm-color-primary-darkest: #008F8F;
+  --ifm-color-primary-light: #00E8E8;
+  --ifm-color-primary-lighter: #00FAFA;
+  --ifm-color-primary-lightest: #1AFFFF;
+  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.3);
+}
+
+/* Custom styles */
+.header-github-link:hover {
+  opacity: 0.6;
+}
+
+.header-github-link::before {
+  content: '';
+  width: 24px;
+  height: 24px;
+  display: flex;
+  background: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12'/%3E%3C/svg%3E")
+    no-repeat;
+}
+
+[data-theme='dark'] .header-github-link::before {
+  background: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath fill='white' d='M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12'/%3E%3C/svg%3E")
+    no-repeat;
+}
+
+/* Documentation images */
+.markdown img {
+  border-radius: 16px;
+  border: 1px solid var(--ifm-color-emphasis-300);
+}
+
+[data-theme='dark'] .markdown img {
+  border-color: var(--ifm-color-emphasis-200);
+}
+
+.navbar__logo {
+  display: flex;
+  align-items: center;
+  height: 2.5rem;
+}
+
+.navbar__logo img {
+  width: 40px;
+  height: 40px;
+  border-radius: 4px;
+}
+
+/* Hide collapse arrows for main category headers */
+.category-no-arrow > .menu__list-item-collapsible > .menu__link::after {
+  display: none !important;
+}
+
+.category-no-arrow > .menu__list-item-collapsible > .menu__link {
+  cursor: default;
+}
+
+/* Make the main category headers more prominent but still light */
+.category-no-arrow > .menu__list-item-collapsible > .menu__link {
+  font-weight: 200 !important;
+  text-transform: uppercase;
+  color: #4A5568;
+  font-size: 0.9rem;
+  padding-top: 1.5rem;
+  letter-spacing: 0.05rem;
+}
+
+[data-theme='dark'] .category-no-arrow > .menu__list-item-collapsible > .menu__link {
+  color: #A0AEC0;
+}
+
+/* Remove hover effect on non-collapsible category headers */
+.category-no-arrow > .menu__list-item-collapsible:hover {
+  background: none;
+}
+
+.category-no-arrow > .menu__list-item-collapsible > .menu__link:hover {
+  background: none;
+}
+
+/* Add some spacing between main categories */
+.category-no-arrow {
+  margin-bottom: 0.5rem;
+}
+
+/* Table styles */
+.markdown table {
+  border-radius: 8px;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%;
+  display: table;
+  margin: 0 0 var(--ifm-spacing-vertical);
+}
+
+[data-theme='dark'] .markdown table {
+  border-color: var(--ifm-color-emphasis-200);
+}
+
+.markdown table th,
+.markdown table td {
+  border: 0;
+  border-right: 1px solid var(--ifm-color-emphasis-300);
+  border-bottom: 1px solid var(--ifm-color-emphasis-300);
+  padding: var(--ifm-table-cell-padding);
+  text-align: left;
+}
+
+.markdown table th {
+  font-weight: var(--ifm-font-weight-semibold);
+}
+
+.markdown table th:last-child,
+.markdown table td:last-child {
+  border-right: 0;
+}
+
+.markdown table tr:last-child td {
+  border-bottom: 0;
+}
+
+[data-theme='dark'] .markdown table th,
+[data-theme='dark'] .markdown table td {
+  border-color: var(--ifm-color-emphasis-200);
+}
+
+/* Round the corners of the first and last cells in the first and last rows */
+.markdown table tr:first-child th:first-child {
+  border-top-left-radius: 8px;
+}
+
+.markdown table tr:first-child th:last-child {
+  border-top-right-radius: 8px;
+}
+
+.markdown table tr:last-child td:first-child {
+  border-bottom-left-radius: 8px;
+}
+
+.markdown table tr:last-child td:last-child {
+  border-bottom-right-radius: 8px;
+}
+
+/* For tables that need horizontal scrolling */
+.markdown .table-wrapper {
+  overflow-x: auto;
+  border-radius: 8px;
+  border: 1px solid var(--ifm-color-emphasis-300);
+}
+
+[data-theme='dark'] .markdown .table-wrapper {
+  border-color: var(--ifm-color-emphasis-200);
+}
+
+.markdown .table-wrapper table {
+  border: 0;
+  margin: 0;
+  border-radius: 0;
+}
+
+/* Add margin to menu items */
+.menu__list .menu__list-item .menu__link {
+  margin: 0 8px;
+  border-radius: var(--ifm-global-radius);
+}
+
+/* Handle collapsible menu items differently */
+.menu__list-item-collapsible {
+  margin: 0 8px;
+}
+
+.menu__list-item-collapsible .menu__link {
+  margin: 0;
+  border-radius: var(--ifm-global-radius);
+}
+
+.menu__list .menu__list-item .menu__link--active {
+  margin: 0 8px;
+}
+
+/* Ensure nested items under collapsible maintain margin */
+.menu__list-item-collapsible .menu__list .menu__link {
+  margin: 0 8px;
+}
+
+/* Style all headers globally */
+h1, h2, h3, h4, h5, h6,
+.markdown h1, .markdown h2, .markdown h3, .markdown h4, .markdown h5, .markdown h6,
+.navbar__brand, .navbar__title {
+  font-weight: 200 !important;
+}
+
+/* Make the navbar title (Tyler) larger */
+.navbar__title {
+  font-size: 1.5rem !important; /* Increase font size */
+  font-weight: bold !important; /* Make it bold */
+  margin-right: 3rem !important; /* Add more space to the right */
+}
+
+/* Style markdown headers */
+.markdown h1, .markdown h2, .markdown h3, .markdown h4, .markdown h5, .markdown h6 {
+  color: #4A5568;
+}
+
+[data-theme='dark'] .markdown h1,
+[data-theme='dark'] .markdown h2,
+[data-theme='dark'] .markdown h3,
+[data-theme='dark'] .markdown h4,
+[data-theme='dark'] .markdown h5,
+[data-theme='dark'] .markdown h6 {
+  color: #A0AEC0;
+}
+
+/* Simplify footer */
+.footer {
+  padding: 2rem;
+  background-color: var(--ifm-navbar-background-color);
+  border-top: 1px solid var(--ifm-color-emphasis-200);
+  color: #6B7280;
+}
+
+/* Hide documentation links */
+.footer__links {
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+}
+
+/* Hide all footer columns except first (Weave sponsorship) */
+.footer__col:not(:first-child) {
+  display: none;
+}
+
+/* Style the container for proper flex layout */
+.footer .container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  padding: 0 var(--ifm-spacing-horizontal);
+}
+
+/* Style the sponsorship section */
+.footer__col:first-child {
+  display: flex;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  min-width: fit-content;
+}
+
+/* Show and style the sponsorship title */
+.footer__col:first-child .footer__title {
+  display: block;
+  margin: 0;
+  padding: 0;
+  margin-right: 1rem;
+  color: #6B7280;
+}
+
+/* Remove default list styles and spacing */
+.footer__items {
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+}
+
+.footer__item {
+  margin: 0;
+  padding: 0;
+}
+
+/* Position copyright section */
+.footer__bottom {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0;
+  padding: 0;
+  flex: 1;
+  min-width: 0;
+}
+
+.footer__copyright {
+  margin-left: auto;
+  padding: 0;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* Keep category headers light but regular nav links normal */
+.category-no-arrow > .menu__list-item-collapsible > .menu__link {
+  font-weight: 200 !important;
+  text-transform: uppercase;
+  color: #4A5568;
+  font-size: 0.9rem;
+  padding-top: 1.5rem;
+  letter-spacing: 0.05rem;
+}
+
+/* Ensure regular nav links maintain normal font weight */
+.menu__link:not(.category-no-arrow > .menu__list-item-collapsible > .menu__link),
+.navbar__link,
+.theme-doc-sidebar-item-category > .menu__link:not(.category-no-arrow > .menu__list-item-collapsible > .menu__link),
+.theme-doc-sidebar-item-link > .menu__link,
+.navbar-sidebar__item {
+  font-weight: var(--ifm-font-weight-normal);
+}

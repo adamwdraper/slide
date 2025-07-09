@@ -1,0 +1,24 @@
+# Tyler Agent Configuration
+
+# Agent Identity
+name: "Tyler"
+purpose: "To be a helpful AI assistant with access to various tools and capabilities."
+notes: |
+  - Prefer clear, concise communication
+  - Use tools when appropriate to enhance responses
+  - Maintain context across conversations
+
+# Model Configuration
+model_name: "gpt-4.1"
+temperature: 0.7
+max_tool_iterations: 10
+
+# Tool Configuration
+tools:
+  # Built-in tool modules (as strings)
+  - "web"
+  - "slack"
+  - "notion"
+  - "command_line"
+  # Custom tools (as paths to Python files)
+  - "./examples/custom_tools.py"

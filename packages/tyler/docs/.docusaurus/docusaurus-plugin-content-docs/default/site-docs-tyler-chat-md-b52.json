@@ -1,0 +1,27 @@
+{
+  "id": "tyler-chat",
+  "title": "Tyler Chat",
+  "description": "Tyler Chat is a modern web interface for interacting with Tyler agents. It provides a user-friendly way to chat with your AI assistants, manage conversations, and handle file attachments.",
+  "source": "@site/docs/tyler-chat.md",
+  "sourceDirName": ".",
+  "slug": "/tyler-chat",
+  "permalink": "/tyler/docs/tyler-chat",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/adamwdraper/tyler/tree/main/docs/docs/tyler-chat.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 4,
+  "frontMatter": {
+    "sidebar_position": 4
+  },
+  "sidebar": "documentationSidebar",
+  "previous": {
+    "title": "Configuration Guide",
+    "permalink": "/tyler/docs/configuration"
+  },
+  "next": {
+    "title": "Core Concepts",
+    "permalink": "/tyler/docs/core-concepts"
+  }
+}

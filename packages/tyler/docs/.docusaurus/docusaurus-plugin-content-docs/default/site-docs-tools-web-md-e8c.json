@@ -1,0 +1,24 @@
+{
+  "id": "tools/web",
+  "title": "Web",
+  "description": "The web module provides tools for interacting with web content. These tools allow you to fetch and process web pages in various formats.",
+  "source": "@site/docs/tools/web.md",
+  "sourceDirName": "tools",
+  "slug": "/tools/web",
+  "permalink": "/tyler/tools/web",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/adamwdraper/tyler/tree/main/docs/docs/tools/web.md",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {},
+  "sidebar": "documentationSidebar",
+  "previous": {
+    "title": "Overview",
+    "permalink": "/tyler/tools/overview"
+  },
+  "next": {
+    "title": "Slack integration",
+    "permalink": "/tyler/tools/slack"
+  }
+}

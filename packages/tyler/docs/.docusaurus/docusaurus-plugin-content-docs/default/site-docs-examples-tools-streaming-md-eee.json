@@ -1,0 +1,24 @@
+{
+  "id": "examples/tools-streaming",
+  "title": "Tools with Streaming",
+  "description": "This example demonstrates how to combine tool execution with streaming responses, allowing you to build interactive applications that can perform actions while providing real-time feedback.",
+  "source": "@site/docs/examples/tools-streaming.md",
+  "sourceDirName": "examples",
+  "slug": "/examples/tools-streaming",
+  "permalink": "/tyler/examples/tools-streaming",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/adamwdraper/tyler/tree/main/docs/docs/examples/tools-streaming.md",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {},
+  "sidebar": "documentationSidebar",
+  "previous": {
+    "title": "Using Tools",
+    "permalink": "/tyler/examples/using-tools"
+  },
+  "next": {
+    "title": "Streaming Responses",
+    "permalink": "/tyler/examples/streaming"
+  }
+}

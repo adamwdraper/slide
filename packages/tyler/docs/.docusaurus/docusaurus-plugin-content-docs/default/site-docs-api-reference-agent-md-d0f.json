@@ -1,0 +1,27 @@
+{
+  "id": "api-reference/agent",
+  "title": "Agent API",
+  "description": "The Agent class is the core component of Tyler, responsible for managing conversations and executing tasks. It uses Pydantic for data validation and Weave for monitoring and tracing.",
+  "source": "@site/docs/api-reference/agent.md",
+  "sourceDirName": "api-reference",
+  "slug": "/api-reference/agent",
+  "permalink": "/tyler/api-reference/agent",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/adamwdraper/tyler/tree/main/docs/docs/api-reference/agent.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 1,
+  "frontMatter": {
+    "sidebar_position": 1
+  },
+  "sidebar": "referenceSidebar",
+  "previous": {
+    "title": "Troubleshooting",
+    "permalink": "/tyler/troubleshooting"
+  },
+  "next": {
+    "title": "Thread API",
+    "permalink": "/tyler/api-reference/thread"
+  }
+}

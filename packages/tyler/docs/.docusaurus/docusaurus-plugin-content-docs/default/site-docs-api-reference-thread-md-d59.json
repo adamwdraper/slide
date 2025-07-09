@@ -1,0 +1,27 @@
+{
+  "id": "api-reference/thread",
+  "title": "Thread API",
+  "description": "The Thread class manages conversations and maintains context between messages. It's responsible for organizing messages, handling system prompts, storing conversation metadata, and tracking analytics.",
+  "source": "@site/docs/api-reference/thread.md",
+  "sourceDirName": "api-reference",
+  "slug": "/api-reference/thread",
+  "permalink": "/tyler/api-reference/thread",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/adamwdraper/tyler/tree/main/docs/docs/api-reference/thread.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 2,
+  "frontMatter": {
+    "sidebar_position": 2
+  },
+  "sidebar": "referenceSidebar",
+  "previous": {
+    "title": "Agent API",
+    "permalink": "/tyler/api-reference/agent"
+  },
+  "next": {
+    "title": "Message API",
+    "permalink": "/tyler/api-reference/message"
+  }
+}

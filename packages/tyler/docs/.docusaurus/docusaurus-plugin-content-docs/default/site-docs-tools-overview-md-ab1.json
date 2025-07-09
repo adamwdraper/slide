@@ -1,0 +1,24 @@
+{
+  "id": "tools/overview",
+  "title": "Overview",
+  "description": "Tyler comes with several built-in tool modules and supports custom tools to extend its capabilities. Each module can be enabled by including its name in the agent's tools configuration.",
+  "source": "@site/docs/tools/overview.md",
+  "sourceDirName": "tools",
+  "slug": "/tools/overview",
+  "permalink": "/tyler/tools/overview",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/adamwdraper/tyler/tree/main/docs/docs/tools/overview.md",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {},
+  "sidebar": "documentationSidebar",
+  "previous": {
+    "title": "Core concepts",
+    "permalink": "/tyler/core-concepts"
+  },
+  "next": {
+    "title": "Web",
+    "permalink": "/tyler/tools/web"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "id": "intro",
+  "title": "Meet Tyler",
+  "description": "A development kit for manifesting AI agents with a complete lack of conventional limitations.",
+  "source": "@site/docs/intro.md",
+  "sourceDirName": ".",
+  "slug": "/",
+  "permalink": "/tyler/",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/adamwdraper/tyler/tree/main/docs/docs/intro.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 1,
+  "frontMatter": {
+    "sidebar_position": 1,
+    "slug": "/"
+  },
+  "sidebar": "documentationSidebar",
+  "next": {
+    "title": "Quickstart",
+    "permalink": "/tyler/quickstart"
+  }
+}

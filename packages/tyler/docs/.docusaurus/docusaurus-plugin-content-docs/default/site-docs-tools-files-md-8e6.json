@@ -1,0 +1,24 @@
+{
+  "id": "tools/files",
+  "title": "File and Document Operations",
+  "description": "The files module provides tools for reading, processing, and analyzing various file types and documents, with automatic content extraction and format-specific handling.",
+  "source": "@site/docs/tools/files.md",
+  "sourceDirName": "tools",
+  "slug": "/tools/files",
+  "permalink": "/tyler/tools/files",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/adamwdraper/tyler/tree/main/docs/docs/tools/files.md",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {},
+  "sidebar": "documentationSidebar",
+  "previous": {
+    "title": "Audio processing",
+    "permalink": "/tyler/tools/audio"
+  },
+  "next": {
+    "title": "MCP Tools",
+    "permalink": "/tyler/tools/mcp"
+  }
+}

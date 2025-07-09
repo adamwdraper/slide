@@ -1,0 +1,24 @@
+{
+  "id": "api-reference/tools",
+  "title": "Tools",
+  "description": "The Tools API in Tyler provides a way to define and use custom tools that your agent can interact with.",
+  "source": "@site/docs/api-reference/tools.md",
+  "sourceDirName": "api-reference",
+  "slug": "/api-reference/tools",
+  "permalink": "/tyler/docs/api-reference/tools",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/adamwdraper/tyler/tree/main/docs/docs/api-reference/tools.md",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {},
+  "sidebar": "apiSidebar",
+  "previous": {
+    "title": "ThreadStore API",
+    "permalink": "/tyler/docs/api-reference/thread-store"
+  },
+  "next": {
+    "title": "Built-in Tools",
+    "permalink": "/tyler/docs/built-in-tools"
+  }
+}

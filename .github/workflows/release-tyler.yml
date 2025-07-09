@@ -1,0 +1,90 @@
+name: Release Tyler
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [ main ]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  publish-tyler:
+    # Only run if PR was merged and branch matches release/tyler-v*
+    if: github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'release/tyler-v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Install dependencies
+        run: |
+          uv tool install hatch
+      
+      - name: Extract version from PR branch
+        run: |
+          BRANCH_NAME="${{ github.event.pull_request.head.ref }}"
+          VERSION=${BRANCH_NAME#release/tyler-v}
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "Extracted version: $VERSION"
+      
+      - name: Verify version matches pyproject.toml
+        run: |
+          cd packages/tyler
+          PYPROJECT_VERSION=$(grep -Po '(?<=version = ")[^"]*' pyproject.toml)
+          echo "pyproject.toml version: $PYPROJECT_VERSION"
+          echo "Branch version: $VERSION"
+          if [ "$PYPROJECT_VERSION" != "$VERSION" ]; then
+            echo "Version mismatch! pyproject.toml has $PYPROJECT_VERSION but branch has $VERSION"
+            exit 1
+          fi
+      
+      - name: Create and push tag
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git tag -a "tyler-v$VERSION" -m "Release Tyler version $VERSION"
+          git push origin "tyler-v$VERSION"
+      
+      - name: Build Tyler package
+        run: |
+          cd packages/tyler
+          uv tool run hatch build
+      
+      - name: Publish Tyler to PyPI
+        env:
+          HATCH_INDEX_USER: __token__
+          HATCH_INDEX_AUTH: ${{ secrets.PYPI_API_TOKEN }}
+        run: |
+          cd packages/tyler
+          uv tool run hatch publish
+      
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: tyler-v${{ env.VERSION }}
+          release_name: Tyler v${{ env.VERSION }}
+          body: |
+            Release Tyler v${{ env.VERSION }}
+            
+            Package: slide-tyler
+            Version: ${{ env.VERSION }}
+            
+            See the [changelog](packages/tyler/CHANGELOG.md) for details.
+          draft: false
+          prerelease: false 

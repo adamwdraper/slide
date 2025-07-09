@@ -1,0 +1,15 @@
+{
+  "id": "category/api-reference",
+  "title": "API Reference",
+  "description": "This section provides detailed documentation for Tyler's core APIs. Here you'll find comprehensive information about the main classes and interfaces that make up the development kit.",
+  "source": "@site/docs/category/api-reference.md",
+  "sourceDirName": "category",
+  "slug": "/category/api-reference",
+  "permalink": "/tyler/category/api-reference",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/adamwdraper/tyler/tree/main/docs/docs/category/api-reference.md",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {}
+}

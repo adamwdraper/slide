@@ -1,0 +1,27 @@
+{
+  "id": "quick-start",
+  "title": "Quick Start",
+  "description": "This guide demonstrates how to create a basic Tyler agent, initialize a conversation thread, and process messages.",
+  "source": "@site/docs/quick-start.md",
+  "sourceDirName": ".",
+  "slug": "/quick-start",
+  "permalink": "/tyler/docs/quick-start",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/adamwdraper/tyler/tree/main/docs/docs/quick-start.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 3,
+  "frontMatter": {
+    "sidebar_position": 3
+  },
+  "sidebar": "documentationSidebar",
+  "previous": {
+    "title": "Installation Guide",
+    "permalink": "/tyler/docs/installation"
+  },
+  "next": {
+    "title": "Configuration Guide",
+    "permalink": "/tyler/docs/configuration"
+  }
+}

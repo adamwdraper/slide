@@ -1,0 +1,18 @@
+{
+  "id": "api-reference/tools-audio",
+  "title": "Audio Tools",
+  "description": "Tyler provides a set of tools for working with audio, including text-to-speech and speech-to-text conversion.",
+  "source": "@site/docs/api-reference/tools-audio.md",
+  "sourceDirName": "api-reference",
+  "slug": "/api-reference/tools-audio",
+  "permalink": "/tyler/api-reference/tools-audio",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/adamwdraper/tyler/tree/main/docs/docs/api-reference/tools-audio.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 4,
+  "frontMatter": {
+    "sidebar_position": 4
+  }
+}

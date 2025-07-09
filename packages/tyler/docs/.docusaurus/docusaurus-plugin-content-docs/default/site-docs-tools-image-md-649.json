@@ -1,0 +1,24 @@
+{
+  "id": "tools/image",
+  "title": "Image generation and analysis",
+  "description": "The image module provides tools for generating and analyzing images using advanced AI models. These tools allow you to create high-quality images from text descriptions and analyze existing images.",
+  "source": "@site/docs/tools/image.md",
+  "sourceDirName": "tools",
+  "slug": "/tools/image",
+  "permalink": "/tyler/tools/image",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/adamwdraper/tyler/tree/main/docs/docs/tools/image.md",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {},
+  "sidebar": "documentationSidebar",
+  "previous": {
+    "title": "Notion integration",
+    "permalink": "/tyler/tools/notion"
+  },
+  "next": {
+    "title": "Command line operations",
+    "permalink": "/tyler/tools/command-line"
+  }
+}

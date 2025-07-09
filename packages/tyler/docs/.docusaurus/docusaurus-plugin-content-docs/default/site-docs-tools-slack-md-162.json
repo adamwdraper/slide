@@ -1,0 +1,24 @@
+{
+  "id": "tools/slack",
+  "title": "Slack integration",
+  "description": "The Slack module provides tools for interacting with Slack workspaces, allowing you to send messages, create channels, and manage users.",
+  "source": "@site/docs/tools/slack.md",
+  "sourceDirName": "tools",
+  "slug": "/tools/slack",
+  "permalink": "/tyler/tools/slack",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/adamwdraper/tyler/tree/main/docs/docs/tools/slack.md",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {},
+  "sidebar": "documentationSidebar",
+  "previous": {
+    "title": "Web",
+    "permalink": "/tyler/tools/web"
+  },
+  "next": {
+    "title": "Notion integration",
+    "permalink": "/tyler/tools/notion"
+  }
+}

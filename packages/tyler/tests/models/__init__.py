@@ -1,0 +1,3 @@
+"""
+Test models package initialization.
+""" 

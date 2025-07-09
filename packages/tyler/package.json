@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "@docsearch/react": "^3.8.3"
+  }
+}

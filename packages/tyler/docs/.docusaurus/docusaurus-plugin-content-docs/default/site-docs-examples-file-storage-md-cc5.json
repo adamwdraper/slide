@@ -1,0 +1,24 @@
+{
+  "id": "examples/file-storage",
+  "title": "File Storage Example",
+  "description": "This example demonstrates how to use Tyler's file storage capabilities to save and retrieve files.",
+  "source": "@site/docs/examples/file-storage.md",
+  "sourceDirName": "examples",
+  "slug": "/examples/file-storage",
+  "permalink": "/tyler/examples/file-storage",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/adamwdraper/tyler/tree/main/docs/docs/examples/file-storage.md",
+  "tags": [],
+  "version": "current",
+  "frontMatter": {},
+  "sidebar": "documentationSidebar",
+  "previous": {
+    "title": "Database Storage",
+    "permalink": "/tyler/examples/database-storage"
+  },
+  "next": {
+    "title": "Message Attachments",
+    "permalink": "/tyler/examples/message-attachments"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "id": "mcp-integration",
+  "title": "MCP Integration",
+  "description": "Tyler supports integration with the Model Context Protocol (MCP), which enables seamless integration between LLM applications and external data sources and tools.",
+  "source": "@site/docs/mcp-integration.md",
+  "sourceDirName": ".",
+  "slug": "/mcp-integration",
+  "permalink": "/tyler/mcp-integration",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/adamwdraper/tyler/tree/main/docs/docs/mcp-integration.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 8,
+  "frontMatter": {
+    "sidebar_position": 8
+  }
+}

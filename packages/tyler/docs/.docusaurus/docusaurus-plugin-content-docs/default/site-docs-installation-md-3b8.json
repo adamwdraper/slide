@@ -1,0 +1,18 @@
+{
+  "id": "installation",
+  "title": "Installation Guide",
+  "description": "This guide will walk you through the process of installing Tyler and setting up your development environment on macOS.",
+  "source": "@site/docs/installation.md",
+  "sourceDirName": ".",
+  "slug": "/installation",
+  "permalink": "/tyler/installation",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/adamwdraper/tyler/tree/main/docs/docs/installation.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 2,
+  "frontMatter": {
+    "sidebar_position": 2
+  }
+}

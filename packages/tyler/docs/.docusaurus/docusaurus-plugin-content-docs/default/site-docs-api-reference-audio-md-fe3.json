@@ -1,0 +1,18 @@
+{
+  "id": "api-reference/audio",
+  "title": "Audio Tools",
+  "description": "The Audio module provides tools for text-to-speech synthesis and speech-to-text transcription using state-of-the-art AI models.",
+  "source": "@site/docs/api-reference/audio.md",
+  "sourceDirName": "api-reference",
+  "slug": "/api-reference/audio",
+  "permalink": "/tyler/api-reference/audio",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/adamwdraper/tyler/tree/main/docs/docs/api-reference/audio.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 6,
+  "frontMatter": {
+    "sidebar_position": 6
+  }
+}

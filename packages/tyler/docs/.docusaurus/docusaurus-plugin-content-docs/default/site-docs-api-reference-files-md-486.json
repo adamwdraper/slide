@@ -1,0 +1,18 @@
+{
+  "id": "api-reference/files",
+  "title": "Files Tools",
+  "description": "The Files module provides tools for reading and processing various file types, with special handling for PDFs and text files.",
+  "source": "@site/docs/api-reference/files.md",
+  "sourceDirName": "api-reference",
+  "slug": "/api-reference/files",
+  "permalink": "/tyler/api-reference/files",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/adamwdraper/tyler/tree/main/docs/docs/api-reference/files.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 4,
+  "frontMatter": {
+    "sidebar_position": 4
+  }
+}

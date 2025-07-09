@@ -1,0 +1,27 @@
+{
+  "id": "how-it-works",
+  "title": "How Tyler works",
+  "description": "Tyler's architecture is designed to make building AI agents simple while providing all the components needed for production use. Let's dive into how Tyler processes requests and manages conversations.",
+  "source": "@site/docs/how-it-works.md",
+  "sourceDirName": ".",
+  "slug": "/how-it-works",
+  "permalink": "/tyler/how-it-works",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/adamwdraper/tyler/tree/main/docs/docs/how-it-works.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 3,
+  "frontMatter": {
+    "sidebar_position": 3
+  },
+  "sidebar": "documentationSidebar",
+  "previous": {
+    "title": "Quickstart",
+    "permalink": "/tyler/quickstart"
+  },
+  "next": {
+    "title": "Chat with Tyler",
+    "permalink": "/tyler/chat-with-tyler"
+  }
+}

@@ -1,0 +1,72 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "slide-narrator"
+version = "0.2.0"
+description = "Thread and file storage components for conversational AI - the companion to Tyler AI framework"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [
+    {name = "adamwdraper"}
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: OS Independent",
+    "License :: OSI Approved :: MIT License",
+]
+dependencies = [
+    "SQLAlchemy>=2.0.36",
+    "alembic>=1.14.1",
+    "asyncpg>=0.30.0",
+    "aiosqlite>=0.21.0",
+    "python-magic>=0.4.0",
+    "pydantic>=2.10.4",
+    "uuid_utils>=0.10.0",
+    "pypdf>=5.3.0",
+    "click>=8.1.8",
+    "greenlet>=3.2.3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.4",
+    "pytest-asyncio>=0.25.2",
+    "pytest-cov>=6.0.0",
+    "coverage>=7.6.10",
+]
+
+[project.urls]
+Homepage = "https://github.com/adamwdraper/slide"
+Repository = "https://github.com/adamwdraper/slide"
+"Bug Tracker" = "https://github.com/adamwdraper/slide/issues"
+
+[project.scripts]
+narrator-db = "narrator.database.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["narrator"]
+
+[tool.hatch.build]
+include = [
+    "narrator/**/*.py",
+]
+exclude = [
+    "**/.env",
+    "**/*.pyc",
+    "**/__pycache__",
+    "**/*.db",
+    "**/*.sqlite",
+    "**/data",
+    "**/.coverage",
+    "**/htmlcov",
+    "**/dist",
+    "**/build",
+    "**/*.egg-info",
+] 

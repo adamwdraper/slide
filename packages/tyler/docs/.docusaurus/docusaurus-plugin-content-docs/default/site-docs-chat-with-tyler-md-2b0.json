@@ -1,0 +1,27 @@
+{
+  "id": "chat-with-tyler",
+  "title": "Chat with Tyler",
+  "description": "Tyler provides two interactive interfaces for chatting with your agent:",
+  "source": "@site/docs/chat-with-tyler.md",
+  "sourceDirName": ".",
+  "slug": "/chat-with-tyler",
+  "permalink": "/tyler/chat-with-tyler",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/adamwdraper/tyler/tree/main/docs/docs/chat-with-tyler.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 4,
+  "frontMatter": {
+    "sidebar_position": 4
+  },
+  "sidebar": "documentationSidebar",
+  "previous": {
+    "title": "How Tyler works",
+    "permalink": "/tyler/how-it-works"
+  },
+  "next": {
+    "title": "Core concepts",
+    "permalink": "/tyler/core-concepts"
+  }
+}

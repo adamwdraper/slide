@@ -1,0 +1,27 @@
+{
+  "id": "examples/database-storage",
+  "title": "Database Storage",
+  "description": "This example demonstrates how to use persistent database storage with Tyler, including PostgreSQL integration and metrics tracking.",
+  "source": "@site/docs/examples/database-storage.md",
+  "sourceDirName": "examples",
+  "slug": "/examples/database-storage",
+  "permalink": "/tyler/examples/database-storage",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/adamwdraper/tyler/tree/main/docs/docs/examples/database-storage.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 5,
+  "frontMatter": {
+    "sidebar_position": 5
+  },
+  "sidebar": "documentationSidebar",
+  "previous": {
+    "title": "Streaming Responses",
+    "permalink": "/tyler/examples/streaming"
+  },
+  "next": {
+    "title": "File Storage Example",
+    "permalink": "/tyler/examples/file-storage"
+  }
+}
