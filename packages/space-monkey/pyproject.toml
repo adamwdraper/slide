@@ -1,0 +1,71 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "slide-space-monkey"
+version = "0.1.0"
+description = "A powerful, extensible Slack bot framework built on the slide-narrator storage system"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [
+    {name = "adamwdraper"}
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: OS Independent",
+    "License :: OSI Approved :: MIT License",
+]
+dependencies = [
+    "slide-narrator>=0.2.0",
+    "slack-bolt>=1.20.1",
+    "fastapi>=0.115.6",
+    "uvicorn>=0.34.0",
+    "weave-python>=0.51.25",
+    "python-dotenv>=1.0.1",
+    "requests>=2.32.3",
+    "pydantic>=2.10.4",
+    "aiofiles>=24.1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.4",
+    "pytest-asyncio>=0.25.2",
+    "pytest-cov>=6.0.0",
+    "pytest-mock>=3.14.0",
+    "coverage>=7.6.10",
+    "black>=24.3.0",
+    "ruff>=0.8.4",
+]
+
+[project.urls]
+Homepage = "https://github.com/adamwdraper/slide"
+Repository = "https://github.com/adamwdraper/slide"
+"Bug Tracker" = "https://github.com/adamwdraper/slide/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["space_monkey"]
+
+[tool.hatch.build]
+include = [
+    "space_monkey/**/*.py",
+]
+exclude = [
+    "**/.env",
+    "**/*.pyc",
+    "**/__pycache__",
+    "**/*.db",
+    "**/*.sqlite",
+    "**/data",
+    "**/.coverage",
+    "**/htmlcov",
+    "**/dist",
+    "**/build",
+    "**/*.egg-info",
+] 
