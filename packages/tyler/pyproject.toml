@@ -162,3 +162,7 @@ exclude = [
     "**/build",
     "**/*.egg-info",
 ] 
+
+# Workspace dependencies for development
+[tool.uv.sources]
+slide-narrator = { workspace = true }

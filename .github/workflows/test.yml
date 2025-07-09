@@ -8,31 +8,6 @@ on:
       - '.github/workflows/test.yml'
 
 jobs:
-  test-tyler:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
-        with:
-          enable-cache: true
-      
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      
-      - name: Install Tyler dependencies
-        run: |
-          cd packages/tyler
-          uv sync --dev
-      
-      - name: Run Tyler tests
-        run: |
-          cd packages/tyler
-          uv run pytest tests/
-
   test-narrator:
     runs-on: ubuntu-latest
     steps:
@@ -48,14 +23,38 @@ jobs:
         with:
           python-version: '3.12'
       
-      - name: Install Narrator dependencies
+      - name: Install workspace dependencies
         run: |
-          cd packages/narrator
           uv sync --dev
       
       - name: Run Narrator tests
         run: |
           cd packages/narrator
+          uv run pytest tests/
+
+  test-tyler:
+    runs-on: ubuntu-latest
+    needs: [test-narrator]
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Install workspace dependencies
+        run: |
+          uv sync --dev
+      
+      - name: Run Tyler tests
+        run: |
+          cd packages/tyler
           uv run pytest tests/
 
   integration-test:
@@ -74,14 +73,13 @@ jobs:
         with:
           python-version: '3.12'
       
-      - name: Install both packages
+      - name: Install workspace dependencies
         run: |
-          uv pip install --system -e packages/narrator
-          uv pip install --system -e packages/tyler
+          uv sync --dev
       
       - name: Test Tyler imports and basic functionality
         run: |
-          python -c "
+          uv run python -c "
           import tyler
           from tyler import Agent
           print('Tyler imports successfully')
@@ -93,7 +91,7 @@ jobs:
       
       - name: Test Narrator imports and basic functionality
         run: |
-          python -c "
+          uv run python -c "
           import narrator
           from narrator import ThreadStore
           print('Narrator imports successfully')
