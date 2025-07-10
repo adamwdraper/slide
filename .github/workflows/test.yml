@@ -57,9 +57,34 @@ jobs:
           cd packages/tyler
           uv run pytest tests/
 
+  test-space-monkey:
+    runs-on: ubuntu-latest
+    needs: [test-narrator]
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Install workspace dependencies
+        run: |
+          uv sync --dev
+      
+      - name: Run Space Monkey tests
+        run: |
+          cd packages/space-monkey
+          uv run pytest tests/
+
   integration-test:
     runs-on: ubuntu-latest
-    needs: [test-tyler, test-narrator]
+    needs: [test-tyler, test-narrator, test-space-monkey]
     steps:
       - uses: actions/checkout@v4
       
@@ -99,4 +124,12 @@ jobs:
           # Test basic thread store creation
           store = ThreadStore()
           print('Narrator ThreadStore created successfully')
+          "
+      
+      - name: Test Space Monkey imports and basic functionality
+        run: |
+          uv run python -c "
+          import space_monkey
+          print('Space Monkey imports successfully')
+          print(f'Space Monkey version: {space_monkey.__version__}')
           " 

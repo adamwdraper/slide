@@ -13,6 +13,7 @@ resolution-markers = [
 [manifest]
 members = [
     "slide-narrator",
+    "slide-space-monkey",
     "slide-tyler",
 ]
 
@@ -5193,7 +5194,7 @@ wheels = [
 
 [[package]]
 name = "slide-narrator"
-version = "0.2.1"
+version = "0.2.2"
 source = { editable = "packages/narrator" }
 dependencies = [
     { name = "aiosqlite" },
@@ -5236,8 +5237,42 @@ requires-dist = [
 provides-extras = ["dev"]
 
 [[package]]
+name = "slide-space-monkey"
+version = "0.1.0"
+source = { editable = "packages/space-monkey" }
+dependencies = [
+    { name = "click" },
+    { name = "pydantic" },
+    { name = "python-dotenv" },
+    { name = "slide-narrator" },
+    { name = "slide-tyler" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "coverage" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "pytest-cov" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "click", specifier = ">=8.1.8" },
+    { name = "coverage", marker = "extra == 'dev'", specifier = ">=7.6.10" },
+    { name = "pydantic", specifier = ">=2.10.4" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.3.4" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.25.2" },
+    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=6.0.0" },
+    { name = "python-dotenv", specifier = ">=1.0.1" },
+    { name = "slide-narrator", editable = "packages/narrator" },
+    { name = "slide-tyler", editable = "packages/tyler" },
+]
+provides-extras = ["dev"]
+
+[[package]]
 name = "slide-tyler"
-version = "1.1.0"
+version = "1.1.1"
 source = { editable = "packages/tyler" }
 dependencies = [
     { name = "aiohappyeyeballs" },
