@@ -46,7 +46,7 @@ git checkout main
 git pull origin main
 
 # Get the new version number without making changes yet
-NEW_VERSION=$(python ../../scripts/bump_version.py "$PACKAGE" "$VERSION_TYPE" --dry-run)
+NEW_VERSION=$(python ../../scripts/bump_version.py "$PACKAGE" "$VERSION_TYPE" --dry-run --quiet)
 if [ $? -ne 0 ]; then
     echo "Failed to determine new version number"
     exit 1
@@ -57,7 +57,7 @@ BRANCH_NAME="release/$PACKAGE-v$NEW_VERSION"
 git checkout -b "$BRANCH_NAME"
 
 # Now actually bump the version
-NEW_VERSION=$(python ../../scripts/bump_version.py "$PACKAGE" "$VERSION_TYPE")
+python ../../scripts/bump_version.py "$PACKAGE" "$VERSION_TYPE"
 
 # Create git commit
 git add pyproject.toml ${PACKAGE}/__init__.py
