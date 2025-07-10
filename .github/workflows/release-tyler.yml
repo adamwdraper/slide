@@ -19,6 +19,15 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Validate this is a tyler release
+        run: |
+          if [[ ! "${{ github.event.pull_request.head.ref }}" =~ ^release/tyler-v.*$ ]]; then
+            echo "ERROR: This workflow should only run for tyler releases"
+            echo "Branch: ${{ github.event.pull_request.head.ref }}"
+            exit 1
+          fi
+          echo "✓ Confirmed this is a tyler release"
       
       - name: Install uv
         uses: astral-sh/setup-uv@v4
