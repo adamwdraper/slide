@@ -39,8 +39,6 @@ class SlackApp:
         agent,
         thread_store,
         file_store,
-        health_check_url: str = None,
-        weave_project: str = None,
         response_topics: str = None
     ):
         """
@@ -50,8 +48,6 @@ class SlackApp:
             agent: The main Tyler agent to handle conversations
             thread_store: ThreadStore instance for conversation persistence
             file_store: FileStore instance for file handling
-            health_check_url: Optional URL for health check pings
-            weave_project: Optional Weave project name for tracing
             response_topics: Simple sentence describing what topics the bot should respond to
         """
         # Load environment variables
@@ -61,8 +57,8 @@ class SlackApp:
         self.agent = agent
         self.thread_store = thread_store
         self.file_store = file_store
-        self.health_check_url = health_check_url or os.getenv("HEALTH_CHECK_URL")
-        self.weave_project = weave_project or os.getenv("WANDB_PROJECT")
+        self.health_check_url = os.getenv("HEALTH_CHECK_URL")
+        self.weave_project = os.getenv("WANDB_PROJECT")
         
         # Classifier configuration
         self.response_topics = response_topics  # Will use default in format_classifier_prompt if None

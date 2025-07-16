@@ -125,8 +125,7 @@ def test_api_matches_readme():
     # Test 3: SlackApp constructor signature
     slack_app_sig = inspect.signature(SlackApp.__init__)
     expected_slack_params = [
-        'agent', 'thread_store', 'file_store', 'health_check_url', 'weave_project',
-        'response_topics'
+        'agent', 'thread_store', 'file_store', 'response_topics'
     ]
     actual_slack_params = list(slack_app_sig.parameters.keys())[1:]  # Skip 'self'
     
