@@ -25,12 +25,25 @@ pip install slide-space-monkey
 
 ### 2. Set Up Environment Variables
 
-Create a `.env` file:
+Copy the example environment file and add your tokens:
+
+```bash
+cp env.example .env
+# Then edit .env with your actual tokens
+```
+
+Required variables:
 
 ```bash
 # Required: Slack Configuration
 SLACK_BOT_TOKEN=xoxb-your-bot-token
 SLACK_APP_TOKEN=xapp-your-app-token
+
+# Required: LLM Configuration (at least one)
+OPENAI_API_KEY=sk-your-openai-api-key      # For GPT models
+# ANTHROPIC_API_KEY=sk-ant-your-key         # For Claude models
+# GEMINI_API_KEY=your-gemini-api-key        # For Gemini models
+# XAI_API_KEY=xai-your-grok-api-key         # For Grok models
 
 # Optional: Weave Monitoring
 WANDB_API_KEY=your-wandb-key
@@ -249,16 +262,22 @@ CMD ["python", "bot.py"]
 SLACK_BOT_TOKEN=xoxb-prod-token
 SLACK_APP_TOKEN=xapp-prod-token
 
+# LLM Configuration (choose one or more)
+OPENAI_API_KEY=sk-prod-openai-key
+# ANTHROPIC_API_KEY=sk-ant-prod-key
+# GEMINI_API_KEY=prod-gemini-api-key
+# XAI_API_KEY=xai-prod-grok-key
+
 # Database
-TYLER_DB_TYPE=postgresql
-TYLER_DB_USER=tyler_prod
-TYLER_DB_PASSWORD=secure_password
-TYLER_DB_HOST=db.example.com
-TYLER_DB_PORT=5432
-TYLER_DB_NAME=tyler_prod
+NARRATOR_DB_TYPE=postgresql
+NARRATOR_DB_USER=tyler_prod
+NARRATOR_DB_PASSWORD=secure_password
+NARRATOR_DB_HOST=db.example.com
+NARRATOR_DB_PORT=5432
+NARRATOR_DB_NAME=tyler_prod
 
 # File Storage
-TYLER_FILE_STORAGE_PATH=/data/files
+NARRATOR_FILE_STORAGE_PATH=/data/files
 
 # Monitoring
 WANDB_API_KEY=prod-key
