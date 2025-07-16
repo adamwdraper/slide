@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "slide-space-monkey"
-version = "0.1.0"
+version = "0.1.1"
 description = "A simple, powerful way to deploy Tyler AI agents as Slack bots"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -62,11 +62,11 @@ Repository = "https://github.com/adamwdraper/slide"
 "Bug Tracker" = "https://github.com/adamwdraper/slide/issues"
 
 [tool.hatch.build.targets.wheel]
-packages = ["slide_space_monkey"]
+packages = ["space_monkey"]
 
 [tool.hatch.build]
 include = [
-    "slide_space_monkey/**/*.py",
+    "space_monkey/**/*.py",
 ]
 exclude = [
     "**/.env",

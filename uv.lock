@@ -5286,7 +5286,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "slide-space-monkey"
-version = "0.1.0"
+version = "0.1.1"
 source = { editable = "packages/space-monkey" }
 dependencies = [
     { name = "fastapi" },

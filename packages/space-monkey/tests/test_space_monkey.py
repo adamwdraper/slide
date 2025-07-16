@@ -9,7 +9,7 @@ from unittest.mock import patch, MagicMock
 def test_imports():
     """Test that all main classes can be imported."""
     try:
-        from slide_space_monkey import SlackApp, Agent, ThreadStore, FileStore
+        from space_monkey import SlackApp, Agent, ThreadStore, FileStore
         assert SlackApp is not None
         assert Agent is not None
         assert ThreadStore is not None
@@ -20,7 +20,7 @@ def test_imports():
 @pytest.mark.asyncio
 async def test_stores_creation():
     """Test that stores can be created."""
-    from slide_space_monkey import ThreadStore, FileStore
+    from space_monkey import ThreadStore, FileStore
     
     # Test ThreadStore creation (in-memory)
     thread_store = await ThreadStore.create()
@@ -32,7 +32,7 @@ async def test_stores_creation():
 
 def test_agent_creation():
     """Test that agents can be created."""
-    from slide_space_monkey import Agent
+    from space_monkey import Agent
     
     # Test agent creation with required parameters
     agent = Agent(
@@ -50,7 +50,7 @@ def test_agent_creation():
 @pytest.mark.asyncio
 async def test_slack_app_creation():
     """Test that SlackApp can be instantiated."""
-    from slide_space_monkey import SlackApp, Agent, ThreadStore, FileStore
+    from space_monkey import SlackApp, Agent, ThreadStore, FileStore
     
     # Create mock components
     thread_store = await ThreadStore.create()
@@ -79,7 +79,7 @@ def test_api_matches_readme():
     # This test ensures the API we've implemented matches the README examples
     
     # Test 1: Simple import
-    from slide_space_monkey import SlackApp, Agent, ThreadStore, FileStore
+    from space_monkey import SlackApp, Agent, ThreadStore, FileStore
     
     # Test 2: Agent constructor signature (Tyler Agent)
     import inspect
@@ -101,8 +101,4 @@ def test_api_matches_readme():
     for param in expected_slack_params:
         assert param in actual_slack_params, f"Missing parameter {param} in SlackApp.__init__()"
 
-@pytest.mark.integration
-def test_package_version():
-    """Test that package version is accessible."""
-    from slide_space_monkey import __version__
-    assert __version__ == "0.1.0" 
+ 

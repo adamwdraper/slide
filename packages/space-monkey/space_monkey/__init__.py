@@ -12,7 +12,7 @@ from tyler import Agent
 from .slack_app import SlackApp
 
 # Version
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 # Main exports
 __all__ = [
