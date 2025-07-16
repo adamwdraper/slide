@@ -21,7 +21,7 @@ import uvicorn
 from narrator import Thread, Message
 from tyler.tools.slack import generate_slack_blocks
 from tyler import Agent
-from .message_classifier_prompt import purpose_prompt
+from .message_classifier_prompt import format_classifier_prompt
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -40,7 +40,8 @@ class SlackApp:
         thread_store,
         file_store,
         health_check_url: str = None,
-        weave_project: str = None
+        weave_project: str = None,
+        response_topics: str = None
     ):
         """
         Initialize SlackApp with agent and stores.
@@ -51,6 +52,7 @@ class SlackApp:
             file_store: FileStore instance for file handling
             health_check_url: Optional URL for health check pings
             weave_project: Optional Weave project name for tracing
+            response_topics: Simple sentence describing what topics the bot should respond to
         """
         # Load environment variables
         load_dotenv()
@@ -61,6 +63,9 @@ class SlackApp:
         self.file_store = file_store
         self.health_check_url = health_check_url or os.getenv("HEALTH_CHECK_URL")
         self.weave_project = weave_project or os.getenv("WANDB_PROJECT")
+        
+        # Classifier configuration
+        self.response_topics = response_topics  # Will use default in format_classifier_prompt if None
         
         # Internal state
         self.slack_app = None
@@ -155,19 +160,35 @@ class SlackApp:
     
     async def _init_classifier(self):
         """Initialize the message classifier agent."""
-        # Use the local purpose prompt and directly create the Agent
-        logger.info("Using local purpose prompt from message_classifier_prompt.py")
+        # Use the configurable classifier prompt
+        logger.info("Initializing message classifier with custom configuration")
         
-        # Initialize classifier agent directly
+        # Format the classifier prompt with configured parameters
+        agent_name = getattr(self.agent, 'name', 'Assistant')
+        if self.response_topics:
+            formatted_prompt = format_classifier_prompt(
+                agent_name=agent_name,
+                bot_user_id=self.bot_user_id,
+                response_topics=self.response_topics
+            )
+        else:
+            # Use default response_topics
+            formatted_prompt = format_classifier_prompt(
+                agent_name=agent_name,
+                bot_user_id=self.bot_user_id
+            )
+        
+        # Initialize classifier agent
         self.message_classifier_agent = Agent(
             name="MessageClassifier",
             model_name="gpt-4.1",
             version="2.0.0",
-            purpose=purpose_prompt.format(bot_user_id=self.bot_user_id),
+            purpose=formatted_prompt,
             thread_store=self.thread_store,
             file_store=self.file_store
         )
-        logger.info("Message classifier agent initialized with local prompt")
+        topics_msg = self.response_topics or "default topics"
+        logger.info(f"Message classifier initialized for agent '{agent_name}' with topics: {topics_msg}")
     
     def _register_event_handlers(self):
         """Register Slack event handlers."""

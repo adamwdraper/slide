@@ -74,6 +74,35 @@ async def test_slack_app_creation():
     assert app.thread_store == thread_store
     assert app.file_store == file_store
 
+@pytest.mark.asyncio
+async def test_slack_app_with_classifier_config():
+    """Test that SlackApp accepts the new classifier configuration parameters."""
+    from space_monkey import SlackApp, Agent, ThreadStore, FileStore
+    
+    # Create mock components
+    thread_store = await ThreadStore.create()
+    file_store = await FileStore.create()
+    agent = Agent(
+        name="TestAgent",
+        model_name="gpt-4.1", 
+        purpose="Test purpose",
+        tools=["web"],
+        temperature=0.7
+    )
+    
+    # Create SlackApp with classifier config
+    app = SlackApp(
+        agent=agent,
+        thread_store=thread_store,
+        file_store=file_store,
+        response_topics="custom test topics"
+    )
+    
+    assert app.agent == agent
+    assert app.thread_store == thread_store
+    assert app.file_store == file_store
+    assert app.response_topics == "custom test topics"
+
 def test_api_matches_readme():
     """Test that the API matches what's documented in the README."""
     # This test ensures the API we've implemented matches the README examples
@@ -95,7 +124,10 @@ def test_api_matches_readme():
     
     # Test 3: SlackApp constructor signature
     slack_app_sig = inspect.signature(SlackApp.__init__)
-    expected_slack_params = ['agent', 'thread_store', 'file_store', 'health_check_url', 'weave_project']
+    expected_slack_params = [
+        'agent', 'thread_store', 'file_store', 'health_check_url', 'weave_project',
+        'response_topics'
+    ]
     actual_slack_params = list(slack_app_sig.parameters.keys())[1:]  # Skip 'self'
     
     for param in expected_slack_params:

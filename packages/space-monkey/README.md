@@ -151,6 +151,35 @@ app = SlackApp(
 await app.start(host="0.0.0.0", port=8080)
 ```
 
+### Message Classification Configuration
+
+Space Monkey includes intelligent message routing that determines when your bot should respond. You can customize what topics your bot should respond to:
+
+```python
+# Default configuration (responds to general questions and requests)
+app = SlackApp(
+    agent=agent,
+    thread_store=thread_store,
+    file_store=file_store
+)
+
+# Custom topic configuration
+app = SlackApp(
+    agent=agent,
+    thread_store=thread_store,
+    file_store=file_store,
+    response_topics="technical support, troubleshooting, or product questions"
+)
+
+# HR/People team configuration
+app = SlackApp(
+    agent=agent,
+    thread_store=thread_store,
+    file_store=file_store,
+    response_topics="people topics, HR, company culture, recognition, or employee experience"
+)
+```
+
 ## Agent Configuration
 
 Space Monkey uses Tyler Agent directly, giving you full access to all Tyler's capabilities:
@@ -262,9 +291,20 @@ class SlackApp:
         thread_store: ThreadStore,
         file_store: FileStore,
         health_check_url: Optional[str] = None,
-        weave_project: Optional[str] = None
+        weave_project: Optional[str] = None,
+        response_topics: Optional[str] = None
     ):
-        """Initialize Slack app with agent and stores."""
+        """
+        Initialize Slack app with agent and stores.
+        
+        Args:
+            agent: The main Tyler agent to handle conversations
+            thread_store: ThreadStore instance for conversation persistence  
+            file_store: FileStore instance for file handling
+            health_check_url: Optional URL for health check pings
+            weave_project: Optional Weave project name for tracing
+            response_topics: Simple sentence describing what topics the bot should respond to
+        """
         
     async def start(
         self,
@@ -272,6 +312,17 @@ class SlackApp:
         port: int = 8000
     ) -> None:
         """Start the Slack bot app."""
+```
+
+### Classifier Configuration
+
+```python
+def format_classifier_prompt(
+    agent_name: str = "Assistant",
+    bot_user_id: str = "",
+    response_topics: str = "general questions, requests for help, or inquiries directed at the assistant"
+) -> str:
+    """Format the classifier prompt with custom configuration."""
 ```
 
 ### Agent
@@ -317,7 +368,7 @@ import asyncio
 from space_monkey import SlackApp, Agent, ThreadStore, FileStore
 
 async def main():
-    # Simple setup for an HR assistant
+    # Simple setup for an HR assistant with HR-specific topic classification
     thread_store = await ThreadStore.create()
     file_store = await FileStore.create()
     
@@ -332,7 +383,39 @@ async def main():
     app = SlackApp(
         agent=agent,
         thread_store=thread_store,
-        file_store=file_store
+        file_store=file_store,
+        response_topics="people topics, HR, company culture, recognition, or employee experience"
+    )
+    
+    await app.start()
+
+asyncio.run(main())
+```
+
+### Technical Support Bot
+
+```python
+import asyncio
+from space_monkey import SlackApp, Agent, ThreadStore, FileStore
+
+async def main():
+    # Technical support bot with custom topic classification
+    thread_store = await ThreadStore.create()
+    file_store = await FileStore.create()
+    
+    agent = Agent(
+        name="TechSupport",
+        model_name="gpt-4.1",
+        purpose="To help users with technical support and troubleshooting",
+        tools=["web", "files"],
+        temperature=0.3
+    )
+    
+    app = SlackApp(
+        agent=agent,
+        thread_store=thread_store,
+        file_store=file_store,
+        response_topics="technical issues, bugs, troubleshooting, or product support"
     )
     
     await app.start()
