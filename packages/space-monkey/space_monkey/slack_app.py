@@ -20,6 +20,8 @@ import uvicorn
 
 from narrator import Thread, Message
 from tyler.tools.slack import generate_slack_blocks
+from tyler import Agent
+from .message_classifier_prompt import purpose_prompt
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -153,32 +155,19 @@ class SlackApp:
     
     async def _init_classifier(self):
         """Initialize the message classifier agent."""
-        # Import here to avoid circular imports
-        from .classifier import initialize_message_classifier_agent
+        # Use the local purpose prompt and directly create the Agent
+        logger.info("Using local purpose prompt from message_classifier_prompt.py")
         
-        # Get classifier prompt version from environment
-        classifier_prompt_version = os.getenv("MESSAGE_CLASSIFIER_PROMPT_VERSION")
-        if not classifier_prompt_version:
-            logger.error("MESSAGE_CLASSIFIER_PROMPT_VERSION not set")
-            raise RuntimeError("MESSAGE_CLASSIFIER_PROMPT_VERSION not set")
-        
-        # Fetch prompt from Weave
-        try:
-            classifier_prompt_obj = weave.ref(f"MessageClassifierPurposePrompt:{classifier_prompt_version}").get()
-            logger.info(f"Fetched classifier prompt: {classifier_prompt_version}")
-        except Exception as e:
-            logger.error(f"Failed to load classifier prompt: {e}")
-            raise RuntimeError(f"Failed to load classifier prompt: {e}")
-        
-        # Initialize classifier agent
-        self.message_classifier_agent = initialize_message_classifier_agent(
+        # Initialize classifier agent directly
+        self.message_classifier_agent = Agent(
+            name="MessageClassifier",
             model_name="gpt-4.1",
-            purpose_prompt=classifier_prompt_obj,
+            version="2.0.0",
+            purpose=purpose_prompt.format(bot_user_id=self.bot_user_id),
             thread_store=self.thread_store,
-            file_store=self.file_store,
-            bot_user_id=self.bot_user_id
+            file_store=self.file_store
         )
-        logger.info("Message classifier agent initialized")
+        logger.info("Message classifier agent initialized with local prompt")
     
     def _register_event_handlers(self):
         """Register Slack event handlers."""
