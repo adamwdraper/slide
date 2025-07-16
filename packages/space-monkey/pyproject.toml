@@ -27,23 +27,17 @@ dependencies = [
     # Core Tyler ecosystem packages
     "slide-tyler>=1.1.0",
     "slide-narrator>=0.2.0",
-    
     # Slack integration
     "slack-bolt>=1.18.0",
-    
     # Web framework
     "fastapi>=0.104.0",
     "uvicorn[standard]>=0.24.0",
-    
     # Environment and configuration
     "python-dotenv>=1.0.0",
-    
     # Monitoring and logging
     "weave>=0.51.0",
-    
     # HTTP requests
     "requests>=2.32.0",
-    
     # Core utilities
     "pydantic>=2.10.0",
 ]
