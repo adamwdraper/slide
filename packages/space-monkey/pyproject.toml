@@ -1,0 +1,83 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "slide-space-monkey"
+version = "0.1.0"
+description = "A simple, powerful way to deploy Tyler AI agents as Slack bots"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [
+    {name = "adamwdraper"}
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: OS Independent",
+    "Topic :: Communications :: Chat",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+    # Core Tyler ecosystem packages
+    "slide-tyler>=1.1.0",
+    "slide-narrator>=0.2.0",
+    
+    # Slack integration
+    "slack-bolt>=1.18.0",
+    
+    # Web framework
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    
+    # Environment and configuration
+    "python-dotenv>=1.0.0",
+    
+    # Monitoring and logging
+    "weave>=0.51.0",
+    
+    # HTTP requests
+    "requests>=2.32.0",
+    
+    # Core utilities
+    "pydantic>=2.10.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.25.0",
+    "pytest-cov>=6.0.0",
+    "coverage>=7.6.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/adamwdraper/slide"
+Repository = "https://github.com/adamwdraper/slide"
+"Bug Tracker" = "https://github.com/adamwdraper/slide/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["slide_space_monkey"]
+
+[tool.hatch.build]
+include = [
+    "slide_space_monkey/**/*.py",
+]
+exclude = [
+    "**/.env",
+    "**/*.pyc",
+    "**/__pycache__",
+    "**/*.db",
+    "**/*.sqlite",
+    "**/data",
+    "**/.coverage",
+    "**/htmlcov",
+    "**/dist",
+    "**/build",
+    "**/*.egg-info",
+] 
