@@ -55,7 +55,7 @@ NARRATOR_FILE_STORAGE_PATH=/data/files
 
 ```python
 import asyncio
-from slide_space_monkey import SlackApp, ThreadStore, FileStore, Agent
+from space_monkey import SlackApp, ThreadStore, FileStore, Agent
 
 async def main():
     # Create stores
@@ -93,7 +93,7 @@ That's it! Your Tyler agent is now running as a Slack bot.
 For production deployments, use a persistent database:
 
 ```python
-from slide_space_monkey import ThreadStore, FileStore
+from space_monkey import ThreadStore, FileStore
 
 # PostgreSQL
 thread_store = await ThreadStore.create(
@@ -314,7 +314,7 @@ file_store = await FileStore.create(
 
 ```python
 import asyncio
-from slide_space_monkey import SlackApp, Agent, ThreadStore, FileStore
+from space_monkey import SlackApp, Agent, ThreadStore, FileStore
 
 async def main():
     # Simple setup for an HR assistant
@@ -344,7 +344,7 @@ asyncio.run(main())
 
 ```python
 import asyncio
-from slide_space_monkey import SlackApp, Agent, ThreadStore, FileStore
+from space_monkey import SlackApp, Agent, ThreadStore, FileStore
 
 async def main():
     # Production setup with PostgreSQL

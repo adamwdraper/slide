@@ -11,7 +11,7 @@ import os
 from dotenv import load_dotenv
 
 # Import everything from Space Monkey
-from slide_space_monkey import SlackApp, Agent, ThreadStore, FileStore
+from space_monkey import SlackApp, Agent, ThreadStore, FileStore
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
