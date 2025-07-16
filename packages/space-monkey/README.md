@@ -51,6 +51,11 @@ WANDB_PROJECT=your-project-name
 
 # Optional: Health Check
 HEALTH_CHECK_URL=http://healthcheck:8000/ping-receiver
+HEALTH_PING_INTERVAL_SECONDS=120  # How often to ping (defaults to 120)
+
+# Optional: Environment & Logging
+ENV=development  # Environment name for Weave tracing
+LOG_LEVEL=INFO   # Log level (DEBUG, INFO, WARNING, ERROR)
 
 # Optional: Database (defaults to in-memory)
 NARRATOR_DB_TYPE=postgresql
@@ -280,9 +285,14 @@ NARRATOR_DB_NAME=tyler_prod
 NARRATOR_FILE_STORAGE_PATH=/data/files
 
 # Monitoring
-WANDB_API_KEY=prod-key
+WANDB_API_KEY=prod-wandb-key
 WANDB_PROJECT=slack-bot-prod
 HEALTH_CHECK_URL=http://healthcheck:8000/ping-receiver
+HEALTH_PING_INTERVAL_SECONDS=120
+
+# Environment & Logging
+ENV=production
+LOG_LEVEL=INFO
 ```
 
 ### Health Monitoring
