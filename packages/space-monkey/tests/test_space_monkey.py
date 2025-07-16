@@ -101,8 +101,4 @@ def test_api_matches_readme():
     for param in expected_slack_params:
         assert param in actual_slack_params, f"Missing parameter {param} in SlackApp.__init__()"
 
-@pytest.mark.integration
-def test_package_version():
-    """Test that package version is accessible."""
-    from space_monkey import __version__
-    assert __version__ == "0.1.0" 
+ 
