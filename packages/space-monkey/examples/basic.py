@@ -2,21 +2,24 @@
 """
 Simple Space Monkey example - minimal Slack bot setup
 """
-import asyncio
-import os
+# Load environment variables first
 from dotenv import load_dotenv
-
-# Load environment variables
 load_dotenv()
 
-# Import Space Monkey components
+# Import Space Monkey components and configure logging
 from space_monkey import SlackApp, Agent, ThreadStore, FileStore
+from space_monkey.utils import get_logger
+logger = get_logger(__name__)
+
+import asyncio
+import os
 
 async def main():
     """Simple Space Monkey bot example"""
     
     # Check for required environment variables
     if not os.getenv("SLACK_BOT_TOKEN") or not os.getenv("SLACK_APP_TOKEN"):
+        logger.error("Missing required environment variables!")
         print("❌ Missing required environment variables!")
         print("Please set in your .env file:")
         print("  SLACK_BOT_TOKEN=xoxb-...")
@@ -30,10 +33,12 @@ async def main():
         purpose="To be a helpful assistant in Slack",
         temperature=0.7
     )
+    logger.info(f"Created agent: {agent.name}")
     
     # Create in-memory stores (simple for testing)
     thread_store = await ThreadStore.create()
     file_store = await FileStore.create()
+    logger.info("Created in-memory thread and file stores")
     
     # Create and start the Slack app
     app = SlackApp(

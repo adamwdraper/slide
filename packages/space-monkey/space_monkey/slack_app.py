@@ -22,9 +22,10 @@ from narrator import Thread, Message
 from tyler.tools.slack import generate_slack_blocks
 from tyler import Agent
 from .message_classifier_prompt import format_classifier_prompt
+from .utils import get_logger
 
-# Set up logging
-logger = logging.getLogger(__name__)
+# Get logger for this module
+logger = get_logger(__name__)
 
 class SlackApp:
     """
@@ -248,7 +249,10 @@ class SlackApp:
     # Event handlers
     async def _handle_app_mention(self, event, say):
         """Handle app mention events."""
-        logger.info(f"App mention event: ts={event.get('ts')}")
+        logger.info(f"App mention event: ts={event.get('ts')}, channel={event.get('channel')}, user={event.get('user')}")
+        # The actual message will be handled by the message event handler
+        # This prevents "Unhandled request" warnings while avoiding duplicate processing
+        logger.info(f"Received app_mention event with ts={event.get('ts')} - will be processed by message handler")
     
     async def _handle_user_message(self, event, say):
         """Handle user messages with intelligent routing."""
@@ -257,25 +261,28 @@ class SlackApp:
         channel = event.get("channel")
         channel_type = event.get("channel_type")
         
-        logger.info(f"Message: ts={ts}, thread_ts={thread_ts}, channel={channel}, type={channel_type}")
+        logger.info(f"Received user message: ts={ts}, thread_ts={thread_ts}, channel={channel}, channel_type={channel_type}")
         
         # Check if message should be processed
         if not await self._should_process_message(event):
-            logger.info("Skipping message processing")
+            logger.info(f"Skipping message processing based on checks")
             return
         
         text = event.get("text", "")
+        logger.info(f"Processing message text: {text[:100]}{'...' if len(text) > 100 else ''}")
         
         # Process the message
         response_type, content = await self._process_message(text, event)
         
         # Handle different response types
         if response_type == "none":
-            logger.info("No response needed")
+            logger.info("No response needed from agent")
             return
         elif response_type == "emoji":
+            logger.info(f"Sending emoji reaction: {content.get('emoji')}")
             await self._send_emoji_reaction(content)
         elif response_type == "message":
+            logger.info(f"Sending text response (length: {len(content)} chars)")
             await self._send_text_response(content, event, say)
         else:
             logger.warning(f"Unknown response type: {response_type}")
@@ -323,26 +330,40 @@ class SlackApp:
         channel_type = event.get("channel_type")
         thread_ts = event.get("thread_ts")
         
+        logger.info(f"Checking if message should be processed: ts={ts}, channel_type={channel_type}, thread_ts={thread_ts}")
+        
         # Check if already processed
         try:
+            logger.info(f"Checking if message with ts={ts} has already been processed")
             messages = await self.thread_store.find_messages_by_attribute("platforms.slack.ts", ts)
             if messages:
-                logger.info(f"Message {ts} already processed")
+                logger.info(f"Found existing message with ts={ts} - skipping processing")
                 return False
+            else:
+                logger.info(f"No existing message found with ts={ts} - will process")
         except Exception as e:
-            logger.warning(f"Error checking message: {str(e)}")
+            logger.warning(f"Error checking if message is already processed: {str(e)}")
         
         # Process DMs, threaded messages, and channel messages
-        if channel_type == "im" or thread_ts:
+        if channel_type == "im":
+            logger.info("Processing direct message")
             return True
         
+        if thread_ts:
+            logger.info(f"Processing thread reply in thread_ts={thread_ts}")
+            return True
+        
+        logger.info("Processing channel message")
         return True  # For now, process all channel messages
     
     async def _process_message(self, text: str, event: dict):
         """Process a message and return (type, content) tuple."""
         try:
+            logger.info("Starting message processing...")
+            
             # Get or create thread
             thread = await self._get_or_create_thread(event)
+            logger.info(f"Using thread {thread.id} with {len(thread.messages)} existing messages")
             
             # Create user message
             user_id = event.get("user", "unknown_user")
@@ -362,11 +383,13 @@ class SlackApp:
             # Add message to thread and save
             thread.add_message(user_message)
             await self.thread_store.save(thread)
+            logger.info(f"Added user message to thread and saved")
             
             # Run message classifier
             classifier_thread = copy.deepcopy(thread)
             thread_ts = event.get("thread_ts") or event.get("ts")
             
+            logger.info(f"Passing copy of thread {classifier_thread.id} with {len(classifier_thread.messages)} messages to classifier")
             with weave.attributes({'env': os.getenv("ENV", "development"), 'event_id': thread_ts}):
                 _, classify_messages = await self.message_classifier_agent.go(classifier_thread)
             
@@ -378,21 +401,26 @@ class SlackApp:
                     response_type = classification.get("response_type", "full_response")
                     
                     if response_type == "ignore":
-                        logger.info(f"Classification: IGNORE - {classification.get('reasoning', '')}")
+                        logger.info(f"Classification result: IGNORE - {classification.get('reasoning', 'No reason provided')}")
                         return ("none", "")
                     elif response_type == "emoji_reaction":
                         emoji = classification.get("suggested_emoji", "thumbsup")
-                        logger.info(f"Classification: EMOJI ({emoji}) - {classification.get('reasoning', '')}")
+                        logger.info(f"Classification result: EMOJI ({emoji}) - {classification.get('reasoning', 'No reason provided')}")
                         return ("emoji", {
                             "ts": event.get("ts"),
                             "channel": event.get("channel"),
                             "emoji": emoji
                         })
+                    else:
+                        logger.info(f"Classification result: FULL RESPONSE - {classification.get('reasoning', 'No reason provided')}")
                 except json.JSONDecodeError:
-                    logger.warning(f"Failed to parse classification: {classify_result}")
+                    logger.warning(f"Failed to parse classification response: {classify_result}")
+            else:
+                logger.warning("No classification result, proceeding with full response")
             
             # Add thinking emoji while processing
             try:
+                logger.info(f"Adding thinking face emoji reaction to message {event.get('ts')} to indicate processing")
                 await self.slack_app.client.reactions_add(
                     channel=event.get("channel"),
                     timestamp=event.get("ts"),
@@ -402,17 +430,27 @@ class SlackApp:
                 logger.warning(f"Failed to add thinking emoji: {str(e)}")
             
             # Process with main agent
+            logger.info(f"Processing with main agent {self.agent.name}")
             with weave.attributes({'env': os.getenv("ENV", "development"), 'event_id': thread_ts}):
                 _, new_messages = await self.agent.go(thread.id)
+            
+            logger.info(f"Agent returned {len(new_messages)} new messages")
             
             # Get assistant response
             assistant_messages = [m for m in new_messages if m.role == "assistant"]
             assistant_message = assistant_messages[-1] if assistant_messages else None
             
             if not assistant_message:
+                logger.warning("No assistant message found in agent response")
                 return ("message", "I apologize, but I couldn't generate a response.")
             
             response_content = assistant_message.content
+            
+            # Log metrics if available
+            if hasattr(assistant_message, 'metrics') and assistant_message.metrics:
+                metrics = assistant_message.metrics
+                logger.info(f"Message metrics - Model: {metrics.get('model', 'N/A')}, "
+                           f"Tokens: {metrics.get('completion_tokens', 'N/A')}/{metrics.get('prompt_tokens', 'N/A')}")
             
             # Add dev footer if metrics available
             if hasattr(assistant_message, 'metrics') and assistant_message.metrics:
@@ -420,6 +458,7 @@ class SlackApp:
                 if footer:
                     response_content += footer
             
+            logger.info(f"Returning message response with length: {len(response_content)} chars")
             return ("message", response_content)
             
         except Exception as e:
@@ -436,61 +475,81 @@ class SlackApp:
         # Try to find existing thread
         if event.get("thread_ts"):
             try:
+                logger.info(f"Searching for thread with thread_ts: {event.get('thread_ts')}")
                 threads = await self.thread_store.find_by_platform("slack", {"thread_ts": str(event.get("thread_ts"))})
                 if threads:
+                    logger.info(f"Found existing thread {threads[0].id} for Slack thread {event.get('thread_ts')}")
                     return threads[0]
+                logger.info(f"No thread found with thread_ts: {event.get('thread_ts')}")
             except Exception as e:
-                logger.warning(f"Error finding thread: {str(e)}")
+                logger.warning(f"Error finding thread by thread_ts: {str(e)}", exc_info=True)
         
         # Try by ts
         ts = event.get("ts")
         if ts:
             try:
+                logger.info(f"Searching for thread with ts as thread_ts: {ts}")
                 threads = await self.thread_store.find_by_platform("slack", {"thread_ts": str(ts)})
                 if threads:
+                    logger.info(f"Found existing thread {threads[0].id} for Slack ts {ts}")
                     return threads[0]
+                logger.info(f"No thread found with ts: {ts}")
             except Exception as e:
-                logger.warning(f"Error finding thread by ts: {str(e)}")
+                logger.warning(f"Error finding thread by ts: {str(e)}", exc_info=True)
         
         # Create new thread
         thread = Thread(platforms={"slack": slack_platform_data})
         await self.thread_store.save(thread)
-        logger.info(f"Created new thread {thread.id}")
+        logger.info(f"Created new thread {thread.id} with thread_ts: {slack_platform_data['thread_ts']}")
         return thread
     
     async def _find_message_and_thread(self, item_ts):
         """Find a message and its thread by timestamp."""
         try:
+            logger.info(f"Searching for message with slack ts={item_ts}")
             messages = await self.thread_store.find_messages_by_attribute("platforms.slack.ts", item_ts)
             if not messages:
+                logger.info(f"No message found with ts={item_ts}")
                 return None, None
             
             message = messages[0]
             thread = await self.thread_store.get_thread_by_message_id(message.id)
+            if not thread:
+                logger.warning(f"Thread not found for message {message.id}")
+                return message, None
+            
+            logger.info(f"Found message {message.id} in thread {thread.id}")
             return message, thread
         except Exception as e:
-            logger.error(f"Error finding message: {str(e)}")
+            logger.error(f"Error finding message and thread: {str(e)}", exc_info=True)
             return None, None
     
     async def _send_emoji_reaction(self, reaction_info):
         """Send an emoji reaction."""
         try:
+            emoji = reaction_info["emoji"]
+            ts = reaction_info["ts"]
+            channel = reaction_info["channel"]
+            logger.info(f"Adding emoji reaction '{emoji}' to message {ts} in channel {channel}")
             await self.slack_app.client.reactions_add(
-                channel=reaction_info["channel"],
-                timestamp=reaction_info["ts"],
-                name=reaction_info["emoji"]
+                channel=channel,
+                timestamp=ts,
+                name=emoji
             )
+            logger.info(f"Successfully added emoji reaction '{emoji}'")
         except Exception as e:
-            logger.error(f"Error sending emoji reaction: {str(e)}")
+            logger.error(f"Error sending emoji reaction: {str(e)}", exc_info=True)
     
     async def _send_text_response(self, text, event, say):
         """Send a text response."""
         try:
             # Convert to Slack blocks
             thread_ts = event.get("thread_ts") or event.get("ts")
+            logger.info(f"Converting response to Slack blocks for thread_ts={thread_ts}")
             response_blocks = await self._convert_to_slack_blocks(text, thread_ts)
             
             # Send response
+            logger.info(f"Sending response with thread_ts={thread_ts}")
             response = await say(
                 thread_ts=thread_ts,
                 text=response_blocks["text"],
@@ -499,25 +558,33 @@ class SlackApp:
             
             # Update assistant message with Slack timestamp
             if response and "ts" in response:
+                logger.info(f"Response sent successfully with ts={response['ts']}")
                 thread = await self._get_or_create_thread(event)
-                await self._update_assistant_message_with_slack_ts(
+                updated = await self._update_assistant_message_with_slack_ts(
                     thread,
                     event.get("channel"),
                     response["ts"],
                     thread_ts
                 )
+                if updated:
+                    logger.info(f"Updated assistant message with Slack timestamp")
+                else:
+                    logger.warning("Failed to update assistant message with Slack timestamp")
         except Exception as e:
-            logger.error(f"Error sending text response: {str(e)}")
+            logger.error(f"Error sending text response: {str(e)}", exc_info=True)
     
     async def _convert_to_slack_blocks(self, text, thread_ts=None):
         """Convert markdown text to Slack blocks."""
         try:
+            logger.debug(f"Converting text to Slack blocks (length: {len(text)} chars)")
             with weave.attributes({'env': os.getenv("ENV", "development"), 'event_id': thread_ts}):
                 result = await generate_slack_blocks(content=text)
             
             if result and isinstance(result, dict) and "blocks" in result:
+                logger.debug(f"Successfully converted to {len(result['blocks'])} blocks")
                 return {"blocks": result["blocks"], "text": result.get("text", text)}
             else:
+                logger.warning("Unexpected response format from generate_slack_blocks")
                 return {"text": text}
         except Exception as e:
             logger.error(f"Error converting to Slack blocks: {e}")
@@ -535,11 +602,12 @@ class SlackApp:
                         "thread_ts": thread_ts
                     }
                     await self.thread_store.save(thread)
-                    logger.info(f"Updated assistant message with ts={response_ts}")
+                    logger.info(f"Updated assistant message {message.id} with slack ts={response_ts}")
                     return True
+            logger.info("No assistant messages found to update with Slack timestamp")
             return False
         except Exception as e:
-            logger.error(f"Error updating assistant message: {str(e)}")
+            logger.error(f"Error updating assistant message with slack ts: {str(e)}", exc_info=True)
             return False
     
     def _get_dev_footer(self, metrics):
