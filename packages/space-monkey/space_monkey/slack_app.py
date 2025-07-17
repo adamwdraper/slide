@@ -76,6 +76,7 @@ class SlackApp:
         self._original_sigint = None  # Store original SIGINT handler
         self._original_sigterm = None  # Store original SIGTERM handler
         self._shutdown_event = asyncio.Event()  # Event to signal shutdown
+        self._background_tasks = set()  # Track background tasks
         
         # FastAPI app for server functionality
         self.fastapi_app = FastAPI(
@@ -129,8 +130,13 @@ class SlackApp:
         """Clean shutdown logic."""
         logger.info("Shutting down Space Monkey Slack Agent...")
         
+        # Close the socket handler
         if self.socket_handler:
-            await self.socket_handler.close_async()
+            try:
+                await self.socket_handler.close_async()
+                logger.info("Slack socket handler closed")
+            except Exception as e:
+                logger.error(f"Error closing socket handler: {e}")
         
         # Close database connections if available
         if (self.thread_store and 
@@ -222,7 +228,9 @@ class SlackApp:
         """Start the Slack socket connection."""
         self.socket_handler = AsyncSocketModeHandler(self.slack_app, os.environ["SLACK_APP_TOKEN"])
         # Start the socket handler as a background task instead of blocking
-        asyncio.create_task(self.socket_handler.start_async())
+        task = asyncio.create_task(self.socket_handler.start_async())
+        self._background_tasks.add(task)
+        task.add_done_callback(self._background_tasks.discard)
         # Give it a moment to connect
         await asyncio.sleep(0.5)
         logger.info("Slack socket connection established")
@@ -658,8 +666,24 @@ class SlackApp:
         
         try:
             logger.info(f"Starting server on {host}:{port}")
-            # Run the server with proper signal handling
-            await self.server.serve()
+            # Run server with shutdown event monitoring
+            server_task = asyncio.create_task(self.server.serve())
+            shutdown_task = asyncio.create_task(self._shutdown_event.wait())
+            
+            # Wait for either server completion or shutdown signal
+            done, pending = await asyncio.wait(
+                {server_task, shutdown_task},
+                return_when=asyncio.FIRST_COMPLETED
+            )
+            
+            # Cancel pending tasks
+            for task in pending:
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+                    
         except asyncio.CancelledError:
             logger.info("Server task cancelled")
         except KeyboardInterrupt:
@@ -668,38 +692,37 @@ class SlackApp:
             logger.error(f"Server error: {str(e)}", exc_info=True)
             raise
         finally:
+            # Ensure proper cleanup
+            await self._cleanup()
             # Restore original signal handlers
             self._restore_signal_handlers()
             logger.info("Server shutting down")
     
+    async def _cleanup(self):
+        """Clean up all resources."""
+        logger.info("Starting cleanup...")
+        
+        # Cancel all background tasks
+        for task in self._background_tasks:
+            if not task.done():
+                task.cancel()
+        
+        # Wait for all tasks to complete
+        if self._background_tasks:
+            await asyncio.gather(*self._background_tasks, return_exceptions=True)
+        
+        # Shutdown server if still running
+        if self.server and not self.server.should_exit:
+            self.server.should_exit = True
+            
+        logger.info("Cleanup complete")
+    
     def _setup_signal_handlers(self):
         """Set up signal handlers for graceful shutdown."""
-        # Get the current event loop
-        loop = asyncio.get_event_loop()
-        
-        # Define handler that schedules shutdown in the event loop
         def signal_handler(sig, frame):
-            logger.info(f"Received signal {sig}, scheduling graceful shutdown...")
-            
-            # Try to shutdown gracefully first
-            if self.server:
-                self.server.should_exit = True
-                self.server.force_exit = True
-            
-            # Schedule the shutdown coroutine in the event loop
-            try:
-                loop.call_soon_threadsafe(lambda: asyncio.create_task(self._shutdown_server()))
-            except RuntimeError:
-                # If the loop is not running, just set the flags
-                pass
-            
-            # If we're really stuck, force exit after a delay
-            def force_exit():
-                logger.warning("Forcing exit after timeout")
-                os._exit(0)
-            
-            # Give it 2 seconds to shut down gracefully
-            threading.Timer(2.0, force_exit).start()
+            logger.info(f"Received signal {sig}, triggering shutdown event...")
+            # Simply set the shutdown event - let async code handle the rest
+            self._shutdown_event.set()
         
         # Store original handlers and set new ones
         self._original_sigint = signal.signal(signal.SIGINT, signal_handler)
@@ -712,28 +735,4 @@ class SlackApp:
             signal.signal(signal.SIGINT, self._original_sigint)
         if self._original_sigterm is not None:
             signal.signal(signal.SIGTERM, self._original_sigterm)
-        logger.info("Original signal handlers restored")
-    
-    async def _shutdown_server(self):
-        """Gracefully shutdown the server."""
-        logger.info("Starting server shutdown sequence...")
-        
-        # Close the socket handler first
-        if self.socket_handler:
-            logger.info("Closing Slack socket handler...")
-            try:
-                await self.socket_handler.close_async()
-                logger.info("Slack socket handler closed")
-            except Exception as e:
-                logger.error(f"Error closing socket handler: {e}")
-        
-        # Signal the uvicorn server to stop
-        if self.server:
-            logger.info("Signaling uvicorn server to stop...")
-            self.server.should_exit = True
-            # Force close all connections
-            if hasattr(self.server, 'force_exit'):
-                self.server.force_exit = True
-            logger.info("Uvicorn server signaled to stop")
-        
-        logger.info("Server shutdown sequence complete") 
+        logger.info("Original signal handlers restored") 
