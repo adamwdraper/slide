@@ -10,6 +10,8 @@ import time
 import threading
 import requests
 import weave
+import signal
+import sys
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 from slack_bolt.async_app import AsyncApp
@@ -70,6 +72,10 @@ class SlackApp:
         self.bot_user_id = None
         self.message_classifier_agent = None
         self.health_thread = None
+        self.server = None  # Store uvicorn server instance
+        self._original_sigint = None  # Store original SIGINT handler
+        self._original_sigterm = None  # Store original SIGTERM handler
+        self._shutdown_event = asyncio.Event()  # Event to signal shutdown
         
         # FastAPI app for server functionality
         self.fastapi_app = FastAPI(
@@ -215,7 +221,10 @@ class SlackApp:
     async def _start_slack(self):
         """Start the Slack socket connection."""
         self.socket_handler = AsyncSocketModeHandler(self.slack_app, os.environ["SLACK_APP_TOKEN"])
-        await self.socket_handler.start_async()
+        # Start the socket handler as a background task instead of blocking
+        asyncio.create_task(self.socket_handler.start_async())
+        # Give it a moment to connect
+        await asyncio.sleep(0.5)
         logger.info("Slack socket connection established")
     
     def _start_health_monitoring(self):
@@ -634,15 +643,97 @@ class SlackApp:
             workers=1,
             loop="asyncio",
             timeout_keep_alive=65,
+            # Disable uvicorn's signal handlers so we can use our own
+            use_colors=True,
+            server_header=False,
         )
         
-        server = uvicorn.Server(config)
+        self.server = uvicorn.Server(config)
+        
+        # Override uvicorn's signal handling
+        self.server.install_signal_handlers = lambda: None
+        
+        # Set up our own signal handlers
+        self._setup_signal_handlers()
         
         try:
             logger.info(f"Starting server on {host}:{port}")
-            await server.serve()
+            # Run the server with proper signal handling
+            await self.server.serve()
+        except asyncio.CancelledError:
+            logger.info("Server task cancelled")
+        except KeyboardInterrupt:
+            logger.info("Received keyboard interrupt")
         except Exception as e:
             logger.error(f"Server error: {str(e)}", exc_info=True)
             raise
         finally:
-            logger.info("Server shutting down") 
+            # Restore original signal handlers
+            self._restore_signal_handlers()
+            logger.info("Server shutting down")
+    
+    def _setup_signal_handlers(self):
+        """Set up signal handlers for graceful shutdown."""
+        # Get the current event loop
+        loop = asyncio.get_event_loop()
+        
+        # Define handler that schedules shutdown in the event loop
+        def signal_handler(sig, frame):
+            logger.info(f"Received signal {sig}, scheduling graceful shutdown...")
+            
+            # Try to shutdown gracefully first
+            if self.server:
+                self.server.should_exit = True
+                self.server.force_exit = True
+            
+            # Schedule the shutdown coroutine in the event loop
+            try:
+                loop.call_soon_threadsafe(lambda: asyncio.create_task(self._shutdown_server()))
+            except RuntimeError:
+                # If the loop is not running, just set the flags
+                pass
+            
+            # If we're really stuck, force exit after a delay
+            def force_exit():
+                logger.warning("Forcing exit after timeout")
+                os._exit(0)
+            
+            # Give it 2 seconds to shut down gracefully
+            threading.Timer(2.0, force_exit).start()
+        
+        # Store original handlers and set new ones
+        self._original_sigint = signal.signal(signal.SIGINT, signal_handler)
+        self._original_sigterm = signal.signal(signal.SIGTERM, signal_handler)
+        logger.info("Signal handlers installed for graceful shutdown")
+    
+    def _restore_signal_handlers(self):
+        """Restore original signal handlers."""
+        if self._original_sigint is not None:
+            signal.signal(signal.SIGINT, self._original_sigint)
+        if self._original_sigterm is not None:
+            signal.signal(signal.SIGTERM, self._original_sigterm)
+        logger.info("Original signal handlers restored")
+    
+    async def _shutdown_server(self):
+        """Gracefully shutdown the server."""
+        logger.info("Starting server shutdown sequence...")
+        
+        # Close the socket handler first
+        if self.socket_handler:
+            logger.info("Closing Slack socket handler...")
+            try:
+                await self.socket_handler.close_async()
+                logger.info("Slack socket handler closed")
+            except Exception as e:
+                logger.error(f"Error closing socket handler: {e}")
+        
+        # Signal the uvicorn server to stop
+        if self.server:
+            logger.info("Signaling uvicorn server to stop...")
+            self.server.should_exit = True
+            # Force close all connections
+            if hasattr(self.server, 'force_exit'):
+                self.server.force_exit = True
+            logger.info("Uvicorn server signaled to stop")
+        
+        logger.info("Server shutdown sequence complete") 
