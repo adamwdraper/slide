@@ -26,19 +26,21 @@ async def main():
         print("  SLACK_APP_TOKEN=xapp-...")
         return
     
-    # Create a simple agent
-    agent = Agent(
-        name="SimpleBot",
-        model_name="gpt-4.1",
-        purpose="To be a helpful assistant in Slack",
-        temperature=0.7
-    )
-    logger.info(f"Created agent: {agent.name}")
-    
     # Create in-memory stores (simple for testing)
     thread_store = await ThreadStore.create()
     file_store = await FileStore.create()
     logger.info("Created in-memory thread and file stores")
+    
+    # Create a simple agent with stores
+    agent = Agent(
+        name="SimpleBot",
+        model_name="gpt-4.1",
+        purpose="To be a helpful assistant in Slack",
+        temperature=0.7,
+        thread_store=thread_store,
+        file_store=file_store
+    )
+    logger.info(f"Created agent: {agent.name}")
     
     # Create and start the Slack app
     app = SlackApp(
