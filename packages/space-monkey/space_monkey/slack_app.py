@@ -180,9 +180,7 @@ class SlackApp:
             name="MessageClassifier",
             model_name="gpt-4.1",
             version="2.0.0",
-            purpose=formatted_prompt,
-            thread_store=self.thread_store,
-            file_store=self.file_store
+            purpose=formatted_prompt
         )
         topics_msg = self.response_topics or "default topics"
         logger.info(f"Message classifier initialized for agent '{agent_name}' with topics: {topics_msg}")
