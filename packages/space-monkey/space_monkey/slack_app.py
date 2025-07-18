@@ -307,8 +307,8 @@ class SlackApp:
             logger.info(f"Sending emoji reaction: {content.get('emoji')}")
             await self._send_emoji_reaction(content)
         elif response_type == "message":
-            logger.info(f"Sending text response (length: {len(content)} chars)")
-            await self._send_text_response(content, event, say)
+            logger.info(f"Sending text response (length: {len(content['text'])} chars)")
+            await self._send_response(content['text'], event, say)
         else:
             logger.warning(f"Unknown response type: {response_type}")
     
@@ -475,15 +475,92 @@ class SlackApp:
             
             logger.info(f"Agent returned {len(new_messages)} new messages")
             
+            # Check for attachments in tool messages BEFORE sending response
+            attachments_to_upload = []
+            for msg in new_messages:
+                if msg.role == "tool" and msg.attachments:
+                    for attachment in msg.attachments:
+                        attachments_to_upload.append({
+                            "message": msg,
+                            "attachment": attachment
+                        })
+            
             # Get assistant response
             assistant_messages = [m for m in new_messages if m.role == "assistant"]
             assistant_message = assistant_messages[-1] if assistant_messages else None
             
             if not assistant_message:
                 logger.warning("No assistant message found in agent response")
-                return ("message", "I apologize, but I couldn't generate a response.")
+                return ("message", {"text": "I apologize, but I couldn't generate a response."})
             
             response_content = assistant_message.content
+            
+            # Upload attachments BEFORE sending the message
+            uploaded_files = []
+            if attachments_to_upload:
+                logger.info(f"Found {len(attachments_to_upload)} attachments to upload to Slack")
+                for item in attachments_to_upload:
+                    attachment = item["attachment"]
+                    try:
+                        # Get the file content
+                        content_bytes = await attachment.get_content_bytes()
+                        
+                        # Get upload URL from Slack
+                        logger.info(f"Getting upload URL for {attachment.filename}")
+                        upload_url_response = await self.slack_app.client.files_getUploadURLExternal(
+                            length=len(content_bytes),
+                            filename=attachment.filename
+                        )
+                        
+                        upload_url = upload_url_response['upload_url']
+                        file_id = upload_url_response['file_id']
+                        
+                        # Upload the file
+                        logger.info(f"Uploading {attachment.filename} to Slack")
+                        import aiohttp
+                        async with aiohttp.ClientSession() as session:
+                            async with session.post(
+                                upload_url,
+                                data={'file': content_bytes}
+                            ) as resp:
+                                if resp.status != 200:
+                                    logger.error(f"Failed to upload file: {await resp.text()}")
+                                    continue
+                        
+                        # Don't complete the upload yet - save the file info
+                        uploaded_files.append({
+                            "file_id": file_id,
+                            "filename": attachment.filename,
+                            "mime_type": attachment.mime_type
+                        })
+                        logger.info(f"File {attachment.filename} uploaded, ready to share")
+                        
+                    except Exception as e:
+                        logger.error(f"Error uploading attachment {attachment.filename}: {str(e)}")
+            
+            # Now send the message with files if any
+            if uploaded_files:
+                # Complete all uploads and share them with the message
+                thread_ts_for_files = event.get("thread_ts") or event.get("ts")
+                
+                # Complete uploads with initial_comment containing our response
+                files_to_complete = [{"id": f["file_id"], "title": f["filename"]} for f in uploaded_files]
+                
+                try:
+                    complete_response = await self.slack_app.client.files_completeUploadExternal(
+                        files=files_to_complete,
+                        channel_id=event.get("channel"),
+                        thread_ts=thread_ts_for_files,
+                        initial_comment=response_content
+                    )
+                    
+                    if complete_response['ok']:
+                        logger.info(f"Successfully shared {len(files_to_complete)} files with message")
+                        # Return empty response since files_completeUploadExternal already posted the message
+                        return ("none", "")
+                except Exception as e:
+                    logger.error(f"Error completing file uploads: {str(e)}")
+                    # Fall back to sending message without files
             
             # Log metrics if available
             if hasattr(assistant_message, 'metrics') and assistant_message.metrics:
@@ -498,7 +575,7 @@ class SlackApp:
                     response_content += footer
             
             logger.info(f"Returning message response with length: {len(response_content)} chars")
-            return ("message", response_content)
+            return ("message", {"text": response_content})
             
         except Exception as e:
             logger.error(f"Error processing message: {e}", exc_info=True)
@@ -520,10 +597,10 @@ class SlackApp:
                     logger.error(f"Do they match? {error_thread_id == thread.id if 'thread' in locals() else 'No thread to compare'}")
                 
                 # Don't expose internal thread errors to users
-                return ("message", "I apologize, but I'm having trouble processing your message. Please try again.")
+                return ("message", {"text": "I apologize, but I'm having trouble processing your message. Please try again."})
             
             # For other errors, provide a generic error message
-            return ("message", "I apologize, but I encountered an error. Please try again.")
+            return ("message", {"text": "I apologize, but I encountered an error. Please try again."})
     
     async def _get_or_create_thread(self, event):
         """Get or create a thread based on Slack event data."""
@@ -600,15 +677,16 @@ class SlackApp:
         except Exception as e:
             logger.error(f"Error sending emoji reaction: {str(e)}", exc_info=True)
     
-    async def _send_text_response(self, text, event, say):
+    async def _send_response(self, text, event, say):
         """Send a text response."""
         try:
-            # Convert to Slack blocks
             thread_ts = event.get("thread_ts") or event.get("ts")
+            
+            # Convert text to Slack blocks
             logger.info(f"Converting response to Slack blocks for thread_ts={thread_ts}")
             response_blocks = await self._convert_to_slack_blocks(text, thread_ts)
             
-            # Send response
+            # Send the text message
             logger.info(f"Sending response with thread_ts={thread_ts}")
             response = await say(
                 thread_ts=thread_ts,
@@ -631,7 +709,7 @@ class SlackApp:
                 else:
                     logger.warning("Failed to update assistant message with Slack timestamp")
         except Exception as e:
-            logger.error(f"Error sending text response: {str(e)}", exc_info=True)
+            logger.error(f"Error sending response: {str(e)}", exc_info=True)
     
     async def _convert_to_slack_blocks(self, text, thread_ts=None):
         """Convert markdown text to Slack blocks."""
