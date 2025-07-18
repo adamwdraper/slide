@@ -193,6 +193,7 @@ class SlackApp:
             model_name="gpt-4.1",
             version="2.0.0",
             purpose=formatted_prompt
+            # Note: Message classifier doesn't need stores - it only processes thread copies
         )
         topics_msg = self.response_topics or "default topics"
         logger.info(f"Message classifier initialized for agent '{agent_name}' with topics: {topics_msg}")
@@ -206,12 +207,15 @@ class SlackApp:
                 logger.info(f"MIDDLEWARE: Received payload: {list(payload.keys())}")
                 if isinstance(payload, dict) and "type" in payload:
                     event_type = payload["type"]
-                    logger.critical(f"MIDDLEWARE: Event type '{event_type}'")
+                    subtype = payload.get("subtype")
+                    logger.critical(f"MIDDLEWARE: Event type '{event_type}', subtype: '{subtype}'")
                     
                     if event_type in ["reaction_added", "reaction_removed"]:
                         logger.critical(f"MIDDLEWARE: REACTION EVENT: {json.dumps(payload)}")
                     elif event_type == "message":
-                        logger.critical(f"MIDDLEWARE: MESSAGE EVENT: channel={payload.get('channel')}, user={payload.get('user')}, ts={payload.get('ts')}")
+                        logger.critical(f"MIDDLEWARE: MESSAGE EVENT: channel={payload.get('channel')}, user={payload.get('user')}, ts={payload.get('ts')}, subtype={subtype}")
+                    elif event_type == "app_mention":
+                        logger.critical(f"MIDDLEWARE: APP_MENTION EVENT: channel={payload.get('channel')}, user={payload.get('user')}, ts={payload.get('ts')}")
                 
                 await next()
             except Exception as e:
@@ -265,9 +269,15 @@ class SlackApp:
     async def _handle_app_mention(self, event, say):
         """Handle app mention events."""
         logger.info(f"App mention event: ts={event.get('ts')}, channel={event.get('channel')}, user={event.get('user')}")
-        # The actual message will be handled by the message event handler
-        # This prevents "Unhandled request" warnings while avoiding duplicate processing
-        logger.info(f"Received app_mention event with ts={event.get('ts')} - will be processed by message handler")
+        
+        # Check if this message has already been processed
+        ts = event.get("ts")
+        if await self._should_process_message(event):
+            # Process the mention directly since sometimes Slack doesn't send a corresponding message event
+            logger.info(f"Processing app_mention as message since it hasn't been processed yet")
+            await self._handle_user_message(event, say)
+        else:
+            logger.info(f"App mention with ts={ts} already processed, skipping")
     
     async def _handle_user_message(self, event, say):
         """Handle user messages with intelligent routing."""
@@ -347,9 +357,9 @@ class SlackApp:
         
         logger.info(f"Checking if message should be processed: ts={ts}, channel_type={channel_type}, thread_ts={thread_ts}")
         
-        # Check if already processed
+        # Check if already processed in the database
         try:
-            logger.info(f"Checking if message with ts={ts} has already been processed")
+            logger.info(f"Checking if message with ts={ts} has already been processed in database")
             messages = await self.thread_store.find_messages_by_attribute("platforms.slack.ts", ts)
             if messages:
                 logger.info(f"Found existing message with ts={ts} - skipping processing")
@@ -358,6 +368,10 @@ class SlackApp:
                 logger.info(f"No existing message found with ts={ts} - will process")
         except Exception as e:
             logger.warning(f"Error checking if message is already processed: {str(e)}")
+            # Be conservative - if we can't check, assume it might have been processed
+            # This prevents duplicate processing when there are database errors
+            logger.info(f"Due to error, being conservative and skipping message with ts={ts}")
+            return False
         
         # Process DMs, threaded messages, and channel messages
         if channel_type == "im":
@@ -446,8 +460,18 @@ class SlackApp:
             
             # Process with main agent
             logger.info(f"Processing with main agent {self.agent.name}")
-            with weave.attributes({'env': os.getenv("ENV", "development"), 'event_id': thread_ts}):
-                _, new_messages = await self.agent.go(thread.id)
+            logger.info(f"Thread ID: {thread.id}, Message count: {len(thread.messages)}")
+            logger.info(f"Agent thread_store ID: {id(self.agent.thread_store)}, SlackApp thread_store ID: {id(self.thread_store)}")
+            
+            try:
+                with weave.attributes({'env': os.getenv("ENV", "development"), 'event_id': thread_ts}):
+                    _, new_messages = await self.agent.go(thread)
+            except ValueError as e:
+                if "Thread with ID" in str(e) and "not found" in str(e):
+                    logger.error(f"Thread lookup failed: {e}")
+                    logger.error(f"Failed thread ID: {thread.id}")
+                    logger.error(f"Thread store contents: {await self.thread_store.list()}")
+                raise
             
             logger.info(f"Agent returned {len(new_messages)} new messages")
             
@@ -478,7 +502,28 @@ class SlackApp:
             
         except Exception as e:
             logger.error(f"Error processing message: {e}", exc_info=True)
-            return ("message", f"I apologize, but I encountered an error: {str(e)}")
+            error_msg = str(e)
+            
+            # Log thread IDs to help debug phantom thread errors
+            if "Thread with ID" in error_msg and "not found" in error_msg:
+                logger.error(f"Thread error detected!")
+                logger.error(f"Current thread ID: {thread.id if 'thread' in locals() else 'No thread object'}")
+                logger.error(f"Error mentions thread ID in message: {error_msg}")
+                
+                # Try to extract the error thread ID
+                import re
+                match = re.search(r'Thread with ID (\S+) not found', error_msg)
+                if match:
+                    error_thread_id = match.group(1)
+                    logger.error(f"Error thread ID: {error_thread_id}")
+                    logger.error(f"Current thread ID: {thread.id if 'thread' in locals() else 'No thread'}")
+                    logger.error(f"Do they match? {error_thread_id == thread.id if 'thread' in locals() else 'No thread to compare'}")
+                
+                # Don't expose internal thread errors to users
+                return ("message", "I apologize, but I'm having trouble processing your message. Please try again.")
+            
+            # For other errors, provide a generic error message
+            return ("message", "I apologize, but I encountered an error. Please try again.")
     
     async def _get_or_create_thread(self, event):
         """Get or create a thread based on Slack event data."""

@@ -24,9 +24,9 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
-    # Core Tyler ecosystem packages
-    "slide-tyler>=1.1.0",
-    "slide-narrator>=0.2.0",
+    # Core Tyler ecosystem packages (local development versions)
+    "slide-tyler @ file:///Users/adamdraper/Documents/Code/slide/packages/tyler",
+    "slide-narrator @ file:///Users/adamdraper/Documents/Code/slide/packages/narrator",
     # Slack integration
     "slack-bolt>=1.18.0",
     # Web framework
@@ -40,6 +40,8 @@ dependencies = [
     "requests>=2.32.0",
     # Core utilities
     "pydantic>=2.10.0",
+    "openai>=1.97.0",
+    "litellm>=1.74.4",
 ]
 
 [project.optional-dependencies]
@@ -54,6 +56,9 @@ dev = [
 Homepage = "https://github.com/adamwdraper/slide"
 Repository = "https://github.com/adamwdraper/slide"
 "Bug Tracker" = "https://github.com/adamwdraper/slide/issues"
+
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["space_monkey"]

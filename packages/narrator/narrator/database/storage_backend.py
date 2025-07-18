@@ -1,6 +1,6 @@
 """Storage backend implementations for ThreadStore."""
 from abc import ABC, abstractmethod
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 from datetime import datetime, UTC
 import json
 import os
@@ -64,7 +64,7 @@ class StorageBackend(ABC):
         pass
 
     @abstractmethod
-    async def find_messages_by_attribute(self, path: str, value: Any) -> List[MessageRecord]:
+    async def find_messages_by_attribute(self, path: str, value: Any) -> Union[List[Message], List[MessageRecord]]:
         """
         Find messages that have a specific attribute at a given JSON path.
         Uses efficient SQL JSON path queries for PostgreSQL and falls back to
@@ -138,7 +138,7 @@ class MemoryBackend(StorageBackend):
             threads = threads[:limit]
         return threads
 
-    async def find_messages_by_attribute(self, path: str, value: Any) -> List[MessageRecord]:
+    async def find_messages_by_attribute(self, path: str, value: Any) -> List[Message]:
         """
         Check if any messages exist with a specific attribute at a given JSON path.
         
@@ -147,7 +147,7 @@ class MemoryBackend(StorageBackend):
             value: The value to search for
             
         Returns:
-            True if any messages match, False otherwise
+            List of messages matching the criteria (possibly empty)
         """
         # Traverse all threads and messages
         for thread in self._threads.values():
@@ -166,7 +166,9 @@ class MemoryBackend(StorageBackend):
                 
                 # Check if we found a match
                 if current == value:
-                    return [self._create_message_record(message, thread.id, 0)]
+                    # For MemoryBackend, we can't return MessageRecord objects
+                    # Return a list containing the message data that the ThreadStore can handle
+                    return [message]
         
         return []
 
