@@ -1,5 +1,12 @@
 """
 Tests for message classifier configuration features
+
+This file specifically tests the classifier prompt formatting functionality:
+1. format_classifier_prompt function with various parameters
+2. SlackApp integration with custom classifier configurations
+3. Prompt structure integrity and required sections
+
+For comprehensive SlackApp tests, see test_slack_app.py
 """
 import pytest
 import asyncio

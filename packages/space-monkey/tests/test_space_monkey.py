@@ -1,5 +1,13 @@
 """
 Tests for Space Monkey API
+
+This file contains integration and smoke tests to ensure:
+1. All components can be imported correctly
+2. Basic object creation works without mocking
+3. The public API matches what's documented
+4. Components integrate properly together
+
+For detailed unit tests with mocking, see test_slack_app.py
 """
 import pytest
 import asyncio
