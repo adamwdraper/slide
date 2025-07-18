@@ -35,6 +35,7 @@ def mock_env_vars():
         'OPENAI_API_KEY': 'sk-test-key',
         'HEALTH_CHECK_URL': 'http://test-health-check',
         'WANDB_PROJECT': 'test-project',
+        'WANDB_API_KEY': 'test-wandb-key',
         'ENV': 'test'
     }):
         yield
