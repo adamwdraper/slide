@@ -3,7 +3,7 @@ import weave
 import base64
 from typing import Optional, Dict, List, Any, Tuple
 from bs4 import BeautifulSoup
-from tyler.utils.files import save_to_downloads
+from lye.utils.files import save_to_downloads
 from pathlib import Path
 from urllib.parse import urlparse
 

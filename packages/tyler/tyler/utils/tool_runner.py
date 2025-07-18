@@ -152,16 +152,16 @@ class ToolRunner:
                 logger.debug(f"Loading module {module_name} with no filters")
             
             # Import the module using the full package path
-            module_path = f"tyler.tools.{module_name}"
+            module_path = f"lye.{module_name}"
             logger.debug(f"Loading module {module_path}")
             
             try:
                 module = importlib.import_module(module_path)
             except ImportError as e:
                 logger.error(f"Import failed: {str(e)}")
-                # Try to import from tyler.tools directly
+                # Try to import from lye directly
                 try:
-                    from tyler.tools import TOOL_MODULES
+                    from lye import TOOL_MODULES
                     if module_name in TOOL_MODULES:
                         tools_list = TOOL_MODULES[module_name]
                         loaded_tools = []

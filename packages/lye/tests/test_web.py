@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import patch, MagicMock
 from pathlib import Path
-from tyler.tools.web import fetch_page, download_file, extract_text_from_html, fetch_html
+from lye.web import fetch_page, download_file, extract_text_from_html, fetch_html
 
 # Mock responses
 MOCK_HTML_CONTENT = """

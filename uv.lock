@@ -12,6 +12,7 @@ resolution-markers = [
 
 [manifest]
 members = [
+    "slide-lye",
     "slide-narrator",
     "slide-space-monkey",
     "slide-tyler",
@@ -1309,7 +1310,7 @@ wheels = [
 
 [[package]]
 name = "litellm"
-version = "1.74.3"
+version = "1.74.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
@@ -1324,9 +1325,9 @@ dependencies = [
     { name = "tiktoken" },
     { name = "tokenizers" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/cd/e3/3091066f6682016840e9a36111560656b609b95de04b2ec7b19ad2580eaa/litellm-1.74.3.tar.gz", hash = "sha256:a9e87ebe78947ceec67e75f830f1c956cc653b84563574241acea9c84e7e3ca1", size = 9256457, upload-time = "2025-07-12T20:06:06.128Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/52/49/32f0e7052309f2757885737e7eb7ce6f5ea5b48fad455b10dfd21720f04e/litellm-1.74.4.tar.gz", hash = "sha256:ace3dd8c052b57b728a2dbd38e7061cf95e3506b13a58c61da39902f6ee4a6be", size = 9405133, upload-time = "2025-07-17T02:46:11.015Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/14/6f/07735b5178f32e28daf8a30ed6ad3e2c8c06ac374dc06aecde007110470f/litellm-1.74.3-py3-none-any.whl", hash = "sha256:638ec73633c6f2cf78a7343723d8f3bc13c192558fcbaa29f3ba6bc7802e8663", size = 8618899, upload-time = "2025-07-12T20:06:03.609Z" },
+    { url = "https://files.pythonhosted.org/packages/21/0c/88df53727c28c006b2fb36616f93a036cde7fb9e37f016f60f02422f52ae/litellm-1.74.4-py3-none-any.whl", hash = "sha256:28de09c9d4cdbe322402f94236ec8dbac9edc5356e2f3b628b9bab0fb39284e4", size = 8639543, upload-time = "2025-07-17T02:46:08.052Z" },
 ]
 
 [[package]]
@@ -5257,6 +5258,58 @@ wheels = [
 ]
 
 [[package]]
+name = "slide-lye"
+version = "0.1.0"
+source = { editable = "packages/lye" }
+dependencies = [
+    { name = "beautifulsoup4" },
+    { name = "browser-use" },
+    { name = "httpx" },
+    { name = "langchain-openai" },
+    { name = "litellm" },
+    { name = "pandas" },
+    { name = "pdf2image" },
+    { name = "platformdirs" },
+    { name = "pypdf" },
+    { name = "python-dotenv" },
+    { name = "python-magic" },
+    { name = "requests" },
+    { name = "slack-sdk" },
+    { name = "weave" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "coverage" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "pytest-cov" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "beautifulsoup4", specifier = ">=4.12.0" },
+    { name = "browser-use", specifier = ">=0.1.40" },
+    { name = "coverage", marker = "extra == 'dev'", specifier = ">=7.6.10" },
+    { name = "httpx", specifier = ">=0.27.2" },
+    { name = "langchain-openai", specifier = ">=0.1.0" },
+    { name = "litellm", specifier = ">=1.60.2" },
+    { name = "pandas", specifier = ">=2.2.3" },
+    { name = "pdf2image", specifier = ">=1.17.0" },
+    { name = "platformdirs", specifier = ">=4.3.6" },
+    { name = "pypdf", specifier = ">=5.3.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.3.4" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.25.2" },
+    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=6.0.0" },
+    { name = "python-dotenv", specifier = ">=1.0.1" },
+    { name = "python-magic", specifier = ">=0.4.0" },
+    { name = "requests", specifier = ">=2.32.3" },
+    { name = "slack-sdk", specifier = ">=3.34.0" },
+    { name = "weave", specifier = ">=0.51.32" },
+]
+provides-extras = ["dev"]
+
+[[package]]
 name = "slide-narrator"
 version = "0.2.2"
 source = { editable = "packages/narrator" }
@@ -5306,6 +5359,8 @@ version = "0.1.1"
 source = { editable = "packages/space-monkey" }
 dependencies = [
     { name = "fastapi" },
+    { name = "litellm" },
+    { name = "openai" },
     { name = "pydantic" },
     { name = "python-dotenv" },
     { name = "requests" },
@@ -5328,6 +5383,8 @@ dev = [
 requires-dist = [
     { name = "coverage", marker = "extra == 'dev'", specifier = ">=7.6.0" },
     { name = "fastapi", specifier = ">=0.104.0" },
+    { name = "litellm", specifier = ">=1.74.4" },
+    { name = "openai", specifier = ">=1.97.0" },
     { name = "pydantic", specifier = ">=2.10.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.3.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.25.0" },
@@ -5424,6 +5481,7 @@ dependencies = [
     { name = "setproctitle" },
     { name = "six" },
     { name = "slack-sdk" },
+    { name = "slide-lye" },
     { name = "slide-narrator" },
     { name = "smmap" },
     { name = "sniffio" },
@@ -5543,6 +5601,7 @@ requires-dist = [
     { name = "setproctitle", specifier = ">=1.3.4" },
     { name = "six", specifier = ">=1.17.0" },
     { name = "slack-sdk", specifier = ">=3.34.0" },
+    { name = "slide-lye", editable = "packages/lye" },
     { name = "slide-narrator", editable = "packages/narrator" },
     { name = "smmap", specifier = ">=5.0.1" },
     { name = "sniffio", specifier = ">=1.3.1" },

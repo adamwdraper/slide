@@ -13,7 +13,7 @@ import json
 from pypdf import PdfReader
 from pdf2image import convert_from_bytes
 from litellm import completion
-from tyler.utils.logging import get_logger
+from lye.utils.logging import get_logger
 
 # Get configured logger
 logger = get_logger(__name__)

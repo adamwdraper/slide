@@ -24,9 +24,9 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
-    # Core Tyler ecosystem packages (local development versions)
-    "slide-tyler @ file:///Users/adamdraper/Documents/Code/slide/packages/tyler",
-    "slide-narrator @ file:///Users/adamdraper/Documents/Code/slide/packages/narrator",
+    # Core Tyler ecosystem packages
+    "slide-tyler>=1.1.0",
+    "slide-narrator>=0.2.0",
     # Slack integration
     "slack-bolt>=1.18.0",
     # Web framework
@@ -56,6 +56,10 @@ dev = [
 Homepage = "https://github.com/adamwdraper/slide"
 Repository = "https://github.com/adamwdraper/slide"
 "Bug Tracker" = "https://github.com/adamwdraper/slide/issues"
+
+[tool.uv.sources]
+slide-tyler = { workspace = true }
+slide-narrator = { workspace = true }
 
 [tool.hatch.metadata]
 allow-direct-references = true

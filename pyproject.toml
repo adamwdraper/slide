@@ -4,6 +4,7 @@ members = [
     "packages/narrator",
     "packages/tyler",
     "packages/space-monkey",
+    "packages/lye",
 ]
 
 # Workspace dependencies for development
@@ -11,6 +12,7 @@ members = [
 slide-narrator = { workspace = true }
 slide-tyler = { workspace = true }
 slide-space-monkey = { workspace = true }
+slide-lye = { workspace = true }
 
 # Development dependencies for the workspace
 [tool.uv]

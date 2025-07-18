@@ -1,7 +1,7 @@
 import pytest
 import subprocess
 from unittest.mock import patch, MagicMock
-from tyler.tools.command_line import (
+from lye.command_line import (
     is_safe_path,
     is_safe_command,
     validate_file_operation,

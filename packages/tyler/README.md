@@ -91,14 +91,13 @@ Handles files in conversations:
 
 ### Tools
 
-Extend agent capabilities with:
+Tyler's tools are provided by the `slide-lye` package. Extend agent capabilities with:
 - Web browsing and downloads (WEB_TOOLS)
 - Slack integration (SLACK_TOOLS)
 - Notion integration (NOTION_TOOLS)
 - Image processing (IMAGE_TOOLS)
 - Audio processing (AUDIO_TOOLS)
 - File operations (FILES_TOOLS)
-- Document processing (DOCUMENTS_TOOLS)
 - Shell commands (COMMAND_LINE_TOOLS)
 
 ### MCP

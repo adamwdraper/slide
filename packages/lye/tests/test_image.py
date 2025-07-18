@@ -1,5 +1,5 @@
 import pytest
-from tyler.tools.image import generate_image, analyze_image
+from lye.image import generate_image, analyze_image
 import base64
 from unittest.mock import patch, AsyncMock, MagicMock
 from pathlib import Path
@@ -34,7 +34,7 @@ async def test_generate_image_success(mock_image_response, mock_image_bytes):
     # Create a mock for litellm.image_generation
     mock_generation = MagicMock(return_value=mock_image_response)
     
-    with patch('tyler.tools.image.image_generation', mock_generation), \
+    with patch('lye.image.image_generation', mock_generation), \
          patch('httpx.AsyncClient') as mock_client:
         # Mock the HTTP response for image download
         mock_response = AsyncMock()
@@ -110,7 +110,7 @@ async def test_generate_image_parameters(mock_image_response, mock_image_bytes):
     # Create a mock for litellm.image_generation
     mock_generation = MagicMock(return_value=mock_image_response)
     
-    with patch('tyler.tools.image.image_generation', mock_generation), \
+    with patch('lye.image.image_generation', mock_generation), \
          patch('httpx.AsyncClient') as mock_client:
         # Mock the HTTP response for image download
         mock_response = AsyncMock()
@@ -163,7 +163,7 @@ async def test_generate_image_no_data():
         "data": []
     }
     
-    with patch('tyler.tools.image.image_generation', return_value=mock_response):
+    with patch('lye.image.image_generation', return_value=mock_response):
         result = await generate_image(prompt="test image")
         
         # Check error response
@@ -181,7 +181,7 @@ async def test_generate_image_no_url():
         "data": [{"revised_prompt": "A test image"}]  # No URL
     }
     
-    with patch('tyler.tools.image.image_generation', return_value=mock_response):
+    with patch('lye.image.image_generation', return_value=mock_response):
         result = await generate_image(prompt="test image")
         
         # Check error response
@@ -201,7 +201,7 @@ async def test_generate_image_http_error():
         }]
     }
     
-    with patch('tyler.tools.image.image_generation', return_value=mock_response), \
+    with patch('lye.image.image_generation', return_value=mock_response), \
          patch('httpx.AsyncClient') as mock_client:
         # Mock HTTP error
         mock_http_client = AsyncMock()
@@ -222,9 +222,9 @@ async def test_analyze_image_success(mock_completion_response):
     # Create a temporary file path
     file_path = "/tmp/test_image.jpg"
     
-    with patch('tyler.tools.image.Path.exists', return_value=True), \
+    with patch('lye.image.Path.exists', return_value=True), \
          patch('builtins.open', MagicMock()), \
-         patch('tyler.tools.image.completion', return_value=mock_completion_response):
+         patch('lye.image.completion', return_value=mock_completion_response):
         
         # Mock file reading
         mock_file = MagicMock()
@@ -243,9 +243,9 @@ async def test_analyze_image_with_prompt(mock_completion_response):
     file_path = "/tmp/test_image.jpg"
     custom_prompt = "Describe the colors in this image"
     
-    with patch('tyler.tools.image.Path.exists', return_value=True), \
+    with patch('lye.image.Path.exists', return_value=True), \
          patch('builtins.open', MagicMock()), \
-         patch('tyler.tools.image.completion', return_value=mock_completion_response) as mock_completion:
+         patch('lye.image.completion', return_value=mock_completion_response) as mock_completion:
         
         # Mock file reading
         mock_file = MagicMock()
@@ -266,7 +266,7 @@ async def test_analyze_image_file_not_found():
     """Test handling when image file is not found"""
     file_path = "/tmp/nonexistent_image.jpg"
     
-    with patch('tyler.tools.image.Path.exists', return_value=False):
+    with patch('lye.image.Path.exists', return_value=False):
         result = await analyze_image(file_url=file_path)
         
         # Check error response
@@ -279,9 +279,9 @@ async def test_analyze_image_api_error():
     """Test handling when the vision API call fails"""
     file_path = "/tmp/test_image.jpg"
     
-    with patch('tyler.tools.image.Path.exists', return_value=True), \
+    with patch('lye.image.Path.exists', return_value=True), \
          patch('builtins.open', MagicMock()), \
-         patch('tyler.tools.image.completion', side_effect=Exception("API error")):
+         patch('lye.image.completion', side_effect=Exception("API error")):
         
         # Mock file reading
         mock_file = MagicMock()
