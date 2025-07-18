@@ -25,12 +25,25 @@ pip install slide-space-monkey
 
 ### 2. Set Up Environment Variables
 
-Create a `.env` file:
+Copy the example environment file and add your tokens:
+
+```bash
+cp env.example .env
+# Then edit .env with your actual tokens
+```
+
+Required variables:
 
 ```bash
 # Required: Slack Configuration
 SLACK_BOT_TOKEN=xoxb-your-bot-token
 SLACK_APP_TOKEN=xapp-your-app-token
+
+# Required: LLM Configuration (at least one)
+OPENAI_API_KEY=sk-your-openai-api-key      # For GPT models
+# ANTHROPIC_API_KEY=sk-ant-your-key         # For Claude models
+# GEMINI_API_KEY=your-gemini-api-key        # For Gemini models
+# XAI_API_KEY=xai-your-grok-api-key         # For Grok models
 
 # Optional: Weave Monitoring
 WANDB_API_KEY=your-wandb-key
@@ -38,6 +51,11 @@ WANDB_PROJECT=your-project-name
 
 # Optional: Health Check
 HEALTH_CHECK_URL=http://healthcheck:8000/ping-receiver
+HEALTH_PING_INTERVAL_SECONDS=120  # How often to ping (defaults to 120)
+
+# Optional: Environment & Logging
+ENV=development  # Environment name for Weave tracing
+LOG_LEVEL=INFO   # Log level (DEBUG, INFO, WARNING, ERROR)
 
 # Optional: Database (defaults to in-memory)
 NARRATOR_DB_TYPE=postgresql
@@ -151,6 +169,35 @@ app = SlackApp(
 await app.start(host="0.0.0.0", port=8080)
 ```
 
+### Message Classification Configuration
+
+Space Monkey includes intelligent message routing that determines when your bot should respond. You can customize what topics your bot should respond to:
+
+```python
+# Default configuration (responds to general questions and requests)
+app = SlackApp(
+    agent=agent,
+    thread_store=thread_store,
+    file_store=file_store
+)
+
+# Custom topic configuration
+app = SlackApp(
+    agent=agent,
+    thread_store=thread_store,
+    file_store=file_store,
+    response_topics="technical support, troubleshooting, or product questions"
+)
+
+# HR/People team configuration
+app = SlackApp(
+    agent=agent,
+    thread_store=thread_store,
+    file_store=file_store,
+    response_topics="people topics, HR, company culture, recognition, or employee experience"
+)
+```
+
 ## Agent Configuration
 
 Space Monkey uses Tyler Agent directly, giving you full access to all Tyler's capabilities:
@@ -220,21 +267,32 @@ CMD ["python", "bot.py"]
 SLACK_BOT_TOKEN=xoxb-prod-token
 SLACK_APP_TOKEN=xapp-prod-token
 
+# LLM Configuration (choose one or more)
+OPENAI_API_KEY=sk-prod-openai-key
+# ANTHROPIC_API_KEY=sk-ant-prod-key
+# GEMINI_API_KEY=prod-gemini-api-key
+# XAI_API_KEY=xai-prod-grok-key
+
 # Database
-TYLER_DB_TYPE=postgresql
-TYLER_DB_USER=tyler_prod
-TYLER_DB_PASSWORD=secure_password
-TYLER_DB_HOST=db.example.com
-TYLER_DB_PORT=5432
-TYLER_DB_NAME=tyler_prod
+NARRATOR_DB_TYPE=postgresql
+NARRATOR_DB_USER=tyler_prod
+NARRATOR_DB_PASSWORD=secure_password
+NARRATOR_DB_HOST=db.example.com
+NARRATOR_DB_PORT=5432
+NARRATOR_DB_NAME=tyler_prod
 
 # File Storage
-TYLER_FILE_STORAGE_PATH=/data/files
+NARRATOR_FILE_STORAGE_PATH=/data/files
 
 # Monitoring
-WANDB_API_KEY=prod-key
+WANDB_API_KEY=prod-wandb-key
 WANDB_PROJECT=slack-bot-prod
 HEALTH_CHECK_URL=http://healthcheck:8000/ping-receiver
+HEALTH_PING_INTERVAL_SECONDS=120
+
+# Environment & Logging
+ENV=production
+LOG_LEVEL=INFO
 ```
 
 ### Health Monitoring
@@ -262,9 +320,20 @@ class SlackApp:
         thread_store: ThreadStore,
         file_store: FileStore,
         health_check_url: Optional[str] = None,
-        weave_project: Optional[str] = None
+        weave_project: Optional[str] = None,
+        response_topics: Optional[str] = None
     ):
-        """Initialize Slack app with agent and stores."""
+        """
+        Initialize Slack app with agent and stores.
+        
+        Args:
+            agent: The main Tyler agent to handle conversations
+            thread_store: ThreadStore instance for conversation persistence  
+            file_store: FileStore instance for file handling
+            health_check_url: Optional URL for health check pings
+            weave_project: Optional Weave project name for tracing
+            response_topics: Simple sentence describing what topics the bot should respond to
+        """
         
     async def start(
         self,
@@ -272,6 +341,17 @@ class SlackApp:
         port: int = 8000
     ) -> None:
         """Start the Slack bot app."""
+```
+
+### Classifier Configuration
+
+```python
+def format_classifier_prompt(
+    agent_name: str = "Assistant",
+    bot_user_id: str = "",
+    response_topics: str = "general questions, requests for help, or inquiries directed at the assistant"
+) -> str:
+    """Format the classifier prompt with custom configuration."""
 ```
 
 ### Agent
@@ -317,7 +397,7 @@ import asyncio
 from space_monkey import SlackApp, Agent, ThreadStore, FileStore
 
 async def main():
-    # Simple setup for an HR assistant
+    # Simple setup for an HR assistant with HR-specific topic classification
     thread_store = await ThreadStore.create()
     file_store = await FileStore.create()
     
@@ -332,7 +412,39 @@ async def main():
     app = SlackApp(
         agent=agent,
         thread_store=thread_store,
-        file_store=file_store
+        file_store=file_store,
+        response_topics="people topics, HR, company culture, recognition, or employee experience"
+    )
+    
+    await app.start()
+
+asyncio.run(main())
+```
+
+### Technical Support Bot
+
+```python
+import asyncio
+from space_monkey import SlackApp, Agent, ThreadStore, FileStore
+
+async def main():
+    # Technical support bot with custom topic classification
+    thread_store = await ThreadStore.create()
+    file_store = await FileStore.create()
+    
+    agent = Agent(
+        name="TechSupport",
+        model_name="gpt-4.1",
+        purpose="To help users with technical support and troubleshooting",
+        tools=["web", "files"],
+        temperature=0.3
+    )
+    
+    app = SlackApp(
+        agent=agent,
+        thread_store=thread_store,
+        file_store=file_store,
+        response_topics="technical issues, bugs, troubleshooting, or product support"
     )
     
     await app.start()

@@ -190,13 +190,15 @@ class ThreadStore:
         """
         await self._ensure_initialized()
         if hasattr(self._backend, 'find_messages_by_attribute'):
-            message_records = await self._backend.find_messages_by_attribute(path, value)
+            results = await self._backend.find_messages_by_attribute(path, value)
             
-            # Convert MessageRecord objects to Message objects
+            # Handle different return types from different backends
             messages = []
-            if hasattr(self._backend, '_create_message_from_record'):
-                for record in message_records:
-                    message = self._backend._create_message_from_record(record)
+            for item in results:
+                if hasattr(item, 'model_dump'):  # It's a Message object (from MemoryBackend)
+                    messages.append(item)
+                elif hasattr(self._backend, '_create_message_from_record'):  # It's a MessageRecord (from SQLBackend)
+                    message = self._backend._create_message_from_record(item)
                     messages.append(message)
             
             return messages

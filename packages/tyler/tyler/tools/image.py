@@ -42,6 +42,7 @@ async def generate_image(*,
                 []  # Empty files list for error case
             )
 
+        # Call image_generation synchronously (it's not an async function)
         response = image_generation(
             prompt=prompt,
             model=model,
@@ -52,7 +53,7 @@ async def generate_image(*,
             response_format=response_format
         )
 
-        if not response["data"]:
+        if not response or not response.get("data"):
             return (
                 {
                     "success": False,
@@ -62,7 +63,8 @@ async def generate_image(*,
             )
 
         # Get the first image URL
-        image_url = response["data"][0].get("url")
+        image_data = response["data"][0]
+        image_url = image_data.get("url")
         if not image_url:
             return (
                 {
@@ -75,12 +77,12 @@ async def generate_image(*,
         # Fetch the image bytes
         async with httpx.AsyncClient() as client:
             img_response = await client.get(image_url)
-            await img_response.raise_for_status()
+            img_response.raise_for_status()
             image_bytes = img_response.content
 
         # Create a unique filename based on timestamp
         filename = f"generated_image_{response['created']}.png"
-        description = response["data"][0].get("revised_prompt", prompt)
+        description = image_data.get("revised_prompt", prompt)
 
         # Base64 encode the image bytes
         base64_image = base64.b64encode(image_bytes).decode('utf-8')
