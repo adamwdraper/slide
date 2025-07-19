@@ -539,18 +539,18 @@ async def test_load_tool_module_import_fallback(tool_runner, monkeypatch):
         'attributes': {'type': 'test'}
     }
     
-    # Create a mock tyler.tools module
-    mock_tools = types.ModuleType('tyler.tools')
-    mock_tools.TOOL_MODULES = {'test': [mock_tool]}
-    sys.modules['tyler.tools'] = mock_tools
+    # Create a mock lye module
+    mock_lye = types.ModuleType('lye')
+    mock_lye.TOOL_MODULES = {'test': [mock_tool]}
+    sys.modules['lye'] = mock_lye
     
-    # Mock importlib.import_module to raise ImportError for tyler.tools.test
+    # Mock importlib.import_module to raise ImportError for lye.test
     original_import = importlib.import_module
     def mock_import(name, *args, **kwargs):
-        if name == 'tyler.tools.test':
+        if name == 'lye.test':
             raise ImportError("Module not found")
-        if name == 'tyler.tools':
-            return mock_tools
+        if name == 'lye':
+            return mock_lye
         return original_import(name, *args, **kwargs)
     
     monkeypatch.setattr(importlib, 'import_module', mock_import)
@@ -562,17 +562,17 @@ async def test_load_tool_module_import_fallback(tool_runner, monkeypatch):
         assert 'fallback_tool' in tool_runner.tools
     finally:
         # Clean up
-        if 'tyler.tools' in sys.modules:
-            del sys.modules['tyler.tools']
+        if 'lye' in sys.modules:
+            del sys.modules['lye']
 
 @pytest.mark.asyncio
 async def test_load_tool_module_all_imports_fail(tool_runner):
     """Test tool module loading when all imports fail"""
     # Create a mock module that raises ImportError
     def mock_import(*args, **kwargs):
-        if args[0] == 'tyler.tools.test':
+        if args[0] == 'lye.test':
             raise ImportError("Module not found")
-        elif args[0] == 'tyler.tools':
+        elif args[0] == 'lye':
             mock_module = MagicMock()
             mock_module.TOOL_MODULES = {}  # Empty TOOL_MODULES
             return mock_module
