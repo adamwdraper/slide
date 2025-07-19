@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import patch, MagicMock
 import asyncio
-from tyler.tools.slack import (
+from lye.slack import (
     SlackClient,
     post_to_slack,
     generate_slack_blocks,
@@ -34,7 +34,7 @@ def test_slack_client_init(mock_env_token):
     client = SlackClient()
     assert client.token == "mock-token"
 
-@patch('tyler.tools.slack.SlackClient')
+@patch('lye.slack.SlackClient')
 def test_post_to_slack(mock_slack_client):
     """Test posting messages to Slack"""
     mock_instance = MagicMock()
@@ -104,7 +104,7 @@ async def test_generate_slack_blocks(mock_acompletion):
     assert "text" in result["blocks"][0]
     assert "Error" in result["blocks"][0]["text"]["text"]
 
-@patch('tyler.tools.slack.SlackClient')
+@patch('lye.slack.SlackClient')
 def test_send_ephemeral_message(mock_slack_client):
     """Test sending ephemeral messages"""
     mock_instance = MagicMock()
@@ -124,7 +124,7 @@ def test_send_ephemeral_message(mock_slack_client):
         text="Test message"
     )
 
-@patch('tyler.tools.slack.SlackClient')
+@patch('lye.slack.SlackClient')
 def test_reply_in_thread(mock_slack_client):
     """Test replying in threads"""
     mock_instance = MagicMock()

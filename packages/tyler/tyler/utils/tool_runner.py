@@ -20,6 +20,7 @@ class ToolRunner:
     def __init__(self):
         self.tools = {}  # name -> {implementation, is_async, definition}
         self.tool_attributes = {}  # name -> tool attributes
+        self._module_cache = {}  # module_spec -> loaded tools
 
     def register_tool(self, name: str, implementation: Union[Callable, Coroutine], definition: Optional[Dict] = None) -> None:
         """
@@ -141,6 +142,11 @@ class ToolRunner:
             ValueError: If the module doesn't exist or can't be loaded
         """
         try:
+            # Check cache first
+            if module_spec in self._module_cache:
+                logger.debug(f"Loading from cache for module_spec: {module_spec}")
+                return self._module_cache[module_spec]
+
             # Parse module spec to get module name and optional tool filters
             if ":" in module_spec:
                 module_name, tool_filters = module_spec.split(":", 1)
@@ -152,16 +158,16 @@ class ToolRunner:
                 logger.debug(f"Loading module {module_name} with no filters")
             
             # Import the module using the full package path
-            module_path = f"tyler.tools.{module_name}"
+            module_path = f"lye.{module_name}"
             logger.debug(f"Loading module {module_path}")
             
             try:
                 module = importlib.import_module(module_path)
             except ImportError as e:
                 logger.error(f"Import failed: {str(e)}")
-                # Try to import from tyler.tools directly
+                # Try to import from lye directly
                 try:
-                    from tyler.tools import TOOL_MODULES
+                    from lye import TOOL_MODULES
                     if module_name in TOOL_MODULES:
                         tools_list = TOOL_MODULES[module_name]
                         loaded_tools = []
@@ -200,6 +206,7 @@ class ToolRunner:
                                 "function": tool['definition']['function']
                             })
                             logger.debug(f"Loaded tool: {func_name}")
+                        self._module_cache[module_spec] = loaded_tools # Cache the result
                         return loaded_tools
                     else:
                         error_msg = f"Tool module '{module_name}' not found in TOOL_MODULES"
@@ -256,6 +263,7 @@ class ToolRunner:
                 logger.error(error_msg)
                 raise ValueError(error_msg)
                     
+            self._module_cache[module_spec] = loaded_tools # Cache the result
             return loaded_tools
         except Exception as e:
             # Only use this generic error handler if it's not one of our specific errors

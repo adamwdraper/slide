@@ -2,7 +2,7 @@
 import pytest
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
-from tyler.tools.browser import browser_automate, browser_screenshot
+from lye.browser import browser_automate, browser_screenshot
 
 # Mock classes and objects
 class MockBrowserAgent:
@@ -29,9 +29,9 @@ class MockBrowser:
 async def test_browser_automate_success():
     """Test successful browser automation."""
     # Mock dependencies
-    with patch('tyler.tools.browser.ChatOpenAI') as mock_chat_openai, \
-         patch('tyler.tools.browser.Browser') as mock_browser_class, \
-         patch('tyler.tools.browser.BrowserAgent', MockBrowserAgent):
+    with patch('lye.browser.ChatOpenAI') as mock_chat_openai, \
+         patch('lye.browser.Browser') as mock_browser_class, \
+         patch('lye.browser.BrowserAgent', MockBrowserAgent):
         
         # Setup mocks
         mock_chat_openai.return_value = MagicMock()
@@ -54,9 +54,9 @@ async def test_browser_automate_success():
 async def test_browser_automate_exception():
     """Test browser automation with exception."""
     # Mock dependencies
-    with patch('tyler.tools.browser.ChatOpenAI') as mock_chat_openai, \
-         patch('tyler.tools.browser.Browser') as mock_browser_class, \
-         patch('tyler.tools.browser.BrowserAgent') as mock_agent_class:
+    with patch('lye.browser.ChatOpenAI') as mock_chat_openai, \
+         patch('lye.browser.Browser') as mock_browser_class, \
+         patch('lye.browser.BrowserAgent') as mock_agent_class:
         
         # Setup mocks
         mock_chat_openai.return_value = MagicMock()
@@ -78,9 +78,9 @@ async def test_browser_automate_exception():
 async def test_browser_screenshot_success():
     """Test successful browser screenshot."""
     # Mock dependencies
-    with patch('tyler.tools.browser.ChatOpenAI') as mock_chat_openai, \
-         patch('tyler.tools.browser.Browser') as mock_browser_class, \
-         patch('tyler.tools.browser.BrowserAgent', MockBrowserAgent):
+    with patch('lye.browser.ChatOpenAI') as mock_chat_openai, \
+         patch('lye.browser.Browser') as mock_browser_class, \
+         patch('lye.browser.BrowserAgent', MockBrowserAgent):
         
         # Setup mocks
         mock_chat_openai.return_value = MagicMock()
@@ -105,9 +105,9 @@ async def test_browser_screenshot_success():
 async def test_browser_screenshot_exception():
     """Test browser screenshot with exception."""
     # Mock dependencies
-    with patch('tyler.tools.browser.ChatOpenAI') as mock_chat_openai, \
-         patch('tyler.tools.browser.Browser') as mock_browser_class, \
-         patch('tyler.tools.browser.BrowserAgent') as mock_agent_class:
+    with patch('lye.browser.ChatOpenAI') as mock_chat_openai, \
+         patch('lye.browser.Browser') as mock_browser_class, \
+         patch('lye.browser.BrowserAgent') as mock_agent_class:
         
         # Setup mocks
         mock_chat_openai.return_value = MagicMock()
@@ -130,11 +130,11 @@ async def test_browser_screenshot_exception():
 async def test_browser_config_parameters():
     """Test that browser configuration parameters are set correctly."""
     # Mock dependencies
-    with patch('tyler.tools.browser.ChatOpenAI') as mock_chat_openai, \
-         patch('tyler.tools.browser.Browser') as mock_browser_class, \
-         patch('tyler.tools.browser.BrowserAgent', MockBrowserAgent), \
-         patch('tyler.tools.browser.BrowserConfig') as mock_browser_config, \
-         patch('tyler.tools.browser.BrowserContextConfig') as mock_context_config:
+    with patch('lye.browser.ChatOpenAI') as mock_chat_openai, \
+         patch('lye.browser.Browser') as mock_browser_class, \
+         patch('lye.browser.BrowserAgent', MockBrowserAgent), \
+         patch('lye.browser.BrowserConfig') as mock_browser_config, \
+         patch('lye.browser.BrowserContextConfig') as mock_context_config:
         
         # Setup mocks
         mock_chat_openai.return_value = MagicMock()

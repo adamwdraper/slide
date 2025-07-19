@@ -21,7 +21,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
 from narrator import Thread, Message
-from tyler.tools.slack import generate_slack_blocks
+from lye.slack import generate_slack_blocks
 from tyler import Agent
 from .message_classifier_prompt import format_classifier_prompt
 from .utils import get_logger

@@ -302,7 +302,7 @@ weather_tool = {
 
 ### Slack tools
 ```python
-from tyler.tools.slack import TOOLS as SLACK_TOOLS
+from lye.slack import TOOLS as SLACK_TOOLS
 
 agent = Agent(
     model_name="gpt-4.1",
@@ -317,7 +317,7 @@ agent = Agent(
 
 ### Notion tools
 ```python
-from tyler.tools.notion import TOOLS as NOTION_TOOLS
+from lye.notion import TOOLS as NOTION_TOOLS
 
 agent = Agent(
     model_name="gpt-4.1",

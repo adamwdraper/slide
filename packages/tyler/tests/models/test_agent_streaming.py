@@ -10,6 +10,23 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
+class MockDelta:
+    def __init__(self, content=None, tool_calls=None):
+        self.content = content
+        self.tool_calls = tool_calls
+
+
+class MockChoiceDelta:
+    def __init__(self, delta):
+        self.delta = delta
+
+
+class MockChunk:
+    def __init__(self, choices, usage=None):
+        self.choices = choices
+        self.usage = usage
+
 def create_streaming_chunk(content=None, tool_calls=None, role="assistant", usage=None):
     """Helper function to create streaming chunks with proper structure"""
     delta = {"role": role}
@@ -878,3 +895,227 @@ async def test_go_stream_interrupt_tool():
         assert mock_tool_runner.get_tool_attributes.called
         # Verify we got a complete update
         assert any(update.type == StreamUpdate.Type.COMPLETE for update in updates)
+
+
+@pytest.mark.asyncio
+async def test_go_stream_general_exception_handling():
+    """Test general exception handling in go_stream"""
+    agent = Agent(name="Tyler")
+    thread = Thread()
+    thread.add_message(Message(role="user", content="Test"))
+    
+    # Mock step to raise an exception
+    with patch.object(agent, 'step') as mock_step:
+        mock_step.side_effect = RuntimeError("Streaming failed")
+        
+        updates = []
+        try:
+            async for update in agent.go_stream(thread):
+                updates.append(update)
+        except Exception:
+            pass  # go_stream may not raise, depending on implementation
+        
+        # Should have yielded an error update
+        error_updates = [u for u in updates if u.type == StreamUpdate.Type.ERROR]
+        assert len(error_updates) >= 1
+
+
+@pytest.mark.asyncio
+async def test_go_stream_tool_calls():
+    """Test tool calls in streaming"""
+    agent = Agent(name="Tyler")
+    thread = Thread()
+    thread.add_message(Message(role="user", content="Test"))
+    
+    # Create mock streaming response with tool calls
+    chunks = [
+        create_streaming_chunk(tool_calls=[{
+            "index": 0,
+            "id": "1",
+            "type": "function",
+            "function": {"name": "test_tool", "arguments": '{"arg": "value"}'}
+        }])
+    ]
+    
+    # Add a final chunk to signal end
+    chunks.append(create_streaming_chunk())
+    
+    with patch('tyler.models.agent.acompletion') as mock_completion:
+        mock_completion.return_value = async_generator(chunks)
+        
+        with patch.object(tool_runner, 'execute_tool_call') as mock_execute:
+            mock_execute.return_value = "Tool result"
+            
+            updates = []
+            async for update in agent.go_stream(thread):
+                updates.append(update)
+            
+            # Should have tool-related updates
+            tool_messages = [u for u in updates if u.type == StreamUpdate.Type.TOOL_MESSAGE]
+            assert len(tool_messages) >= 1
+
+
+@pytest.mark.asyncio
+async def test_go_stream_multiple_tool_calls():
+    """Test handling of multiple tool calls in streaming"""
+    agent = Agent(name="Tyler")
+    thread = Thread()
+    thread.add_message(Message(role="user", content="Test"))
+    
+    # Create streaming response with multiple tool calls
+    chunks = [
+        create_streaming_chunk(tool_calls=[
+            {"index": 0, "id": "1", "type": "function", "function": {"name": "tool1", "arguments": "{}"}},
+            {"index": 1, "id": "2", "type": "function", "function": {"name": "tool2", "arguments": "{}"}}
+        ])
+    ]
+    chunks.append(create_streaming_chunk())  # End chunk
+    
+    with patch('tyler.models.agent.acompletion') as mock_completion:
+        mock_completion.return_value = async_generator(chunks)
+        
+        # Mock tool execution
+        call_count = 0
+        async def mock_execute(tool_call):
+            nonlocal call_count
+            call_count += 1
+            return f"Result {call_count}"
+        
+        with patch.object(tool_runner, 'execute_tool_call', side_effect=mock_execute):
+            updates = []
+            async for update in agent.go_stream(thread):
+                updates.append(update)
+            
+            # Should have tool messages for both calls
+            tool_messages = [u for u in updates if u.type == StreamUpdate.Type.TOOL_MESSAGE]
+            assert len(tool_messages) >= 2  # At least both tools should produce messages
+
+
+
+
+
+@pytest.mark.asyncio
+async def test_go_stream_cache_clearing():
+    """Test that tool attributes cache is cleared at start of streaming"""
+    agent = Agent(name="Tyler")
+    
+    # Pre-populate cache
+    agent._tool_attributes_cache['existing_tool'] = {'type': 'old'}
+    
+    thread = Thread()
+    thread.add_message(Message(role="user", content="Test"))
+    
+    # Mock step to return simple response
+    chunks = [
+        MockChunk([MockChoiceDelta(MockDelta(content="Response"))]),
+        MockChunk([MockChoiceDelta(MockDelta())])
+    ]
+    
+    async def mock_stream():
+        for chunk in chunks:
+            yield chunk
+    
+    with patch.object(agent, 'step') as mock_step:
+        mock_step.return_value = (mock_stream(), {"model": "gpt-4"})
+        
+        # Collect updates
+        updates = []
+        async for update in agent.go_stream(thread):
+            updates.append(update)
+        
+        # Cache should have been cleared
+        assert 'existing_tool' not in agent._tool_attributes_cache
+
+
+@pytest.mark.asyncio
+async def test_go_stream_step_returns_none():
+    """Test handling when step returns None for streaming response"""
+    agent = Agent(name="Tyler")
+    thread = Thread()
+    thread.add_message(Message(role="user", content="Test"))
+    
+    with patch.object(agent, 'step') as mock_step:
+        mock_step.return_value = (None, {"model": "gpt-4"})
+        
+        updates = []
+        async for update in agent.go_stream(thread):
+            updates.append(update)
+        
+        # Should have error update
+        error_updates = [u for u in updates if u.type == StreamUpdate.Type.ERROR]
+        assert len(error_updates) == 1
+        assert "No response received" in error_updates[0].data
+
+
+@pytest.mark.asyncio
+async def test_go_stream_chunk_without_choices():
+    """Test handling chunks without choices"""
+    agent = Agent(name="Tyler")
+    thread = Thread()
+    thread.add_message(Message(role="user", content="Test"))
+    
+    # Create chunks, some without choices
+    chunks = [
+        MockChunk([]),  # No choices
+        MockChunk([MockChoiceDelta(MockDelta(content="Hello"))]),
+        MockChunk(None),  # None choices
+        MockChunk([MockChoiceDelta(MockDelta(content=" world"))]),
+        MockChunk([MockChoiceDelta(MockDelta())])  # End
+    ]
+    
+    async def mock_stream():
+        for chunk in chunks:
+            yield chunk
+    
+    with patch.object(agent, 'step') as mock_step:
+        mock_step.return_value = (mock_stream(), {"model": "gpt-4"})
+        
+        updates = []
+        async for update in agent.go_stream(thread):
+            updates.append(update)
+        
+        # Should only have content from valid chunks
+        content_chunks = [u.data for u in updates if u.type == StreamUpdate.Type.CONTENT_CHUNK]
+        assert content_chunks == ["Hello", " world"]
+
+
+@pytest.mark.asyncio
+async def test_go_stream_usage_metrics_from_final_chunk():
+    """Test that usage metrics are extracted from the final chunk"""
+    agent = Agent(name="Tyler")
+    thread = Thread()
+    thread.add_message(Message(role="user", content="Test"))
+    
+    # Create chunks with usage in final chunk
+    usage = SimpleNamespace(
+        completion_tokens=10,
+        prompt_tokens=5,
+        total_tokens=15
+    )
+    
+    chunks = [
+        MockChunk([MockChoiceDelta(MockDelta(content="Response"))]),
+        MockChunk([MockChoiceDelta(MockDelta())], usage=usage)  # Final chunk with usage
+    ]
+    
+    async def mock_stream():
+        for chunk in chunks:
+            yield chunk
+    
+    with patch.object(agent, 'step') as mock_step:
+        mock_step.return_value = (mock_stream(), {"model": "gpt-4"})
+        
+        updates = []
+        async for update in agent.go_stream(thread):
+            updates.append(update)
+        
+        # Get the assistant message
+        assistant_msg = next(
+            u.data for u in updates 
+            if u.type == StreamUpdate.Type.ASSISTANT_MESSAGE
+        )
+        
+        # Should have usage metrics from final chunk
+        assert assistant_msg.metrics["usage"]["completion_tokens"] == 10
+        assert assistant_msg.metrics["usage"]["prompt_tokens"] == 5
+        assert assistant_msg.metrics["usage"]["total_tokens"] == 15

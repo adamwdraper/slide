@@ -2,7 +2,7 @@ import os
 import pytest
 import requests
 from unittest.mock import patch, MagicMock
-from tyler.tools.notion import (
+from lye.notion import (
     NotionClient, search, get_page, get_page_content,
     create_comment, get_comments, create_page, update_block,
     create_notion_client

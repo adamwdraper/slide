@@ -1,12 +1,12 @@
 """
-Tools package initialization.
+Lye - Tools package for Tyler
 """
 import importlib
 import sys
 import os
 import glob
 from typing import Dict, List
-from tyler.utils.logging import get_logger
+from lye.utils.logging import get_logger
 
 # Get configured logger
 logger = get_logger(__name__)
@@ -116,4 +116,4 @@ TOOL_MODULES: Dict[str, List] = {
     'audio': AUDIO_TOOLS,
     'files': FILES_TOOLS,
     'browser': BROWSER_TOOLS
-} 
+}

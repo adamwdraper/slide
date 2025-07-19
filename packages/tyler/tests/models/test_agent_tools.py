@@ -1,6 +1,6 @@
 import pytest
 from tyler import Agent
-from tyler.tools import TOOL_MODULES, TOOLS
+from lye import TOOL_MODULES, TOOLS
 from tyler.utils.tool_runner import tool_runner
 
 @pytest.mark.asyncio

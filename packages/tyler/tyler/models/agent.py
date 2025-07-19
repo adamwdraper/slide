@@ -22,6 +22,8 @@ logger = get_logger(__name__)
 
 class StreamUpdate:
     """Update from streaming response"""
+    __slots__ = ('type', 'data')
+    
     class Type(Enum):
         CONTENT_CHUNK = "content_chunk"      # Partial content from assistant
         ASSISTANT_MESSAGE = "assistant_message"  # Complete assistant message with tool calls
@@ -112,16 +114,22 @@ This ensures the user can access the file correctly.
 
     @weave.op()
     def system_prompt(self, purpose: Union[str, Prompt], name: str, model_name: str, tools: List[Dict], notes: Union[str, Prompt] = "") -> str:
-        # Format tools description
-        tools_description_lines = []
-        for tool in tools:
-            if tool.get('type') == 'function' and 'function' in tool:
-                tool_func = tool['function']
-                tool_name = tool_func.get('name', 'N/A')
-                description = tool_func.get('description', 'No description available.')
-                tools_description_lines.append(f"- `{tool_name}`: {description}")
-        
-        tools_description_str = "\n".join(tools_description_lines) if tools_description_lines else "No tools available."
+        # Use cached tools description if available and tools haven't changed
+        cache_key = f"{len(tools)}_{id(tools)}"
+        if not hasattr(self, '_tools_cache') or self._tools_cache.get('key') != cache_key:
+            # Format tools description
+            tools_description_lines = []
+            for tool in tools:
+                if tool.get('type') == 'function' and 'function' in tool:
+                    tool_func = tool['function']
+                    tool_name = tool_func.get('name', 'N/A')
+                    description = tool_func.get('description', 'No description available.')
+                    tools_description_lines.append(f"- `{tool_name}`: {description}")
+            
+            tools_description_str = "\n".join(tools_description_lines) if tools_description_lines else "No tools available."
+            self._tools_cache = {'key': cache_key, 'description': tools_description_str}
+        else:
+            tools_description_str = self._tools_cache['description']
 
         formatted_purpose = purpose.format() if isinstance(purpose, Prompt) else purpose
         formatted_notes = notes.format() if isinstance(notes, Prompt) else notes
@@ -154,6 +162,7 @@ class Agent(Model):
     _iteration_count: int = PrivateAttr(default=0)
     _processed_tools: List[Dict] = PrivateAttr(default_factory=list)
     _system_prompt: str = PrivateAttr(default="")
+    _tool_attributes_cache: Dict[str, Optional[Dict[str, Any]]] = PrivateAttr(default_factory=dict)
 
     model_config = {
         "arbitrary_types_allowed": True,
@@ -165,6 +174,8 @@ class Agent(Model):
         
         # Generate system prompt once at initialization
         self._prompt = AgentPrompt()
+        # Initialize the tool attributes cache
+        self._tool_attributes_cache = {}
         
         # Load tools first as they are needed for the system prompt
         self._processed_tools = []
@@ -291,26 +302,43 @@ class Agent(Model):
             self.notes
         )
 
+    def _get_timestamp(self) -> str:
+        """Get current ISO timestamp."""
+        return datetime.now(UTC).isoformat()
+    
+    def _get_tool_attributes(self, tool_name: str) -> Optional[Dict[str, Any]]:
+        """Get tool attributes with caching."""
+        if tool_name not in self._tool_attributes_cache:
+            self._tool_attributes_cache[tool_name] = tool_runner.get_tool_attributes(tool_name)
+        return self._tool_attributes_cache[tool_name]
 
-
-
-    @weave.op()
     def _normalize_tool_call(self, tool_call):
-        """Convert a tool_call dict to an object with attributes so it can be used by tool_runner."""
+        """Ensure tool_call has a consistent format for tool_runner without modifying the original."""
         if isinstance(tool_call, dict):
-            from types import SimpleNamespace
-            function_data = tool_call.get("function", {})
-            normalized_function = SimpleNamespace(
-                name=function_data.get("name", ""),
-                arguments=function_data.get("arguments", "{}")
-            )
-            normalized = SimpleNamespace(
-                id=tool_call.get("id"),
-                type=tool_call.get("type", "function"),
-                function=normalized_function
-            )
-            return normalized
-        return tool_call
+            # Create a minimal wrapper that provides the expected interface
+            class ToolCallWrapper:
+                def __init__(self, tool_dict):
+                    self.id = tool_dict.get('id')
+                    self.type = tool_dict.get('type', 'function')
+                    self.function = type('obj', (object,), {
+                        'name': tool_dict.get('function', {}).get('name', ''),
+                        'arguments': tool_dict.get('function', {}).get('arguments', '{}') or '{}'
+                    })
+            return ToolCallWrapper(tool_call)
+        else:
+            # For objects, ensure arguments is not empty
+            if not tool_call.function.arguments or tool_call.function.arguments.strip() == "":
+                # Create a copy to avoid modifying the original
+                class ToolCallCopy:
+                    def __init__(self, original):
+                        self.id = original.id
+                        self.type = getattr(original, 'type', 'function')
+                        self.function = type('obj', (object,), {
+                            'name': original.function.name,
+                            'arguments': '{}'
+                        })
+                return ToolCallCopy(tool_call)
+            return tool_call
 
     @weave.op()
     async def _handle_tool_execution(self, tool_call) -> dict:
@@ -324,10 +352,6 @@ class Agent(Model):
             dict: Formatted tool result message
         """
         normalized_tool_call = self._normalize_tool_call(tool_call)
-        # If the arguments string is empty or only whitespace, replace it with '{}'
-        if not normalized_tool_call.function.arguments or normalized_tool_call.function.arguments.strip() == "":
-            normalized_tool_call.function.arguments = "{}"
-        
         return await tool_runner.execute_tool_call(normalized_tool_call)
 
     @weave.op()
@@ -509,7 +533,7 @@ class Agent(Model):
         logger.debug(f"Processing tool call: {tool_name}")
         
         # Get tool attributes before execution
-        tool_attributes = tool_runner.get_tool_attributes(tool_name)
+        tool_attributes = self._get_tool_attributes(tool_name)
 
         # Execute the tool
         tool_start_time = datetime.now(UTC)
@@ -625,6 +649,8 @@ class Agent(Model):
             
         # Reset iteration count at the beginning of each go call
         self._iteration_count = 0
+        # Clear tool attributes cache for fresh request
+        self._tool_attributes_cache.clear()
             
         thread = None
         try:
@@ -647,18 +673,7 @@ class Agent(Model):
                     if not response or not hasattr(response, 'choices') or not response.choices:
                         error_msg = "No response received from chat completion"
                         logger.error(error_msg)
-                        message = Message(
-                            role="assistant",
-                            content=f"I encountered an error: {error_msg}. Please try again.",
-                            source=self._create_assistant_source(include_version=False),
-                            metrics={
-                                "timing": {
-                                    "started_at": datetime.now(UTC).isoformat(),
-                                    "ended_at": datetime.now(UTC).isoformat(),
-                                    "latency": 0
-                                }
-                            }
-                        )
+                        message = self._create_error_message(error_msg)
                         thread.add_message(message)
                         new_messages.append(message)
                         # Save on error
@@ -701,75 +716,14 @@ class Agent(Model):
                             tool_call = tool_calls[i]
                             tool_name = tool_call.function.name if hasattr(tool_call, 'function') else tool_call['function']['name']
                             
-                            # Handle exceptions in tool execution
-                            if isinstance(result, Exception):
-                                error_msg = f"Tool execution failed: {str(result)}"
-                                tool_message = Message(
-                                    role="tool",
-                                    name=tool_name,
-                                    content=error_msg,
-                                    tool_call_id=tool_call.id if hasattr(tool_call, 'id') else tool_call.get('id'),
-                                    source=self._create_tool_source(tool_name),
-                                    metrics={
-                                        "timing": {
-                                            "started_at": datetime.now(UTC).isoformat(),
-                                            "ended_at": datetime.now(UTC).isoformat(),
-                                            "latency": 0
-                                        }
-                                    }
-                                )
-                                thread.add_message(tool_message)
-                                new_messages.append(tool_message)
-                                continue
-                            
-                            # Process successful result
-                            content = None
-                            files = []
-                            
-                            if isinstance(result, tuple):
-                                # Handle tuple return (content, files)
-                                content = str(result[0])
-                                if len(result) >= 2:
-                                    files = result[1]
-                            else:
-                                # Handle any content type - just convert to string
-                                content = str(result)
-                                
-                            # Create tool message
-                            tool_message = Message(
-                                role="tool",
-                                name=tool_name,
-                                content=content,
-                                tool_call_id=tool_call.id if hasattr(tool_call, 'id') else tool_call.get('id'),
-                                source=self._create_tool_source(tool_name),
-                                metrics={
-                                    "timing": {
-                                        "started_at": datetime.now(UTC).isoformat(),
-                                        "ended_at": datetime.now(UTC).isoformat(),
-                                        "latency": 0
-                                    }
-                                }
-                            )
-                            
-                            # Add any files as attachments
-                            if files:
-                                logger.debug(f"Processing {len(files)} files from tool result")
-                                for file_info in files:
-                                    logger.debug(f"Creating attachment for {file_info.get('filename')} with mime type {file_info.get('mime_type')}")
-                                    attachment = Attachment(
-                                        filename=file_info["filename"],
-                                        content=file_info["content"],
-                                        mime_type=file_info["mime_type"]
-                                    )
-                                    tool_message.attachments.append(attachment)
+                            # Process tool result using helper
+                            tool_message, break_iteration = self._process_tool_result(result, tool_call, tool_name)
                             
                             # Add message to thread and new_messages
                             thread.add_message(tool_message)
                             new_messages.append(tool_message)
                             
-                            # Check if tool wants to break iteration
-                            tool_attributes = tool_runner.get_tool_attributes(tool_name)
-                            if tool_attributes and tool_attributes.get('type') == 'interrupt':
+                            if break_iteration:
                                 should_break = True
                                 
                         # Save after processing all tool calls but before next completion
@@ -788,18 +742,7 @@ class Agent(Model):
                 except Exception as e:
                     error_msg = f"Error during chat completion: {str(e)}"
                     logger.error(error_msg)
-                    message = Message(
-                        role="assistant",
-                        content=f"I encountered an error: {error_msg}. Please try again.",
-                        source=self._create_assistant_source(include_version=False),
-                        metrics={
-                            "timing": {
-                                "started_at": datetime.now(UTC).isoformat(),
-                                "ended_at": datetime.now(UTC).isoformat(),
-                                "latency": 0
-                            }
-                        }
-                    )
+                    message = self._create_error_message(error_msg)
                     thread.add_message(message)
                     new_messages.append(message)
                     # Save on error
@@ -829,18 +772,7 @@ class Agent(Model):
         except Exception as e:
             error_msg = f"Error processing thread: {str(e)}"
             logger.error(error_msg)
-            message = Message(
-                role="assistant",
-                content=f"I encountered an error: {error_msg}. Please try again.",
-                source=self._create_assistant_source(include_version=False),
-                metrics={
-                    "timing": {
-                        "started_at": datetime.now(UTC).isoformat(),
-                        "ended_at": datetime.now(UTC).isoformat(),
-                        "latency": 0
-                    }
-                }
-            )
+            message = self._create_error_message(error_msg)
             
             if isinstance(thread_or_id, Thread):
                 # If we were passed a Thread object directly, use it
@@ -869,6 +801,8 @@ class Agent(Model):
         """
         try:
             self._iteration_count = 0
+            # Clear tool attributes cache for fresh request
+            self._tool_attributes_cache.clear()
             current_content = []  # Accumulate content chunks
             current_tool_calls = []  # Accumulate tool calls
             current_tool_call = None  # Track current tool call being built
@@ -897,18 +831,7 @@ class Agent(Model):
                     if not streaming_response:
                         error_msg = "No response received from chat completion"
                         logger.error(error_msg)
-                        message = Message(
-                            role="assistant",
-                            content=f"I encountered an error: {error_msg}. Please try again.",
-                            source=self._create_assistant_source(include_version=False),
-                            metrics={
-                                "timing": {
-                                    "started_at": datetime.now(UTC).isoformat(),
-                                    "ended_at": datetime.now(UTC).isoformat(),
-                                    "latency": 0
-                                }
-                            }
-                        )
+                        message = self._create_error_message(error_msg)
                         thread.add_message(message)
                         new_messages.append(message)
                         yield StreamUpdate(StreamUpdate.Type.ERROR, error_msg)
@@ -1073,77 +996,20 @@ class Agent(Model):
                             tool_call = current_tool_calls[i]
                             tool_name = tool_call['function']['name']
                             
-                            # Handle exceptions in tool execution
-                            if isinstance(result, Exception):
-                                error_msg = f"Tool execution failed: {str(result)}"
-                                error_message = Message(
-                                    role="tool",
-                                    name=tool_name,
-                                    content=error_msg,
-                                    tool_call_id=tool_call.get('id') if isinstance(tool_call, dict) else tool_call.id,
-                                    source=self._create_tool_source(tool_name),
-                                    metrics={
-                                        "timing": {
-                                            "started_at": datetime.now(UTC).isoformat(),
-                                            "ended_at": datetime.now(UTC).isoformat(),
-                                            "latency": 0
-                                        }
-                                    }
-                                )
-                                thread.add_message(error_message)
-                                new_messages.append(error_message)
-                                yield StreamUpdate(StreamUpdate.Type.ERROR, error_msg)
-                                continue
+                            # Process tool result using helper
+                            tool_message, break_iteration = self._process_tool_result(result, tool_call, tool_name)
                             
-                            # Process successful result
-                            content = None
-                            files = []
-                            
-                            if isinstance(result, tuple):
-                                # Handle tuple return (content, files)
-                                content = str(result[0])
-                                if len(result) >= 2:
-                                    files = result[1]
-                            else:
-                                # Handle any content type - just convert to string
-                                content = str(result)
-                                
-                            # Create tool message
-                            tool_message = Message(
-                                role="tool",
-                                name=tool_name,
-                                content=content,
-                                tool_call_id=tool_call.get('id') if isinstance(tool_call, dict) else tool_call.id,
-                                source=self._create_tool_source(tool_name),
-                                metrics={
-                                    "timing": {
-                                        "started_at": datetime.now(UTC).isoformat(),
-                                        "ended_at": datetime.now(UTC).isoformat(),
-                                        "latency": 0
-                                    }
-                                }
-                            )
-                            
-                            # Add any files as attachments
-                            if files:
-                                logger.debug(f"Processing {len(files)} files from tool result")
-                                for file_info in files:
-                                    logger.debug(f"Creating attachment for {file_info.get('filename')} with mime type {file_info.get('mime_type')}")
-                                    attachment = Attachment(
-                                        filename=file_info["filename"],
-                                        content=file_info["content"],
-                                        mime_type=file_info["mime_type"]
-                                    )
-                                    tool_message.attachments.append(attachment)
-                                
                             # Add message to thread and yield update
                             thread.add_message(tool_message)
                             new_messages.append(tool_message)
-                            yield StreamUpdate(StreamUpdate.Type.TOOL_MESSAGE, tool_message)
-                                
-                            # Check if tool wants to break iteration
-                            tool_attributes = tool_runner.get_tool_attributes(tool_name)
-                            if tool_attributes and tool_attributes.get('type') == 'interrupt':
+                            
+                            # Yield appropriate update based on message type
+                            if isinstance(result, Exception):
+                                yield StreamUpdate(StreamUpdate.Type.ERROR, f"Tool execution failed: {str(result)}")
+                            else:
+                                yield StreamUpdate(StreamUpdate.Type.TOOL_MESSAGE, tool_message)
+                            
+                            if break_iteration:
                                 should_break = True
                         
                         # Save after processing all tool calls but before next completion
@@ -1195,18 +1061,7 @@ class Agent(Model):
 
                 except Exception as e:
                     error_msg = f"Completion failed: {str(e)}"
-                    error_message = Message(
-                        role="assistant",
-                        content=f"I encountered an error: {error_msg}. Please try again.",
-                        source=self._create_assistant_source(include_version=False),
-                        metrics={
-                            "timing": {
-                                "started_at": datetime.now(UTC).isoformat(),
-                                "ended_at": datetime.now(UTC).isoformat(),
-                                "latency": 0
-                            }
-                        }
-                    )
+                    error_message = self._create_error_message(error_msg)
                     thread.add_message(error_message)
                     new_messages.append(error_message)
                     yield StreamUpdate(StreamUpdate.Type.ERROR, error_msg)
@@ -1236,18 +1091,7 @@ class Agent(Model):
 
         except Exception as e:
             error_msg = f"Stream processing failed: {str(e)}"
-            error_message = Message(
-                role="assistant",
-                content=f"I encountered an error: {error_msg}. Please try again.",
-                source=self._create_assistant_source(include_version=False),
-                metrics={
-                    "timing": {
-                        "started_at": datetime.now(UTC).isoformat(),
-                        "ended_at": datetime.now(UTC).isoformat(),
-                        "latency": 0
-                    }
-                }
-            )
+            error_message = self._create_error_message(error_msg)
             thread.add_message(error_message)
             yield StreamUpdate(StreamUpdate.Type.ERROR, error_msg)
             # Save on error like in go
@@ -1259,7 +1103,6 @@ class Agent(Model):
             # Finally block intentionally left empty
             pass 
 
-    @weave.op()
     def _create_tool_source(self, tool_name: str) -> Dict:
         """Creates a standardized source entity dict for tool messages."""
         return {
@@ -1271,7 +1114,6 @@ class Agent(Model):
             }
         }
 
-    @weave.op()
     def _create_assistant_source(self, include_version: bool = True) -> Dict:
         """Creates a standardized source entity dict for assistant messages."""
         attributes = {
@@ -1284,3 +1126,94 @@ class Agent(Model):
             "type": "agent",
             "attributes": attributes
         } 
+
+    def _create_error_message(self, error_msg: str, source: Optional[Dict] = None) -> Message:
+        """Create a standardized error message."""
+        timestamp = self._get_timestamp()
+        return Message(
+            role="assistant",
+            content=f"I encountered an error: {error_msg}. Please try again.",
+            source=source or self._create_assistant_source(include_version=False),
+            metrics={
+                "timing": {
+                    "started_at": timestamp,
+                    "ended_at": timestamp,
+                    "latency": 0
+                }
+            }
+        )
+    
+    def _process_tool_result(self, result: Any, tool_call: Any, tool_name: str) -> Tuple[Message, bool]:
+        """
+        Process a tool execution result and create a message.
+        
+        Returns:
+            Tuple[Message, bool]: The tool message and whether to break iteration
+        """
+        timestamp = self._get_timestamp()
+        
+        # Handle exceptions in tool execution
+        if isinstance(result, Exception):
+            error_msg = f"Tool execution failed: {str(result)}"
+            tool_message = Message(
+                role="tool",
+                name=tool_name,
+                content=error_msg,
+                tool_call_id=tool_call.id if hasattr(tool_call, 'id') else tool_call.get('id'),
+                source=self._create_tool_source(tool_name),
+                metrics={
+                    "timing": {
+                        "started_at": timestamp,
+                        "ended_at": timestamp,
+                        "latency": 0
+                    }
+                }
+            )
+            return tool_message, False
+        
+        # Process successful result
+        content = None
+        files = []
+        
+        if isinstance(result, tuple):
+            # Handle tuple return (content, files)
+            content = str(result[0])
+            if len(result) >= 2:
+                files = result[1]
+        else:
+            # Handle any content type - just convert to string
+            content = str(result)
+            
+        # Create tool message
+        tool_message = Message(
+            role="tool",
+            name=tool_name,
+            content=content,
+            tool_call_id=tool_call.id if hasattr(tool_call, 'id') else tool_call.get('id'),
+            source=self._create_tool_source(tool_name),
+            metrics={
+                "timing": {
+                    "started_at": timestamp,
+                    "ended_at": timestamp,
+                    "latency": 0
+                }
+            }
+        )
+        
+        # Add any files as attachments
+        if files:
+            logger.debug(f"Processing {len(files)} files from tool result")
+            for file_info in files:
+                logger.debug(f"Creating attachment for {file_info.get('filename')} with mime type {file_info.get('mime_type')}")
+                attachment = Attachment(
+                    filename=file_info["filename"],
+                    content=file_info["content"],
+                    mime_type=file_info["mime_type"]
+                )
+                tool_message.attachments.append(attachment)
+        
+        # Check if tool wants to break iteration
+        tool_attributes = self._get_tool_attributes(tool_name)
+        should_break = tool_attributes and tool_attributes.get('type') == 'interrupt'
+        
+        return tool_message, should_break 

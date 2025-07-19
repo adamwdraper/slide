@@ -6,7 +6,7 @@ import io
 import base64
 from pathlib import Path
 from unittest.mock import patch, AsyncMock, MagicMock, mock_open
-from tyler.tools.files import Files
+from lye.files import Files
 
 @pytest.fixture
 def files_instance():

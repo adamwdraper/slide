@@ -54,7 +54,7 @@ async def init():
         logger.error("No _processed_tools found on agent")
         
     # Also check the raw tools list
-    from tyler.tools import FILES_TOOLS
+    from lye import FILES_TOOLS
     logger.info(f"FILES_TOOLS contains {len(FILES_TOOLS)} tools")
     for tool in FILES_TOOLS:
         logger.info(f"Found tool definition: {tool['definition']['function']['name']}")

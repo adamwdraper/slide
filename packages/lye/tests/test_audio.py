@@ -2,7 +2,7 @@ import pytest
 import os
 import uuid
 from unittest.mock import patch, MagicMock, mock_open
-from tyler.tools.audio import text_to_speech, speech_to_text
+from lye.audio import text_to_speech, speech_to_text
 from pathlib import Path
 
 # Mock UUID to ensure consistent filenames in tests
@@ -35,7 +35,7 @@ def mock_transcription_response():
 async def test_text_to_speech_success(mock_speech_response, mock_audio_bytes):
     """Test successful text to speech conversion"""
     # Create mocks
-    with patch('tyler.tools.audio.speech', return_value=mock_speech_response) as mock_speech, \
+    with patch('lye.audio.speech', return_value=mock_speech_response) as mock_speech, \
          patch('tempfile.NamedTemporaryFile') as mock_temp, \
          patch('os.unlink') as mock_unlink, \
          patch('builtins.open', mock_open(read_data=mock_audio_bytes)):
@@ -133,7 +133,7 @@ async def test_text_to_speech_invalid_model():
 @pytest.mark.asyncio
 async def test_text_to_speech_exception():
     """Test text to speech with an exception during processing"""
-    with patch('tyler.tools.audio.speech', side_effect=Exception("Test exception")):
+    with patch('lye.audio.speech', side_effect=Exception("Test exception")):
         result = await text_to_speech(
             input="Hello, this is a test.",
             voice="alloy",
@@ -158,9 +158,9 @@ async def test_speech_to_text_success(mock_transcription_response):
     mock_path = MagicMock(spec=Path)
     mock_path.exists.return_value = True
     
-    with patch('tyler.tools.audio.Path', return_value=mock_path), \
+    with patch('lye.audio.Path', return_value=mock_path), \
          patch('builtins.open', mock_open()), \
-         patch('tyler.tools.audio.transcription', return_value=mock_transcription_response) as mock_transcribe:
+         patch('lye.audio.transcription', return_value=mock_transcription_response) as mock_transcribe:
         
         result = await speech_to_text(
             file_url=file_path,
@@ -188,7 +188,7 @@ async def test_speech_to_text_file_not_found():
     mock_path = MagicMock(spec=Path)
     mock_path.exists.return_value = False
     
-    with patch('tyler.tools.audio.Path', return_value=mock_path):
+    with patch('lye.audio.Path', return_value=mock_path):
         result = await speech_to_text(file_url=file_path)
         
         # Check error response
@@ -205,9 +205,9 @@ async def test_speech_to_text_exception():
     mock_path = MagicMock(spec=Path)
     mock_path.exists.return_value = True
     
-    with patch('tyler.tools.audio.Path', return_value=mock_path), \
+    with patch('lye.audio.Path', return_value=mock_path), \
          patch('builtins.open', mock_open()), \
-         patch('tyler.tools.audio.transcription', side_effect=Exception("Test exception")):
+         patch('lye.audio.transcription', side_effect=Exception("Test exception")):
         
         result = await speech_to_text(file_url=file_path)
         
