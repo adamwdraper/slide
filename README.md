@@ -142,31 +142,141 @@ slide/
 
 ## Development
 
-### Setting up Development Environment
+### Setting up Development Environment with UV
+
+This project uses [uv](https://github.com/astral-sh/uv) for fast, reliable Python package management and uses a workspace structure for developing multiple packages together.
 
 ```bash
 # Clone the repository
 git clone https://github.com/adamwdraper/slide.git
 cd slide
 
-# Install development dependencies
-pip install -e packages/tyler[dev]
-pip install -e packages/narrator[dev]
+# Install uv (if not already installed)
+curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Run tests
-pytest packages/tyler/tests
-pytest packages/narrator/tests
+# Sync the entire workspace (installs all packages in development mode)
+uv sync
+
+# Include development dependencies
+uv sync --dev
 ```
 
-### Building and Testing
+### UV Workspace Commands
+
+#### Working from the Root Directory (Recommended)
 
 ```bash
-# Build individual packages
-cd packages/tyler && python -m build
-cd packages/narrator && python -m build
+# Sync all packages at once
+uv sync
 
-# Test all packages
-pytest packages/*/tests
+# Add a dependency to a specific package
+uv add --package tyler requests
+uv add --package lye beautifulsoup4
+
+# Add development dependencies
+uv add --dev pytest-mock
+
+# Run commands in workspace context
+uv run python -m tyler.cli
+uv run --package tyler pytest
+uv run --package lye python examples/demo.py
+
+# Build specific packages
+uv build --package tyler
+uv build --package narrator
+
+# See the entire dependency tree
+uv tree
+
+# Update dependencies
+uv lock --upgrade                    # Upgrade all packages
+uv lock --upgrade-package openai     # Upgrade specific package
+```
+
+#### Working from Package Directories
+
+```bash
+# Navigate to a package
+cd packages/tyler
+
+# Commands still use the workspace
+uv sync              # Uses root uv.lock
+uv add pandas        # Adds to tyler's pyproject.toml
+uv run pytest        # Runs with workspace packages
+
+# The workspace detects you're in a subdirectory
+uv tree              # Shows tyler's dependencies
+```
+
+#### Key UV Commands for Development
+
+```bash
+# Python version management
+uv python list           # List available Python versions
+uv python install 3.12   # Install Python 3.12
+uv python pin 3.12       # Set project to use Python 3.12
+
+# Running code and tests
+uv run python script.py              # Run a script
+uv run --package tyler pytest        # Run tyler's tests
+uv run pytest packages/*/tests       # Run all package tests
+
+# Publishing packages
+uv build --package lye              # Build lye for distribution
+uv publish --package lye            # Publish lye to PyPI
+
+# Tool management
+uv tool install ruff               # Install tools globally
+uv tool run ruff check             # Run without installing
+```
+
+### Understanding the Workspace Structure
+
+```
+slide/                    # Workspace root
+├── pyproject.toml       # Workspace configuration
+├── uv.lock             # Single lock file for all packages
+├── .venv/              # Single virtual environment
+└── packages/
+    ├── tyler/          # Individual package
+    │   └── pyproject.toml  # Package-specific dependencies
+    ├── lye/
+    │   └── pyproject.toml
+    ├── narrator/
+    │   └── pyproject.toml
+    └── space-monkey/
+        └── pyproject.toml
+```
+
+**Key Points:**
+- ONE `uv.lock` file at the root (never in packages)
+- ONE `.venv` at the root (never in packages)
+- Each package has its own `pyproject.toml` with dependencies
+- Packages can depend on each other and changes are immediate
+
+### Common Development Workflows
+
+```bash
+# After cloning or pulling changes
+uv sync --dev
+
+# Making changes to lye that tyler depends on
+cd packages/lye
+# ... make code changes ...
+cd ../tyler
+uv run pytest  # Tests immediately see lye changes
+
+# Adding a new feature that requires a dependency
+uv add --package tyler httpx
+uv run --package tyler python test_new_feature.py
+
+# Before committing
+uv lock  # Update lock file if dependencies changed
+git add uv.lock packages/*/pyproject.toml
+
+# Testing package installation
+uv build --package tyler
+uv pip install dist/*.whl --python /tmp/test-env
 ```
 
 ## Documentation
