@@ -4,14 +4,42 @@ os.environ["OPENAI_ORG_ID"] = "dummy"
 import pytest
 from unittest.mock import patch, MagicMock, create_autospec, Mock, AsyncMock
 from tyler import Agent, Thread, Message, ThreadStore
+from tyler.models.agent import StreamUpdate
 from tyler.utils.tool_runner import tool_runner, ToolRunner
 from narrator.database.storage_backend import MemoryBackend
+from narrator import FileStore
 from openai import OpenAI
 from litellm import ModelResponse
 import base64
 import os
 import json
 from types import SimpleNamespace
+from weave import StringPrompt
+
+
+class MockChoice:
+    def __init__(self, message=None, delta=None):
+        self.message = message
+        self.delta = delta
+
+
+class MockMessage:
+    def __init__(self, content="Test response", tool_calls=None):
+        self.content = content
+        self.tool_calls = tool_calls
+
+
+class MockResponse:
+    def __init__(self, choices=None, usage=None):
+        self.choices = choices or []
+        self.usage = usage
+
+
+class MockToolCall:
+    def __init__(self, id="test_id", function_name="test_tool", arguments="{}"):
+        self.id = id
+        self.type = "function"
+        self.function = SimpleNamespace(name=function_name, arguments=arguments)
 
 @pytest.fixture(autouse=True)
 def mock_openai():
@@ -144,7 +172,6 @@ def test_init(agent):
     assert agent.notes == "test notes"
     assert len(agent.tools) == 0
     assert agent.max_tool_iterations == 10
-    assert agent._iteration_count == 0
 
 @pytest.mark.asyncio
 async def test_go_thread_not_found(agent, mock_thread_store):
@@ -1639,3 +1666,378 @@ async def test_weave_inference_service_example():
         # Verify response
         assert response.choices[0].message.content == "Why don't scientists trust atoms? Because they make up everything!"
         assert metrics["model"] == "deepseek-ai/DeepSeek-R1-0528" 
+
+
+
+
+
+@pytest.mark.asyncio
+async def test_go_general_exception_handling(mock_thread_store):
+    """Test general exception handling in go method"""
+    agent = Agent(
+        name="TestAgent",
+        thread_store=mock_thread_store
+    )
+    
+    # Create a thread to pass
+    thread = Thread()
+    thread.add_message(Message(role="user", content="Test"))
+    
+    # Mock step to raise a general exception (not ValueError)
+    with patch.object(agent, 'step') as mock_step:
+        mock_step.side_effect = RuntimeError("Unexpected error")
+        
+        result_thread, messages = await agent.go(thread)
+        
+        # Should have an error message
+        assert len(messages) == 1
+        assert messages[0].role == "assistant"
+        assert "I encountered an error:" in messages[0].content
+        assert "Unexpected error" in messages[0].content
+        
+        # Thread should be saved even on error
+        mock_thread_store.save.assert_called()
+
+
+@pytest.mark.asyncio
+async def test_go_with_thread_id(mock_thread_store):
+    """Test go method with thread ID instead of thread object"""
+    thread = Thread(id="test_thread_id")
+    thread.add_message(Message(role="user", content="Test"))
+    
+    # Mock thread store to return our thread
+    mock_thread_store.get.return_value = thread
+    
+    agent = Agent(
+        name="TestAgent",
+        thread_store=mock_thread_store
+    )
+    
+    # Mock step
+    with patch.object(agent, 'step') as mock_step:
+        mock_step.return_value = (
+            MockResponse([MockChoice(MockMessage("Response"))]),
+            {"model": "gpt-4"}
+        )
+        
+        # Call with thread ID
+        result_thread, messages = await agent.go("test_thread_id")
+        
+        # Verify thread was fetched
+        mock_thread_store.get.assert_called_with("test_thread_id")
+
+
+@pytest.mark.asyncio
+async def test_go_missing_thread_store():
+    """Test go method when thread store is missing"""
+    # Agent creates a default thread store if None is provided
+    # So we need to test by setting it to None after creation
+    agent = Agent(name="TestAgent")
+    agent.thread_store = None
+    
+    with pytest.raises(ValueError, match="Thread store is required"):
+        await agent.go("thread_id")
+
+
+@pytest.mark.asyncio
+async def test_go_thread_not_found_in_store(mock_thread_store):
+    """Test go method when thread not found in store"""
+    mock_thread_store.get.return_value = None
+    
+    agent = Agent(
+        name="TestAgent",
+        thread_store=mock_thread_store
+    )
+    
+    with pytest.raises(ValueError, match="Thread with ID missing_id not found"):
+        await agent.go("missing_id")
+
+
+@pytest.mark.asyncio
+async def test_gemini_tool_handling(mock_thread_store, mock_file_store):
+    """Test special handling for Gemini models"""
+    # Create a custom tool with additionalProperties
+    custom_tool = {
+        'definition': {
+            'type': 'function',
+            'function': {
+                'name': 'test_tool',
+                'description': 'Test tool',
+                'parameters': {
+                    'type': 'object',
+                    'properties': {
+                        'context': {
+                            'type': 'object',
+                            'description': 'Additional context',
+                            'additionalProperties': True  # This should be removed for Gemini
+                        }
+                    }
+                }
+            }
+        },
+        'implementation': lambda context: "Result"
+    }
+    
+    agent = Agent(
+        model_name="gemini-pro",  # Gemini model
+        tools=[custom_tool],
+        thread_store=mock_thread_store,
+        file_store=mock_file_store
+    )
+    
+    thread = Thread()
+    thread.add_message(Message(role="user", content="Test"))
+    
+    # Mock the acompletion to check the tools passed
+    with patch('tyler.models.agent.acompletion') as mock_completion:
+        mock_completion.return_value = MockResponse([
+            MockChoice(MockMessage("Response"))
+        ])
+        
+        response, metrics = await agent.step(thread)
+        
+        # Check that tools were passed to completion
+        call_args = mock_completion.call_args[1]
+        assert 'tools' in call_args
+        
+        # Verify additionalProperties was removed for Gemini
+        tools = call_args['tools']
+        for tool in tools:
+            if 'function' in tool and 'parameters' in tool['function']:
+                params = tool['function']['parameters']
+                if 'properties' in params:
+                    for prop_name, prop in params['properties'].items():
+                        if isinstance(prop, dict):
+                            assert 'additionalProperties' not in prop
+
+
+@pytest.mark.asyncio
+async def test_process_tool_result_with_metrics():
+    """Test _process_tool_result helper with different scenarios"""
+    agent = Agent(name="TestAgent")
+    
+    # Test with exception result
+    tool_call = {"id": "123", "function": {"name": "test_tool"}}
+    exception = Exception("Tool failed")
+    
+    message, should_break = agent._process_tool_result(
+        exception, tool_call, "test_tool"
+    )
+    
+    assert message.role == "tool"
+    assert "Tool execution failed" in message.content
+    assert not should_break
+    
+    # Test with interrupt tool
+    with patch.object(tool_runner, 'get_tool_attributes', return_value={'type': 'interrupt'}):
+        agent._tool_attributes_cache.clear()  # Clear cache
+        message, should_break = agent._process_tool_result(
+            "Success", tool_call, "interrupt_tool"
+        )
+        
+        assert should_break
+
+
+@pytest.mark.asyncio
+async def test_create_error_message():
+    """Test error message creation helper"""
+    agent = Agent(name="TestAgent")
+    
+    # Test basic error message
+    error_msg = agent._create_error_message("Test error")
+    
+    assert error_msg.role == "assistant"
+    assert "I encountered an error: Test error" in error_msg.content
+    assert error_msg.metrics["timing"]["started_at"] == error_msg.metrics["timing"]["ended_at"]
+    assert error_msg.metrics["timing"]["latency"] == 0
+    
+    # Test with custom source
+    custom_source = {"id": "custom", "name": "Custom Source"}
+    error_msg = agent._create_error_message("Test error", custom_source)
+    assert error_msg.source == custom_source
+
+
+@pytest.mark.asyncio
+async def test_normalize_tool_call_edge_cases():
+    """Test _normalize_tool_call with various edge cases"""
+    agent = Agent(name="TestAgent")
+    
+    # Test with dict having whitespace arguments - should preserve
+    tool_dict = {
+        "id": "123",
+        "function": {
+            "name": "test_tool",
+            "arguments": "  "  # Whitespace only
+        }
+    }
+    
+    normalized = agent._normalize_tool_call(tool_dict)
+    assert normalized.function.arguments == "  "  # Preserves whitespace
+    
+    # Test with dict missing arguments
+    tool_dict2 = {
+        "id": "456",
+        "function": {
+            "name": "test_tool"
+            # No arguments key
+        }
+    }
+    
+    normalized2 = agent._normalize_tool_call(tool_dict2)
+    assert normalized2.function.arguments == "{}"
+    
+    # Test with object having empty string arguments
+    tool_obj = MockToolCall(arguments='')
+    normalized3 = agent._normalize_tool_call(tool_obj)
+    assert normalized3.function.arguments == "{}"  # Empty string is converted
+    
+    # Test with object having valid arguments
+    tool_obj2 = MockToolCall(arguments='{"key": "value"}')
+    normalized4 = agent._normalize_tool_call(tool_obj2)
+    assert normalized4 is tool_obj2  # Should return original if valid
+
+
+@pytest.mark.asyncio
+async def test_step_error_handling():
+    """Test error handling in step method"""
+    agent = Agent(name="TestAgent")
+    
+    thread = Thread()
+    thread.add_message(Message(role="user", content="Test"))
+    
+    # Test when acompletion raises an exception
+    with patch('tyler.models.agent.acompletion') as mock_completion:
+        mock_completion.side_effect = Exception("API Error")
+        
+        # Use go() method to see error handling (step() returns response and metrics)
+        result_thread, messages = await agent.go(thread)
+        
+        # Should have error message
+        assert len(messages) > 0
+        assert any("encountered an error" in m.content for m in messages if m.role == "assistant")
+
+
+def test_stream_update_slots():
+    """Test that StreamUpdate uses __slots__ correctly"""
+    update = StreamUpdate(StreamUpdate.Type.CONTENT_CHUNK, "test data")
+    
+    # Should have type and data attributes
+    assert update.type == StreamUpdate.Type.CONTENT_CHUNK
+    assert update.data == "test data"
+    
+    # Should not have __dict__ due to __slots__
+    assert not hasattr(update, '__dict__')
+    
+    # Should not be able to add new attributes
+    with pytest.raises(AttributeError):
+        update.new_attr = "value"
+
+
+@pytest.mark.asyncio
+async def test_agent_with_child_agents():
+    """Test that agent properly registers delegation tools for child agents"""
+    child1 = Agent(name="Child1", purpose="Help with task 1")
+    child2 = Agent(name="Child2", purpose="Help with task 2")
+    
+    parent = Agent(
+        name="Parent",
+        purpose="Coordinate tasks",
+        agents=[child1, child2]
+    )
+    
+    # Check that delegation tools were created
+    tool_names = [tool['function']['name'] for tool in parent._processed_tools if 'function' in tool]
+    assert "delegate_to_Child1" in tool_names
+    assert "delegate_to_Child2" in tool_names
+    
+    # Check tool descriptions
+    for tool in parent._processed_tools:
+        if tool.get('function', {}).get('name') == 'delegate_to_Child1':
+            assert "Help with task 1" in tool['function']['description']
+
+
+@pytest.mark.asyncio
+async def test_tool_attributes_caching():
+    """Test that tool attributes are cached properly"""
+    agent = Agent(name="TestAgent")
+    
+    # Mock tool_runner.get_tool_attributes
+    with patch.object(tool_runner, 'get_tool_attributes') as mock_get_attrs:
+        mock_get_attrs.return_value = {"type": "normal"}
+        
+        # First call should hit tool_runner
+        attrs1 = agent._get_tool_attributes("tool1")
+        assert attrs1 == {"type": "normal"}
+        mock_get_attrs.assert_called_once_with("tool1")
+        
+        # Second call should use cache
+        attrs2 = agent._get_tool_attributes("tool1")
+        assert attrs2 == {"type": "normal"}
+        mock_get_attrs.assert_called_once()  # Still only once
+        
+        # Different tool should hit tool_runner again
+        attrs3 = agent._get_tool_attributes("tool2")
+        assert mock_get_attrs.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_system_prompt_generation():
+    """Test system prompt generation with various configurations"""
+    # Test with string values and custom tool
+    custom_tool = {
+        'definition': {
+            'type': 'function',
+            'function': {
+                'name': 'test_tool',
+                'description': 'A test tool for testing',
+                'parameters': {
+                    'type': 'object',
+                    'properties': {
+                        'param': {'type': 'string'}
+                    }
+                }
+            }
+        },
+        'implementation': lambda param: f"Processed: {param}"
+    }
+    
+    agent = Agent(
+        name="TestAgent",
+        purpose="Help users with testing",
+        notes="Important test notes",
+        model_name="gpt-4",
+        tools=[custom_tool]
+    )
+    
+    # Access the generated system prompt
+    system_prompt = agent._system_prompt
+    
+    # Should contain agent name and model
+    assert "TestAgent" in system_prompt
+    assert "gpt-4" in system_prompt
+    
+    # Should have the purpose and notes
+    assert "Help users with testing" in system_prompt
+    assert "Important test notes" in system_prompt
+    
+    # Should include tool description
+    assert "test_tool" in system_prompt
+    assert "A test tool for testing" in system_prompt
+
+
+@pytest.mark.asyncio
+async def test_get_timestamp():
+    """Test timestamp helper method"""
+    agent = Agent(name="TestAgent")
+    
+    # Get two timestamps
+    ts1 = agent._get_timestamp()
+    ts2 = agent._get_timestamp()
+    
+    # Should be valid ISO format timestamps
+    from datetime import datetime
+    dt1 = datetime.fromisoformat(ts1.replace('Z', '+00:00'))
+    dt2 = datetime.fromisoformat(ts2.replace('Z', '+00:00'))
+    
+    # Should be very close in time (within 1 second)
+    assert (dt2 - dt1).total_seconds() < 1.0 

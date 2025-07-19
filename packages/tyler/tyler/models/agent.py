@@ -174,6 +174,8 @@ class Agent(Model):
         
         # Generate system prompt once at initialization
         self._prompt = AgentPrompt()
+        # Initialize the tool attributes cache
+        self._tool_attributes_cache = {}
         
         # Load tools first as they are needed for the system prompt
         self._processed_tools = []
