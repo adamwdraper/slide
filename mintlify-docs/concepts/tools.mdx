@@ -1,0 +1,417 @@
+---
+title: 'Tools'
+description: 'Understanding and creating tools for Slide agents'
+---
+
+## What are Tools?
+
+Tools in Slide are the capabilities that agents can use to interact with the world. They bridge the gap between an agent's decision-making and actual actions. The Lye package provides a comprehensive set of pre-built tools, and you can easily create custom ones.
+
+## Built-in Tools
+
+Slide comes with a rich set of tools organized by category:
+
+<Tabs>
+  <Tab title="Audio Tools">
+    ```python
+    from lye import audio
+    
+    # Available tools:
+    audio.transcribe      # Convert audio to text
+    audio.analyze         # Analyze audio properties
+    audio.generate_speech # Text to speech
+    ```
+  </Tab>
+  <Tab title="Browser Tools">
+    ```python
+    from lye import browser
+    
+    # Available tools:
+    browser.screenshot    # Capture webpage screenshots
+    browser.extract_text  # Extract text from pages
+    browser.click        # Interact with elements
+    browser.fill_form    # Fill out forms
+    ```
+  </Tab>
+  <Tab title="File Tools">
+    ```python
+    from lye import files
+    
+    # Available tools:
+    files.read           # Read file contents
+    files.write          # Write to files
+    files.list           # List directory contents
+    files.delete         # Delete files
+    files.move           # Move/rename files
+    ```
+  </Tab>
+  <Tab title="Image Tools">
+    ```python
+    from lye import image
+    
+    # Available tools:
+    image.analyze        # Analyze image content
+    image.extract_text   # OCR text extraction
+    image.resize         # Resize images
+    image.convert        # Convert formats
+    ```
+  </Tab>
+  <Tab title="Web Tools">
+    ```python
+    from lye import web
+    
+    # Available tools:
+    web.search          # Search the internet
+    web.fetch           # Fetch webpage content
+    web.api_call        # Make API requests
+    ```
+  </Tab>
+</Tabs>
+
+## Tool Structure
+
+Every tool in Slide follows a consistent structure:
+
+```python
+from typing import Dict, Any
+from lye.utils import Tool
+
+class MyTool(Tool):
+    """Tool for doing something specific."""
+    
+    name = "my_tool"
+    description = "Does something useful"
+    
+    parameters = {
+        "type": "object",
+        "properties": {
+            "input_text": {
+                "type": "string",
+                "description": "The text to process"
+            },
+            "options": {
+                "type": "object",
+                "properties": {
+                    "format": {"type": "string", "enum": ["json", "text"]}
+                }
+            }
+        },
+        "required": ["input_text"]
+    }
+    
+    async def execute(self, **kwargs) -> Dict[str, Any]:
+        """Execute the tool with given parameters."""
+        input_text = kwargs.get("input_text")
+        options = kwargs.get("options", {})
+        
+        # Tool logic here
+        result = process_text(input_text, options)
+        
+        return {
+            "success": True,
+            "result": result
+        }
+```
+
+## Creating Custom Tools
+
+### Simple Function Tool
+
+The easiest way to create a tool is using the `@tool` decorator:
+
+```python
+from lye.utils import tool
+
+@tool(
+    name="word_counter",
+    description="Count words in text"
+)
+async def count_words(text: str) -> dict:
+    """Count words in the provided text."""
+    words = text.split()
+    return {
+        "word_count": len(words),
+        "character_count": len(text),
+        "unique_words": len(set(words))
+    }
+
+# Use with an agent
+from tyler import Agent
+
+agent = Agent(
+    name="text-analyzer",
+    tools=[count_words]
+)
+```
+
+### Class-Based Tool
+
+For more complex tools, use the class-based approach:
+
+```python
+from lye.utils import Tool
+import aiohttp
+
+class WeatherTool(Tool):
+    """Get weather information for a location."""
+    
+    name = "get_weather"
+    description = "Get current weather for a city"
+    
+    parameters = {
+        "type": "object",
+        "properties": {
+            "city": {
+                "type": "string",
+                "description": "City name"
+            },
+            "units": {
+                "type": "string",
+                "enum": ["celsius", "fahrenheit"],
+                "default": "celsius"
+            }
+        },
+        "required": ["city"]
+    }
+    
+    def __init__(self, api_key: str):
+        self.api_key = api_key
+    
+    async def execute(self, city: str, units: str = "celsius") -> dict:
+        async with aiohttp.ClientSession() as session:
+            url = f"https://api.weather.com/v1/current"
+            params = {
+                "city": city,
+                "units": units,
+                "api_key": self.api_key
+            }
+            
+            async with session.get(url, params=params) as response:
+                data = await response.json()
+                
+                return {
+                    "temperature": data["temp"],
+                    "conditions": data["conditions"],
+                    "humidity": data["humidity"]
+                }
+```
+
+## Tool Patterns
+
+### 1. Validation Pattern
+
+Always validate inputs:
+
+```python
+@tool(name="safe_calculator", description="Safe math calculations")
+async def calculate(expression: str) -> dict:
+    # Validate input
+    allowed_chars = set("0123456789+-*/()., ")
+    if not all(c in allowed_chars for c in expression):
+        return {"error": "Invalid characters in expression"}
+    
+    try:
+        result = eval(expression)  # Safe due to validation
+        return {"result": result}
+    except Exception as e:
+        return {"error": str(e)}
+```
+
+### 2. Resource Management Pattern
+
+Properly manage external resources:
+
+```python
+class DatabaseTool(Tool):
+    name = "query_database"
+    
+    async def execute(self, query: str) -> dict:
+        conn = await self.get_connection()
+        try:
+            result = await conn.execute(query)
+            return {"data": result}
+        finally:
+            await conn.close()  # Always cleanup
+```
+
+### 3. Error Handling Pattern
+
+Provide meaningful error messages:
+
+```python
+@tool(name="api_caller", description="Make API calls")
+async def call_api(url: str, method: str = "GET", data: dict = None) -> dict:
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.request(method, url, json=data) as response:
+                if response.status >= 400:
+                    return {
+                        "error": f"API error: {response.status}",
+                        "details": await response.text()
+                    }
+                return {"data": await response.json()}
+    except aiohttp.ClientError as e:
+        return {"error": f"Network error: {str(e)}"}
+    except Exception as e:
+        return {"error": f"Unexpected error: {str(e)}"}
+```
+
+## Tool Best Practices
+
+<AccordionGroup>
+  <Accordion title="1. Clear Descriptions">
+    Write clear, concise descriptions that help agents understand when to use the tool:
+    ```python
+    # Good
+    @tool(
+        name="translate_text",
+        description="Translate text between languages using Google Translate"
+    )
+    
+    # Too vague
+    @tool(
+        name="translate",
+        description="Translation tool"
+    )
+    ```
+  </Accordion>
+
+  <Accordion title="2. Parameter Documentation">
+    Document all parameters thoroughly:
+    ```python
+    parameters = {
+        "type": "object",
+        "properties": {
+            "source_lang": {
+                "type": "string",
+                "description": "Source language code (e.g., 'en', 'es', 'fr')"
+            },
+            "target_lang": {
+                "type": "string",
+                "description": "Target language code"
+            },
+            "text": {
+                "type": "string",
+                "description": "Text to translate (max 5000 characters)"
+            }
+        },
+        "required": ["text", "target_lang"]
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="3. Idempotency">
+    Make tools idempotent when possible:
+    ```python
+    @tool(name="create_file", description="Create a file if it doesn't exist")
+    async def create_file(path: str, content: str) -> dict:
+        if os.path.exists(path):
+            return {"status": "already_exists", "path": path}
+        
+        with open(path, 'w') as f:
+            f.write(content)
+        
+        return {"status": "created", "path": path}
+    ```
+  </Accordion>
+
+  <Accordion title="4. Rate Limiting">
+    Implement rate limiting for external services:
+    ```python
+    from asyncio import Semaphore
+    
+    class RateLimitedTool(Tool):
+        def __init__(self, max_concurrent: int = 5):
+            self.semaphore = Semaphore(max_concurrent)
+        
+        async def execute(self, **kwargs):
+            async with self.semaphore:
+                # Tool logic here
+                pass
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Testing Tools
+
+Always test your custom tools:
+
+```python
+import pytest
+from your_tools import weather_tool
+
+@pytest.mark.asyncio
+async def test_weather_tool():
+    tool = WeatherTool(api_key="test_key")
+    result = await tool.execute(city="London")
+    
+    assert "temperature" in result
+    assert "conditions" in result
+    assert isinstance(result["temperature"], (int, float))
+
+@pytest.mark.asyncio
+async def test_weather_tool_error():
+    tool = WeatherTool(api_key="invalid")
+    result = await tool.execute(city="InvalidCity")
+    
+    assert "error" in result
+```
+
+## Tool Composition
+
+Combine multiple tools for complex operations:
+
+```python
+from tyler import Agent
+from lye import web, files, image
+
+# Create a research agent with multiple tools
+agent = Agent(
+    name="researcher",
+    tools=[
+        web.search,
+        web.fetch,
+        image.analyze,
+        files.write
+    ]
+)
+
+# Agent can now:
+# 1. Search for information
+# 2. Fetch detailed content
+# 3. Analyze images found
+# 4. Save results to files
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Lye Package"
+    icon="toolbox"
+    href="/packages/lye/introduction"
+  >
+    Explore all available tools
+  </Card>
+  <Card
+    title="MCP Integration"
+    icon="plug"
+    href="/concepts/mcp"
+  >
+    Use tools from MCP servers
+  </Card>
+  <Card
+    title="Tool Examples"
+    icon="code"
+    href="/packages/lye/examples"
+  >
+    See practical tool examples
+  </Card>
+  <Card
+    title="API Reference"
+    icon="book"
+    href="/api-reference/introduction"
+  >
+    Detailed tool API docs
+  </Card>
+</CardGroup> 

@@ -1,0 +1,120 @@
+---
+title: 'Welcome to Slide'
+description: 'A powerful AI agent framework for building intelligent applications'
+---
+
+<img
+  className="block dark:hidden"
+  src="/images/hero-light.svg"
+  alt="Slide Framework Hero Light"
+/>
+<img
+  className="hidden dark:block"
+  src="/images/hero-dark.svg"
+  alt="Slide Framework Hero Dark"
+/>
+
+## What is Slide?
+
+Slide is a comprehensive AI agent framework that provides everything you need to build intelligent, autonomous applications. It consists of four powerful packages that work seamlessly together:
+
+<CardGroup cols={2}>
+  <Card
+    title="Tyler"
+    icon="robot"
+    href="/packages/tyler/introduction"
+  >
+    Core agent framework with MCP (Model Context Protocol) support for building autonomous AI agents
+  </Card>
+  <Card
+    title="Lye"
+    icon="toolbox"
+    href="/packages/lye/introduction"
+  >
+    Rich utility library providing tools for audio, browser automation, image processing, and more
+  </Card>
+  <Card
+    title="Narrator"
+    icon="database"
+    href="/packages/narrator/introduction"
+  >
+    Thread and storage management system for maintaining conversation history and agent state
+  </Card>
+  <Card
+    title="Space Monkey"
+    icon="slack"
+    href="/packages/space-monkey/introduction"
+  >
+    Slack integration framework for deploying AI agents as Slack bots
+  </Card>
+</CardGroup>
+
+## Why Slide?
+
+### 🚀 Production-Ready
+Built with real-world applications in mind, Slide provides robust error handling, logging, and monitoring capabilities out of the box.
+
+### 🧩 Modular Architecture
+Use only what you need. Each package is designed to work independently or as part of the complete framework.
+
+### 🤖 MCP Support
+Native support for the Model Context Protocol enables seamless integration with AI tools and services.
+
+### 🛠️ Rich Tool Ecosystem
+From audio transcription to web scraping, Slide's Lye package provides a comprehensive set of tools for your agents.
+
+## Quick Example
+
+```python
+from tyler import Agent
+from lye import audio, browser
+
+# Create an agent with audio and browser capabilities
+agent = Agent(
+    name="research-assistant",
+    tools=[audio.transcribe, browser.screenshot, browser.extract_text]
+)
+
+# Run the agent
+result = await agent.run(
+    "Transcribe this podcast and create a summary with screenshots"
+)
+```
+
+## Get Started
+
+<CardGroup cols={2}>
+  <Card
+    title="Quickstart"
+    icon="rocket"
+    href="/quickstart"
+  >
+    Get up and running with Slide in 5 minutes
+  </Card>
+  <Card
+    title="Core Concepts"
+    icon="book"
+    href="/concepts/agents"
+  >
+    Learn the fundamental concepts behind Slide
+  </Card>
+</CardGroup>
+
+## Join the Community
+
+<CardGroup cols={2}>
+  <Card
+    title="GitHub"
+    icon="github"
+    href="https://github.com/yourusername/slide"
+  >
+    Star us on GitHub and contribute to the project
+  </Card>
+  <Card
+    title="Slack Community"
+    icon="slack"
+    href="https://slide-community.slack.com"
+  >
+    Join our Slack to get help and share your projects
+  </Card>
+</CardGroup> 

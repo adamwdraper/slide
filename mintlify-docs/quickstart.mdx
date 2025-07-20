@@ -1,0 +1,249 @@
+---
+title: 'Quickstart'
+description: 'Get up and running with Slide in 5 minutes'
+---
+
+## Installation
+
+<Tabs>
+  <Tab title="uv (Recommended)">
+    ```bash
+    # Install uv if you haven't already
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+
+    # Create a new project
+    uv init my-slide-project
+    cd my-slide-project
+
+    # Add Slide packages
+    uv add tyler lye narrator space-monkey
+    ```
+  </Tab>
+  <Tab title="pip">
+    ```bash
+    # Create a virtual environment
+    python -m venv venv
+    source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+    # Install Slide packages
+    pip install tyler lye narrator space-monkey
+    ```
+  </Tab>
+</Tabs>
+
+## Your First Agent
+
+Let's create a simple agent that can browse the web and process images:
+
+<CodeGroup>
+```python basic_agent.py
+from tyler import Agent
+from lye import browser, image
+
+# Create an agent with browser and image tools
+agent = Agent(
+    name="web-analyzer",
+    tools=[
+        browser.screenshot,
+        browser.extract_text,
+        image.analyze,
+        image.extract_text
+    ],
+    model="gpt-4"  # or any other supported model
+)
+
+# Run the agent
+async def main():
+    result = await agent.run(
+        "Take a screenshot of python.org and analyze what you see"
+    )
+    print(result)
+
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(main())
+```
+</CodeGroup>
+
+## Using Narrator for Conversation History
+
+Slide includes Narrator for managing conversation threads:
+
+<CodeGroup>
+```python with_memory.py
+from tyler import Agent
+from narrator import Thread, FileStore
+from lye import web
+
+# Set up storage
+store = FileStore("./conversations")
+thread = Thread(store=store, thread_id="main-conversation")
+
+# Create agent with memory
+agent = Agent(
+    name="assistant",
+    tools=[web.search, web.fetch],
+    thread=thread  # Agent will remember past conversations
+)
+
+async def main():
+    # First interaction
+    await agent.run("Search for information about Python 3.12")
+    
+    # Second interaction (agent remembers context)
+    await agent.run("What were the main features we just found?")
+
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(main())
+```
+</CodeGroup>
+
+## Deploy to Slack with Space Monkey
+
+Transform your agent into a Slack bot:
+
+<CodeGroup>
+```python slack_bot.py
+from space_monkey import SlackApp
+from tyler import Agent
+from lye import web, files
+
+# Create your agent
+agent = Agent(
+    name="slack-assistant",
+    tools=[web.search, files.read, files.write]
+)
+
+# Create Slack app
+app = SlackApp(
+    agent=agent,
+    slack_token="xoxb-your-token",  # Set as environment variable
+    signing_secret="your-secret"    # Set as environment variable
+)
+
+# Handle mentions
+@app.event("app_mention")
+async def handle_mention(event, say):
+    response = await agent.run(event["text"])
+    await say(response)
+
+# Start the app
+if __name__ == "__main__":
+    app.start(port=3000)
+```
+</CodeGroup>
+
+<Note>
+  Remember to set your Slack tokens as environment variables. Never commit them to your repository!
+</Note>
+
+## MCP Integration
+
+Slide's Tyler package supports the Model Context Protocol for advanced integrations:
+
+<CodeGroup>
+```python mcp_example.py
+from tyler import Agent
+from tyler.mcp import MCPAdapter
+
+# Connect to an MCP server
+adapter = MCPAdapter()
+await adapter.connect("stdio://./my-mcp-server")
+
+# Create agent with MCP tools
+agent = Agent(
+    name="mcp-agent",
+    mcp_adapter=adapter
+)
+
+# Use MCP tools
+result = await agent.run("Use the available MCP tools to complete this task")
+```
+</CodeGroup>
+
+## Common Patterns
+
+### Combining Multiple Tools
+
+```python
+from tyler import Agent
+from lye import audio, browser, files
+
+agent = Agent(
+    name="researcher",
+    tools=[
+        audio.transcribe,
+        browser.screenshot,
+        browser.extract_text,
+        files.write
+    ]
+)
+
+# Agent can now transcribe audio, browse web, and save results
+await agent.run("""
+    1. Transcribe the podcast at this URL
+    2. Search for related articles
+    3. Create a summary report and save it
+""")
+```
+
+### Error Handling
+
+```python
+from tyler import Agent
+from tyler.exceptions import AgentError
+
+try:
+    result = await agent.run("Complex task")
+except AgentError as e:
+    print(f"Agent encountered an error: {e}")
+    # Handle gracefully
+```
+
+### Streaming Responses
+
+```python
+async for chunk in agent.stream("Generate a long analysis"):
+    print(chunk, end="", flush=True)
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Tyler Documentation"
+    icon="robot"
+    href="/packages/tyler/introduction"
+  >
+    Deep dive into the agent framework
+  </Card>
+  <Card
+    title="Lye Tools"
+    icon="toolbox"
+    href="/packages/lye/introduction"
+  >
+    Explore all available tools
+  </Card>
+  <Card
+    title="Examples"
+    icon="code"
+    href="/packages/tyler/examples"
+  >
+    See more complex examples
+  </Card>
+  <Card
+    title="MCP Guide"
+    icon="plug"
+    href="/concepts/mcp"
+  >
+    Learn about MCP integration
+  </Card>
+</CardGroup>
+
+## Getting Help
+
+- 📖 Read the [full documentation](/packages/overview)
+- 💬 Join our [Slack community](https://slide-community.slack.com)
+- 🐛 Report issues on [GitHub](https://github.com/yourusername/slide/issues)
+- 📧 Email us at support@slide-framework.com 
