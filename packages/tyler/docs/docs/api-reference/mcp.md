@@ -2,182 +2,226 @@
 
 This page provides detailed reference information for Tyler's [Model Context Protocol (MCP)](https://modelcontextprotocol.io/introduction) integration components.
 
-## MCPService
+## MCPAdapter
 
-The `MCPService` class manages connections to MCP servers, discovers tools, and handles tool execution.
+The `MCPAdapter` class is the main interface for connecting Tyler agents to MCP servers. It handles server connections, tool discovery, and format conversion between MCP and Tyler tools.
+
+### Constructor
+
+```python
+MCPAdapter(mcp_client: Optional[MCPClient] = None)
+```
+
+**Parameters:**
+- `mcp_client`: Optional MCP client instance. If not provided, creates a new one.
 
 ### Methods
 
-#### `async initialize(server_configs: List[Dict[str, Any]]) -> None`
+#### `async connect(name: str, transport: str, **kwargs) -> bool`
 
-Initializes the MCP service with the provided server configurations.
+Connects to an MCP server and registers its tools with Tyler.
 
 **Parameters:**
-- `server_configs`: List of server configuration dictionaries
+- `name`: Unique name for this connection
+- `transport`: Transport type (`'stdio'`, `'sse'`, or `'websocket'`)
+- `**kwargs`: Transport-specific arguments:
+  - For `stdio`: `command` (str), `args` (List[str]), `env` (Dict[str, str])
+  - For `sse`: `url` (str)
+  - For `websocket`: `url` (str)
+
+**Returns:**
+- `bool`: True if connection successful and tools registered
 
 **Example:**
 ```python
-await mcp_service.initialize([
-    {
-        "name": "brave-search",
-        "transport": "stdio",
-        "command": ["python", "-m", "brave_search.server"],
-        "auto_start": True
-    }
-])
+mcp = MCPAdapter()
+
+# STDIO transport
+connected = await mcp.connect(
+    name="brave",
+    transport="stdio",
+    command="npx",
+    args=["-y", "@modelcontextprotocol/server-brave-search"],
+    env={"BRAVE_API_KEY": "your_key"}
+)
+
+# SSE transport
+connected = await mcp.connect(
+    name="filesystem",
+    transport="sse",
+    url="http://localhost:3000/sse"
+)
 ```
 
-#### `async _connect_to_server(name: str, config: Dict[str, Any]) -> Optional[ClientSession]`
+#### `get_tools_for_agent(server_names: Optional[List[str]] = None) -> List[Dict[str, Any]]`
 
-Connects to an MCP server using the specified configuration.
+Gets Tyler-formatted tools for use with an Agent.
 
 **Parameters:**
-- `name`: Server name
-- `config`: Server configuration dictionary
+- `server_names`: Optional list of server names. If None, returns tools from all connected servers.
 
 **Returns:**
-- `ClientSession` object if connection is successful, `None` otherwise
+- List of Tyler tool definitions ready for use with Agent
 
-#### `async _discover_tools(name: str, session: ClientSession) -> None`
+**Example:**
+```python
+# Get all tools
+all_tools = mcp.get_tools_for_agent()
 
-Discovers available tools from an MCP server.
+# Get tools from specific servers
+brave_tools = mcp.get_tools_for_agent(["brave"])
+```
 
-**Parameters:**
-- `name`: Server name
-- `session`: MCP client session
+#### `async disconnect(name: str) -> None`
 
-#### `_convert_mcp_tool_to_tyler_tool(server_name: str, tool, session: ClientSession) -> Dict`
-
-Converts an MCP tool definition to a Tyler-compatible tool definition.
-
-**Parameters:**
-- `server_name`: Server name
-- `tool`: MCP tool definition
-- `session`: MCP client session
-
-**Returns:**
-- Tyler-compatible tool definition dictionary
-
-#### `_create_tool_implementation(server_name: str, tool_name: str)`
-
-Creates a function that implements an MCP tool.
+Disconnects from a specific server and unregisters its tools.
 
 **Parameters:**
-- `server_name`: Server name
-- `tool_name`: Tool name
+- `name`: Name of the server to disconnect from
 
-**Returns:**
-- Function that executes the MCP tool
+#### `async disconnect_all() -> None`
 
-#### `get_tools_for_agent(server_names=None)`
+Disconnects from all servers and cleans up resources.
 
-Gets all available tools for use with a Tyler agent.
+## MCPClient
 
-**Parameters:**
-- `server_names`: Optional list of server names to filter tools by
+The `MCPClient` class provides lower-level access to MCP protocol operations. It handles the actual communication with MCP servers.
 
-**Returns:**
-- List of Tyler-compatible tool definitions
+### Constructor
 
-#### `async cleanup()`
-
-Cleans up all MCP server connections.
-
-## MCPServerManager
-
-The `MCPServerManager` class handles starting, stopping, and managing MCP server processes.
+```python
+MCPClient()
+```
 
 ### Methods
 
-#### `async start_server(name: str, config: Dict[str, Any]) -> bool`
+#### `async connect(name: str, transport: str, **kwargs) -> bool`
 
-Starts an MCP server with the specified configuration.
+Connects to an MCP server.
+
+**Parameters:**
+- `name`: Unique name for this connection
+- `transport`: Transport type (`'stdio'`, `'sse'`, or `'websocket'`)
+- `**kwargs`: Transport-specific arguments
+
+**Returns:**
+- `bool`: True if connection successful
+
+#### `get_tools(server_name: Optional[str] = None) -> List[Any]`
+
+Gets discovered tools from one or all servers.
+
+**Parameters:**
+- `server_name`: Optional server name. If None, returns tools from all servers.
+
+**Returns:**
+- List of MCP tool objects
+
+#### `async call_tool(server_name: str, tool_name: str, arguments: Dict[str, Any]) -> Any`
+
+Calls a tool on a specific server.
+
+**Parameters:**
+- `server_name`: Name of the server that has the tool
+- `tool_name`: Name of the tool to call
+- `arguments`: Tool arguments
+
+**Returns:**
+- Tool execution result
+
+#### `async disconnect(name: str) -> None`
+
+Disconnects from a specific server.
 
 **Parameters:**
 - `name`: Server name
-- `config`: Server configuration dictionary
 
-**Returns:**
-- `True` if server started successfully, `False` otherwise
+#### `async disconnect_all() -> None`
 
-**Example:**
-```python
-success = await server_manager.start_server("brave-search", {
-    "transport": "stdio",
-    "command": ["python", "-m", "brave_search.server"],
-    "auto_start": True
-})
-```
+Disconnects from all servers.
 
-#### `async stop_server(name: str) -> bool`
+#### `is_connected(name: str) -> bool`
 
-Stops a running MCP server.
+Checks if connected to a specific server.
 
 **Parameters:**
 - `name`: Server name
 
 **Returns:**
-- `True` if server stopped successfully, `False` otherwise
+- `bool`: True if connected
 
-**Example:**
-```python
-success = await server_manager.stop_server("brave-search")
-```
+#### `list_connections() -> List[str]`
 
-#### `async stop_all_servers() -> None`
-
-Stops all running MCP servers.
-
-**Example:**
-```python
-await server_manager.stop_all_servers()
-```
-
-## Utility Functions
-
-### `async initialize_mcp_service(server_configs: List[Dict[str, Any]]) -> MCPService`
-
-Initializes and returns an MCPService instance.
-
-**Parameters:**
-- `server_configs`: List of server configuration dictionaries
+Lists all active connections.
 
 **Returns:**
-- Initialized `MCPService` instance
+- List of server names
 
-**Example:**
+## Tool Naming Convention
+
+MCP tools are automatically namespaced when converted to Tyler tools to avoid naming conflicts:
+
+- **MCP Tool**: `search` from server `brave`
+- **Tyler Tool Name**: `brave__search`
+
+The naming pattern is: `{server_name}__{tool_name}`, with all non-alphanumeric characters replaced with underscores.
+
+## Complete Example
+
 ```python
-mcp_service = await initialize_mcp_service([
-    {
-        "name": "brave-search",
-        "transport": "stdio",
-        "command": ["python", "-m", "brave_search.server"],
-        "auto_start": True
-    }
-])
-```
+// ... existing code ...
 
-### `async cleanup_mcp_service(mcp_service: MCPService) -> None`
+from tyler import Agent, Thread, Message
+from tyler.mcp import MCPAdapter
 
-Cleans up an MCPService instance.
-
-**Parameters:**
-- `mcp_service`: MCPService instance to clean up
-
-**Example:**
-```python
-await cleanup_mcp_service(mcp_service)
-```
-
-## Server Configuration
-
-MCP servers can be configured with the following options:
-
-| Option | Description | Required | Default |
-|--------|-------------|----------|---------|
-| `name` | Unique identifier for the server | Yes | - |
-| `transport` | Transport protocol: `stdio`, `sse`, or `websocket` | Yes | - |
-| `command` | Command to start the server (for `stdio` transport with `auto_start: true`) | For `stdio` with `auto_start: true` | - |
-| `auto_start` | Whether Tyler should automatically start and manage the server | No | `False` |
-| `url` | URL for connecting to the server (for `sse` and `websocket` transports) | For `sse` and `websocket` | - |
-| `headers` | Optional HTTP headers for connection (for `sse` and `websocket` transports) | No | `{}` | 
+async def example_with_multiple_servers():
+    # Create adapter
+    mcp = MCPAdapter()
+    
+    # Connect to multiple servers
+    servers = [
+        {
+            "name": "brave",
+            "transport": "stdio",
+            "command": "npx",
+            "args": ["-y", "@modelcontextprotocol/server-brave-search"],
+            "env": {"BRAVE_API_KEY": os.environ.get("BRAVE_API_KEY")}
+        },
+        {
+            "name": "filesystem",
+            "transport": "sse",
+            "url": "http://localhost:3000/sse"
+        }
+    ]
+    
+    connected_servers = []
+    for server in servers:
+        name = server.pop("name")
+        transport = server.pop("transport")
+        if await mcp.connect(name, transport, **server):
+            connected_servers.append(name)
+    
+    if not connected_servers:
+        print("No servers connected")
+        return
+    
+    try:
+        # Create agent with all MCP tools
+        agent = Agent(
+            name="MultiToolAssistant",
+            model_name="gpt-4o-mini",
+            tools=mcp.get_tools_for_agent()
+        )
+        
+        # Use the agent
+        thread = Thread()
+        thread.add_message(Message(
+            role="user",
+            content="Search for recent AI news and save a summary to summary.txt"
+        ))
+        
+        result_thread, messages = await agent.go(thread)
+        
+    finally:
+        await mcp.disconnect_all()
+``` 

@@ -1,6 +1,12 @@
 """Example of using Tyler with the Brave Search MCP server.
 
-This example demonstrates how to use Tyler with the Brave Search MCP server.
+This example demonstrates how to use Tyler with an MCP server.
+The server should be started separately before running this example.
+
+To start the Brave Search server:
+    BRAVE_API_KEY=your_key npx -y @modelcontextprotocol/server-brave-search
+
+Then run this example.
 """
 # Load environment variables and configure logging first
 from dotenv import load_dotenv
@@ -17,7 +23,7 @@ import weave
 from typing import List, Dict, Any
 
 from tyler import Agent, Thread, Message
-from tyler.mcp.utils import initialize_mcp_service, cleanup_mcp_service
+from tyler.mcp import MCPAdapter
 
 # Add the parent directory to the path so we can import the example utils
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -32,36 +38,30 @@ except Exception as e:
 
 async def main():
     """Run the example."""
-    # Check for Brave API key
-    brave_api_key = os.environ.get("BRAVE_API_KEY")
-    if not brave_api_key:
-        logger.warning("BRAVE_API_KEY environment variable not set. "
-                      "Please set it to use the Brave Search API.")
+    # Create MCP adapter
+    mcp = MCPAdapter()
+    
+    logger.info("Connecting to Brave Search MCP server...")
+    
+    # Connect to the Brave Search server running on stdio
+    # The server should already be running with:
+    # BRAVE_API_KEY=xxx npx -y @modelcontextprotocol/server-brave-search
+    connected = await mcp.connect(
+        name="brave",
+        transport="stdio",
+        command="npx",
+        args=["-y", "@modelcontextprotocol/server-brave-search"],
+        env={"BRAVE_API_KEY": os.environ.get("BRAVE_API_KEY", "")}
+    )
+    
+    if not connected:
+        logger.error("Failed to connect to Brave Search MCP server.")
+        logger.info("Make sure you have BRAVE_API_KEY set and the server is accessible.")
         return
-        
-    logger.info("Initializing MCP service with Brave Search server...")
-    
-    # Configure the Brave Search MCP server
-    server_configs = [
-        {
-            "name": "brave",
-            "transport": "stdio",
-            "command": "npx",
-            "args": ["-y", "@modelcontextprotocol/server-brave-search"],
-            "startup_timeout": 5,
-            "required": True,
-            "env": {
-                "BRAVE_API_KEY": brave_api_key
-            }
-        }
-    ]
-    
-    # Initialize the MCP service
-    mcp_service = await initialize_mcp_service(server_configs)
     
     try:
         # Get the MCP tools for the agent
-        mcp_tools = mcp_service.get_tools_for_agent(["brave"])
+        mcp_tools = mcp.get_tools_for_agent(["brave"])
         
         if not mcp_tools:
             logger.error("No tools discovered from the Brave Search MCP server.")
@@ -72,7 +72,7 @@ async def main():
         # Create an agent with the MCP tools
         agent = Agent(
             name="Tyler",
-            model_name="gpt-4.1",
+            model_name="gpt-4o-mini",
             tools=mcp_tools
         )
         
@@ -82,7 +82,7 @@ async def main():
         # Add a user message
         thread.add_message(Message(
             role="user",
-            content="What can you tell me about quantum computing?"
+            content="What's the latest news about quantum computing breakthroughs?"
         ))
         
         # Process the thread with streaming
@@ -91,15 +91,22 @@ async def main():
             if update.type.name == "CONTENT_CHUNK":
                 print(update.data, end="", flush=True)
             elif update.type.name == "TOOL_MESSAGE":
-                print(f"\n[Tool execution: {update.data['name']}]\n")
+                print(f"\n[Tool execution: {update.data.name}]\n")
             elif update.type.name == "COMPLETE":
                 print("\n\nProcessing complete!")
                 
     finally:
-        # Clean up the MCP service
-        logger.info("Cleaning up MCP service...")
-        await cleanup_mcp_service()
+        # Clean up
+        logger.info("Disconnecting from MCP server...")
+        await mcp.disconnect_all()
 
 
 if __name__ == "__main__":
+    # Check for Brave API key
+    if not os.environ.get("BRAVE_API_KEY"):
+        print("Error: BRAVE_API_KEY environment variable not set.")
+        print("Please set it to use the Brave Search API.")
+        print("Example: export BRAVE_API_KEY=your_api_key_here")
+        sys.exit(1)
+        
     asyncio.run(main()) 

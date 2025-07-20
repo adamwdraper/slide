@@ -1,6 +1,11 @@
-"""MCP (Model Context Protocol) integration for Tyler."""
+"""MCP (Model Context Protocol) integration for Tyler.
 
-from .service import MCPService
-from .server_manager import MCPServerManager
+This module provides a clean interface for connecting Tyler agents
+to MCP servers. It does NOT manage server lifecycle - servers should
+be started and managed externally.
+"""
 
-__all__ = ["MCPService", "MCPServerManager"] 
+from .client import MCPClient
+from .adapter import MCPAdapter
+
+__all__ = ["MCPClient", "MCPAdapter"] 
