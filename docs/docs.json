@@ -1,0 +1,136 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "Slide Framework",
+  "colors": {
+    "primary": "#9333EA",
+    "light": "#A855F7",
+    "dark": "#7C3AED"
+  },
+  "favicon": "/favicon.svg",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "introduction",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/agents",
+              "concepts/tools",
+              "concepts/mcp"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "API Reference",
+            "pages": [
+              "api-reference/introduction"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Packages",
+        "groups": [
+          {
+            "group": "Packages",
+            "pages": [
+              "packages/overview",
+              {
+                "group": "Tyler",
+                "pages": [
+                  "packages/tyler/introduction",
+                  "packages/tyler/agents",
+                  "packages/tyler/mcp-adapters",
+                  "packages/tyler/examples"
+                ]
+              },
+              {
+                "group": "Lye",
+                "pages": [
+                  "packages/lye/introduction",
+                  "packages/lye/audio",
+                  "packages/lye/browser",
+                  "packages/lye/files",
+                  "packages/lye/image",
+                  "packages/lye/web"
+                ]
+              },
+              {
+                "group": "Narrator",
+                "pages": [
+                  "packages/narrator/introduction",
+                  "packages/narrator/threads",
+                  "packages/narrator/storage",
+                  "packages/narrator/database"
+                ]
+              },
+              {
+                "group": "Space Monkey",
+                "pages": [
+                  "packages/space-monkey/introduction",
+                  "packages/space-monkey/slack-setup",
+                  "packages/space-monkey/message-handling"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "global": {
+      "anchors": [
+        {
+          "anchor": "GitHub",
+          "href": "https://github.com/yourusername/slide",
+          "icon": "github"
+        },
+        {
+          "anchor": "Community",
+          "href": "https://slide-community.slack.com",
+          "icon": "slack"
+        }
+      ]
+    }
+  },
+  "logo": {
+    "light": "/logo/light.svg",
+    "dark": "/logo/dark.svg"
+  },
+  "api": {
+    "playground": {
+      "display": "none"
+    }
+  },
+  "navbar": {
+    "links": [
+      {
+        "label": "GitHub",
+        "href": "https://github.com/yourusername/slide"
+      }
+    ],
+    "primary": {
+      "type": "button",
+      "label": "Get Started",
+      "href": "https://github.com/yourusername/slide"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/yourusername/slide",
+      "slack": "https://slide-community.slack.com"
+    }
+  }
+}
