@@ -1668,7 +1668,20 @@ async def test_weave_inference_service_example():
         assert metrics["model"] == "deepseek-ai/DeepSeek-R1-0528" 
 
 
-
+@pytest.mark.asyncio
+async def test_base_url_alias():
+    """Test that base_url is properly aliased to api_base"""
+    # Test 1: Using base_url should set api_base
+    agent1 = Agent(name="TestAgent1", base_url="https://custom-api.example.com/v1")
+    assert agent1.api_base == "https://custom-api.example.com/v1", "base_url should be aliased to api_base"
+    
+    # Test 2: Using api_base directly should still work
+    agent2 = Agent(name="TestAgent2", api_base="https://another-api.example.com/v1")
+    assert agent2.api_base == "https://another-api.example.com/v1", "api_base should work directly"
+    
+    # Test 3: Neither base_url nor api_base provided
+    agent3 = Agent(name="TestAgent3")
+    assert agent3.api_base is None, "api_base should be None when neither is provided"
 
 
 @pytest.mark.asyncio

@@ -144,8 +144,16 @@ This ensures the user can access the file correctly.
         )
 
 class Agent(Model):
+    """Tyler Agent model for AI-powered assistants.
+    
+    The Agent class provides a flexible interface for creating AI agents with tool use,
+    delegation capabilities, and conversation management.
+    
+    Note: You can use either 'api_base' or 'base_url' to specify a custom API endpoint.
+    'base_url' will be automatically mapped to 'api_base' for compatibility with litellm.
+    """
     model_name: str = Field(default="gpt-4.1")
-    api_base: Optional[str] = Field(default=None, description="Custom API base URL for the model provider (e.g., for using alternative inference services)")
+    api_base: Optional[str] = Field(default=None, description="Custom API base URL for the model provider (e.g., for using alternative inference services). You can also use 'base_url' as an alias.")
     extra_headers: Optional[Dict[str, str]] = Field(default=None, description="Additional headers to include in API requests (e.g., for authentication or tracking)")
     temperature: float = Field(default=0.7)
     name: str = Field(default="Tyler")
@@ -170,6 +178,10 @@ class Agent(Model):
     }
 
     def __init__(self, **data):
+        # Handle base_url as an alias for api_base (since litellm uses api_base)
+        if 'base_url' in data and 'api_base' not in data:
+            data['api_base'] = data.pop('base_url')
+            
         super().__init__(**data)
         
         # Generate system prompt once at initialization
