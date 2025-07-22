@@ -34,6 +34,37 @@ In this quickstart, you'll build an AI agent that can search the web and analyze
     </Tabs>
   </Step>
   
+  <Step title="Set Up Your API Key">
+    Your agent needs an API key to use the LLM. Choose your provider:
+
+    <Tabs>
+      <Tab title="OpenAI">
+        Create your API key from [platform.openai.com](https://platform.openai.com/api-keys) then add it to your environment:
+        ```bash
+        export OPENAI_API_KEY="sk-..."
+        ```
+      </Tab>
+      <Tab title="Anthropic">
+        Create your API key from [console.anthropic.com](https://console.anthropic.com/) then add it to your environment:
+        ```bash
+        export ANTHROPIC_API_KEY="sk-ant-..."
+        ```
+      </Tab>
+      <Tab title="Other Providers">
+        Slide supports 100+ providers via LiteLLM. See the [full list](https://docs.litellm.ai/docs/providers).
+        
+        Example for Google:
+        ```bash
+        export GOOGLE_API_KEY="..."
+        ```
+      </Tab>
+    </Tabs>
+
+    <Tip>
+      For production, use a `.env` file.
+    </Tip>
+  </Step>
+  
   <Step title="Create Your Agent">
     Create a file called `agent.py`:
 
@@ -45,7 +76,7 @@ In this quickstart, you'll build an AI agent that can search the web and analyze
     # Create your agent
     agent = Agent(
         name="research-assistant",
-        model_name="gpt-4",  # or "gpt-3.5-turbo" for faster/cheaper
+        model_name="gpt-4o",  # Use the model for your API key provider
         purpose="To help with research and analysis tasks",
         tools=[
             *WEB_TOOLS,      # Can search and fetch web content

@@ -15,12 +15,7 @@
       "to": "#A855F7"
     }
   },
-  "topbarLinks": [
-    {
-      "name": "GitHub",
-      "url": "https://github.com/yourusername/slide"
-    }
-  ],
+  "topbarLinks": [],
   "topbarCtaButton": {
     "name": "Get Started",
     "url": "/quickstart"
