@@ -45,6 +45,9 @@ class AgentEval:
         self.use_mock_tools = use_mock_tools
         self.mock_registry = MockToolRegistry()
         
+        # Store results during evaluation
+        self._current_results = []
+        
         # Validate conversations
         if not conversations:
             raise ValueError("Must provide at least one conversation")
@@ -87,6 +90,8 @@ class AgentEval:
         This is the function that Weave will call for each example.
         """
         messages = conversation_data['messages']
+        conversation_id = conversation_data['conversation_id']
+        expectations = conversation_data.get('expectations', [])
         
         # Create a safe copy of the agent with mock tools
         safe_agent = self._create_safe_agent(agent)
@@ -126,6 +131,22 @@ class AgentEval:
             "mock_tools_used": self.use_mock_tools
         }
         
+        # Format tool calls for scorers (extract names)
+        if last_message.tool_calls:
+            formatted_tool_calls = []
+            for tc in last_message.tool_calls:
+                if hasattr(tc, 'function'):
+                    formatted_tool_calls.append({
+                        'name': tc.function.name,
+                        'arguments': tc.function.arguments
+                    })
+                elif isinstance(tc, dict) and 'function' in tc:
+                    formatted_tool_calls.append({
+                        'name': tc['function']['name'],
+                        'arguments': tc['function'].get('arguments', {})
+                    })
+            response["tool_calls"] = formatted_tool_calls
+        
         # Add mock tool call history if using mocks
         if self.use_mock_tools:
             response["mock_tool_calls"] = {
@@ -133,6 +154,14 @@ class AgentEval:
                 for name, mock in self.mock_registry.mocks.items()
                 if mock.was_called()
             }
+        
+        # Store the response with expectations for later processing
+        self._current_results.append({
+            'conversation_id': conversation_id,
+            'response': response,
+            'expectations': expectations,
+            'messages': messages  # Add messages for scorer context
+        })
             
         return response
     
@@ -161,6 +190,9 @@ class AgentEval:
         try:
             # Reset mock tool histories
             self.mock_registry.reset_all()
+            
+            # Clear previous results
+            self._current_results = []
             
             # Create Weave evaluation
             dataset = self._create_weave_dataset()
@@ -196,33 +228,48 @@ class AgentEval:
             # Process results into Tyler format
             conversation_results = []
             
-            # Get the full evaluation results with scores
-            if hasattr(eval_result, 'rows'):
-                for row in eval_result.rows:
-                    conv_id = row['conversation_id']
-                    agent_response = row.get('output', {})
+            # Process the results we stored during evaluation
+            for i, result_data in enumerate(self._current_results):
+                conv_id = result_data['conversation_id']
+                agent_response = result_data['response']
+                expectations = result_data['expectations']
+                
+                # Run scorers on this conversation
+                scores = []
+                for scorer in self.scorers:
+                    conversation = {
+                        'conversation_id': conv_id,
+                        'messages': [msg for msg in result_data.get('messages', [])]
+                    }
                     
-                    # Collect scores for this conversation
-                    scores = []
-                    for scorer in self.scorers:
-                        scorer_name = scorer.name
-                        score_key = f"{scorer_name}_scorer"
+                    try:
+                        score_result = await scorer.score(
+                            agent_response,
+                            conversation,
+                            expectations
+                        )
                         
-                        if score_key in row:
-                            score_data = row[score_key]
-                            scores.append(Score(
-                                name=scorer_name,
-                                score=score_data.get('score', 0.0),
-                                passed=score_data.get('passed', False),
-                                details=score_data.get('details', {}),
-                                error=score_data.get('error')
-                            ))
-                    
-                    conversation_results.append(ConversationResult(
-                        conversation_id=conv_id,
-                        scores=scores,
-                        agent_response=agent_response
-                    ))
+                        scores.append(Score(
+                            name=scorer.name,
+                            score=score_result.get('score', 0.0),
+                            passed=score_result.get('passed', False),
+                            details=score_result.get('details', {}),
+                            error=score_result.get('error')
+                        ))
+                    except Exception as e:
+                        scores.append(Score(
+                            name=scorer.name,
+                            score=0.0,
+                            passed=False,
+                            details={},
+                            error=str(e)
+                        ))
+                
+                conversation_results.append(ConversationResult(
+                    conversation_id=conv_id,
+                    scores=scores,
+                    agent_response=agent_response
+                ))
             
             # Create final results
             results = EvalResults(

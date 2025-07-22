@@ -40,10 +40,10 @@ async def main():
     
     # Create an agent to evaluate
     agent = Agent(
-        name="travel_assistant",
+        name="Travis",
         model_name="gpt-4.1",
         purpose="To help users plan and book travel arrangements",
-        tools=[web.fetch_page, files.write_file],  # Namespace-based references!
+        tools=[web.fetch_page, files.write_file],
         temperature=0.7
     )
     
@@ -130,6 +130,18 @@ async def main():
                 completes_task=True,
                 custom=lambda response: "saved" in response.get("content", "").lower()
             )
+        ),
+        
+        # Add more explicit tool usage test
+        Conversation(
+            id="explicit_search",
+            user="Please search for flight prices from NYC to London for next week using the web tool",
+            expect=Expectation(
+                uses_tools=["web-fetch_page"],
+                mentions_any=["search", "flight", "price"],
+                tone="helpful"
+            ),
+            description="Test explicit request to use web search tool"
         )
     ]
     
@@ -174,7 +186,7 @@ async def main():
                 print(f"  Mock tools called: {list(mock_calls.keys())}")
             
             for score in conv.get_failed_scores():
-                print(f"  ❌ {score.name}: {score.details}")
+                print(f"  ❌ {score.name}: {score.details.get('reasoning', 'No details available')}")
     
     # Access specific scores
     print("\n\nScore breakdown by category:")
