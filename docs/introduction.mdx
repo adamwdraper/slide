@@ -1,22 +1,62 @@
 ---
-title: 'Welcome to Slide'
-description: 'A powerful AI agent framework for building intelligent applications'
+title: 'Slide'
+description: 'A development kit for manifesting AI agents with a complete lack of conventional limitations'
 ---
 
-<img
-  className="block dark:hidden"
-  src="/images/hero-light.svg"
-  alt="Slide Framework Hero Light"
-/>
-<img
-  className="hidden dark:block"
-  src="/images/hero-dark.svg"
-  alt="Slide Framework Hero Dark"
-/>
+Slide makes it easy to start building effective AI agents in just a few lines of code. Whether you're creating autonomous assistants, building Slack bots, or developing complex multi-agent systems, Slide provides all the essential components needed to build production-ready AI applications that can understand context, manage conversations, and effectively use tools.
 
-## What is Slide?
+### Key Features
 
-Slide is a comprehensive AI agent framework that provides everything you need to build intelligent, autonomous applications. It consists of four powerful packages that work seamlessly together:
+- **Multimodal support**: Process and understand images, audio, PDFs, and more out of the box
+- **Flexible model support**: Use any LLM provider supported by LiteLLM (100+ providers including OpenAI, Anthropic, etc.)
+- **MCP compatibility**: Seamless integration with Model Context Protocol (MCP) compatible servers and tools
+- **Ready-to-use tools**: Basic set of built-in tools for web interaction, file handling, and browser automation with support for custom tools
+- **Real-time streaming**: Build interactive applications with streaming responses from both agents and tools
+- **Structured data model**: Built-in support for threads, messages, and attachments to maintain conversation context
+- **Persistent storage**: Choose between in-memory, SQLite, or PostgreSQL to store conversation history and files
+- **Production testing**: Comprehensive evaluation framework with mock tools for safe agent testing
+- **Advanced debugging**: Integration with W&B Weave for powerful tracing and debugging capabilities
+
+Get started quickly by installing Slide via pip or uv:
+
+<Tabs>
+  <Tab title="uv (Recommended)">
+    ```bash
+    # Use the Agent
+    uv add slide-tyler
+    
+    # Add tools (optional)
+    uv add slide-lye
+    
+    # Add conversation management (optional)
+    uv add slide-narrator
+    
+    # Add Slack integration (optional)
+    uv add slide-space-monkey
+    ```
+  </Tab>
+  <Tab title="pip">
+    ```bash
+    # Use the Agent
+    pip install slide-tyler
+    
+    # Add tools (optional)
+    pip install slide-lye
+    
+    # Add conversation management (optional)
+    pip install slide-narrator
+    
+    # Add Slack integration (optional)
+    pip install slide-space-monkey
+    ```
+  </Tab>
+</Tabs>
+
+Check out our [quickstart guide](/quickstart) to build your first agent in minutes.
+
+## The Slide Ecosystem
+
+Slide consists of four independent packages that are designed to work seamlessly together, but each can be used on its own:
 
 <CardGroup cols={2}>
   <Card
@@ -24,60 +64,99 @@ Slide is a comprehensive AI agent framework that provides everything you need to
     icon="robot"
     href="/packages/tyler/introduction"
   >
-    Core agent framework with MCP (Model Context Protocol) support for building autonomous AI agents
+    **The Core Agent Framework** - Use Tyler alone to build autonomous AI agents with MCP support, streaming, and evaluation tools. No other packages required.
   </Card>
   <Card
     title="Lye"
     icon="toolbox"
     href="/packages/lye/introduction"
   >
-    Rich utility library providing tools for audio, browser automation, image processing, and more
+    **The Tools Library** - A standalone collection of utilities for audio, web, images, and more. Use with Tyler agents or in your own applications.
   </Card>
   <Card
     title="Narrator"
     icon="database"
     href="/packages/narrator/introduction"
   >
-    Thread and storage management system for maintaining conversation history and agent state
+    **The Storage System** - Independent thread and file management. Perfect for Tyler agents or any conversational AI that needs persistent storage.
   </Card>
   <Card
     title="Space Monkey"
     icon="slack"
     href="/packages/space-monkey/introduction"
   >
-    Slack integration framework for deploying AI agents as Slack bots
+    **The Slack Bridge** - Deploy Tyler agents to Slack, or use it to add AI capabilities to existing Slack bots.
   </Card>
 </CardGroup>
 
-## Why Slide?
-
-### 🚀 Production-Ready
-Built with real-world applications in mind, Slide provides robust error handling, logging, and monitoring capabilities out of the box.
-
-### 🧩 Modular Architecture
-Use only what you need. Each package is designed to work independently or as part of the complete framework.
-
-### 🤖 MCP Support
-Native support for the Model Context Protocol enables seamless integration with AI tools and services.
-
-### 🛠️ Rich Tool Ecosystem
-From audio transcription to web scraping, Slide's Lye package provides a comprehensive set of tools for your agents.
 
 ## Quick Example
 
-```python
-from tyler import Agent
-from lye import audio, browser
+Here's how the components work together (or separately):
 
-# Create an agent with audio and browser capabilities
+```python
+# Use Tyler alone for simple agents
+from tyler import Agent, Thread, Message
+
 agent = Agent(
-    name="research-assistant",
-    tools=[audio.transcribe, browser.screenshot, browser.extract_text]
+    name="assistant", 
+    model_name="gpt-4",
+    purpose="To be a helpful assistant"
 )
 
-# Run the agent
-result = await agent.run(
-    "Transcribe this podcast and create a summary with screenshots"
+# Create a thread and add a message
+thread = Thread()
+message = Message(role="user", content="Hello!")
+thread.add_message(message)
+
+# Process the conversation
+processed_thread, new_messages = await agent.go(thread)
+
+# Add Lye for tool capabilities
+from tyler import Agent
+from lye import WEB_TOOLS, IMAGE_TOOLS
+from lye.audio import transcribe
+
+agent = Agent(
+    name="researcher",
+    model_name="gpt-4",
+    purpose="To help with research tasks",
+    tools=[
+        *WEB_TOOLS,      # All web tools
+        *IMAGE_TOOLS,    # All image tools
+        transcribe       # Specific audio tool
+    ]
+)
+
+# Add Narrator for persistent storage
+from tyler import Agent, ThreadStore, FileStore
+
+# Create persistent stores
+thread_store = await ThreadStore.create("sqlite+aiosqlite:///threads.db")
+file_store = await FileStore.create(base_path="./stored_files")
+
+agent = Agent(
+    name="persistent-assistant",
+    model_name="gpt-4",
+    thread_store=thread_store,
+    file_store=file_store
+)
+
+# Or use all together for maximum power
+from tyler import Agent, ThreadStore, FileStore
+from lye import WEB_TOOLS, AUDIO_TOOLS, IMAGE_TOOLS
+
+# Set up persistent storage
+thread_store = await ThreadStore.create("postgresql://...")
+file_store = await FileStore.create(base_path="./files")
+
+agent = Agent(
+    name="full-featured-assistant",
+    model_name="gpt-4",
+    purpose="To be a comprehensive AI assistant",
+    tools=[*WEB_TOOLS, *AUDIO_TOOLS, *IMAGE_TOOLS],
+    thread_store=thread_store,
+    file_store=file_store
 )
 ```
 

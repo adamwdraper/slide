@@ -3,7 +3,11 @@ title: 'Quickstart'
 description: 'Get up and running with Slide in 5 minutes'
 ---
 
+Welcome to the world of AI agents without limits. In the next 5 minutes, you'll build your first intelligent agent capable of understanding images, browsing the web, processing audio, and more - all with just a few lines of code.
+
 ## Installation
+
+Slide is modular - install only what you need. Each package works independently:
 
 <Tabs>
   <Tab title="uv (Recommended)">
@@ -15,8 +19,13 @@ description: 'Get up and running with Slide in 5 minutes'
     uv init my-slide-project
     cd my-slide-project
 
-    # Add Slide packages
-    uv add tyler lye narrator space-monkey
+    # Install Tyler (the core agent framework)
+    uv add slide-tyler
+    
+    # Optional: Add capabilities as needed
+    uv add slide-lye        # Tools library (web, audio, image, etc.)
+    uv add slide-narrator   # Conversation memory & storage
+    uv add slide-space-monkey  # Slack integration
     ```
   </Tab>
   <Tab title="pip">
@@ -25,42 +34,212 @@ description: 'Get up and running with Slide in 5 minutes'
     python -m venv venv
     source venv/bin/activate  # On Windows: venv\Scripts\activate
 
-    # Install Slide packages
-    pip install tyler lye narrator space-monkey
+    # Install Tyler (the core agent framework)
+    pip install slide-tyler
+    
+    # Optional: Add capabilities as needed
+    pip install slide-lye        # Tools library (web, audio, image, etc.)
+    pip install slide-narrator   # Conversation memory & storage
+    pip install slide-space-monkey  # Slack integration
     ```
   </Tab>
 </Tabs>
 
-## Your First Agent
+## Start Simple: Tyler Alone
 
-Let's create a simple agent that can browse the web and process images:
+You can build agents with just Tyler - no other dependencies required:
 
 <CodeGroup>
-```python basic_agent.py
-from tyler import Agent
-from lye import browser, image
+```python simple_agent.py
+import asyncio
+from tyler import Agent, Thread, Message
 
-# Create an agent with browser and image tools
+# Create a basic agent
 agent = Agent(
-    name="web-analyzer",
-    tools=[
-        browser.screenshot,
-        browser.extract_text,
-        image.analyze,
-        image.extract_text
-    ],
-    model="gpt-4"  # or any other supported model
+    name="assistant",
+    model_name="gpt-4",  # or any 100+ supported models
+    purpose="To explain complex topics simply"
 )
 
-# Run the agent
 async def main():
-    result = await agent.run(
-        "Take a screenshot of python.org and analyze what you see"
+    # Create a thread for the conversation
+    thread = Thread()
+    
+    # Add a user message
+    message = Message(
+        role="user", 
+        content="Explain quantum computing in simple terms"
     )
-    print(result)
+    thread.add_message(message)
+    
+    # Process the conversation
+    processed_thread, new_messages = await agent.go(thread)
+    
+    # Print the response
+    for msg in new_messages:
+        if msg.role == "assistant":
+            print(msg.content)
 
 if __name__ == "__main__":
-    import asyncio
+    asyncio.run(main())
+```
+</CodeGroup>
+
+## Add Power: Tyler + Lye
+
+Want your agent to interact with the world? Add Lye's tools:
+
+<CodeGroup>
+```python powerful_agent.py
+import asyncio
+from tyler import Agent, Thread, Message
+from lye import WEB_TOOLS, IMAGE_TOOLS, AUDIO_TOOLS
+from lye.browser import screenshot, extract_text
+
+# Create a multimodal agent with tools
+agent = Agent(
+    name="research-assistant",
+    model_name="gpt-4",
+    purpose="To help with comprehensive research tasks",
+    tools=[
+        *WEB_TOOLS,        # All web tools (search, fetch)
+        *IMAGE_TOOLS,      # All image tools (analyze, extract_text)
+        *AUDIO_TOOLS,      # All audio tools (transcribe, text_to_speech)
+        screenshot,        # Additional specific tools
+        extract_text
+    ]
+)
+
+async def main():
+    # Create a thread
+    thread = Thread()
+    
+    # Add a complex research request
+    message = Message(
+        role="user",
+        content="""
+        1. Search for the latest breakthrough in quantum computing
+        2. Take a screenshot of the most relevant article
+        3. Analyze any diagrams or images you find
+        4. Create an audio summary of your findings
+        """
+    )
+    thread.add_message(message)
+    
+    # Let the agent work its magic
+    processed_thread, new_messages = await agent.go(thread)
+    
+    # Print all responses
+    for msg in new_messages:
+        if msg.role == "assistant":
+            print(f"Assistant: {msg.content}")
+        elif msg.role == "tool":
+            print(f"Tool ({msg.name}): {msg.content[:100]}...")
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+</CodeGroup>
+
+That's it! You've just created an agent that can search the web, capture screenshots, analyze images, and create audio summaries.
+
+## Add Memory: Tyler + Narrator
+
+Give your agent conversation memory with persistent storage:
+
+<CodeGroup>
+```python agent_with_memory.py
+import asyncio
+from tyler import Agent, Thread, Message, ThreadStore, FileStore
+
+async def main():
+    # Set up persistent storage
+    thread_store = await ThreadStore.create("sqlite+aiosqlite:///conversations.db")
+    file_store = await FileStore.create(base_path="./conversation_files")
+    
+    # Create agent with persistent memory
+    agent = Agent(
+        name="chatbot",
+        model_name="gpt-4",
+        purpose="To be a helpful assistant with memory",
+        thread_store=thread_store,
+        file_store=file_store
+    )
+    
+    # Create or resume a conversation thread
+    thread_id = "main-chat"
+    try:
+        # Try to load existing thread
+        thread = await thread_store.get_thread(thread_id)
+        print("Resuming previous conversation...")
+    except:
+        # Create new thread
+        thread = Thread(id=thread_id)
+        print("Starting new conversation...")
+    
+    # First interaction
+    message1 = Message(role="user", content="My name is Alice and I love Python")
+    thread.add_message(message1)
+    processed_thread, _ = await agent.go(thread)
+    
+    # Save the thread
+    await thread_store.save_thread(processed_thread)
+    
+    # Second interaction - agent remembers context
+    message2 = Message(role="user", content="What's my favorite programming language?")
+    processed_thread.add_message(message2)
+    final_thread, new_messages = await agent.go(processed_thread)
+    
+    # Print response
+    for msg in new_messages:
+        if msg.role == "assistant":
+            print(msg.content)
+            # Output: "Your favorite programming language is Python!"
+    
+    # Save the updated thread
+    await thread_store.save_thread(final_thread)
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+</CodeGroup>
+
+## Real-Time Streaming
+
+Build interactive applications with streaming responses:
+
+<CodeGroup>
+```python streaming_agent.py
+import asyncio
+from tyler import Agent, Thread, Message, StreamUpdate
+from lye import WEB_TOOLS
+
+agent = Agent(
+    name="real-time-assistant",
+    model_name="gpt-4",
+    purpose="To provide real-time analysis",
+    tools=WEB_TOOLS
+)
+
+async def main():
+    # Create a thread
+    thread = Thread()
+    message = Message(role="user", content="What's happening in AI today?")
+    thread.add_message(message)
+    
+    print("🤖 Assistant: ", end="", flush=True)
+    
+    # Stream responses as they're generated
+    async for update in agent.stream(thread):
+        if isinstance(update, StreamUpdate):
+            if update.type == "content":
+                print(update.content, end="", flush=True)
+            elif update.type == "tool_call":
+                print(f"\n[Using tool: {update.tool_name}]", end="", flush=True)
+    
+    print()  # New line after completion
+
+if __name__ == "__main__":
     asyncio.run(main())
 ```
 </CodeGroup>
@@ -71,30 +250,32 @@ Slide includes Narrator for managing conversation threads:
 
 <CodeGroup>
 ```python with_memory.py
-from tyler import Agent
-from narrator import Thread, FileStore
-from lye import web
+import asyncio
+from tyler import Agent, Thread, Message, ThreadStore, FileStore
+from lye import WEB_TOOLS
 
 # Set up storage
-store = FileStore("./conversations")
-thread = Thread(store=store, thread_id="main-conversation")
+thread_store = await ThreadStore.create("sqlite+aiosqlite:///conversations.db")
+file_store = await FileStore.create(base_path="./conversation_files")
 
 # Create agent with memory
 agent = Agent(
     name="assistant",
-    tools=[web.search, web.fetch],
-    thread=thread  # Agent will remember past conversations
+    model_name="gpt-4",
+    purpose="To search for information and save results",
+    thread_store=thread_store,
+    file_store=file_store,
+    tools=[WEB_TOOLS.search, WEB_TOOLS.fetch]
 )
 
 async def main():
     # First interaction
-    await agent.run("Search for information about Python 3.12")
+    await agent.go(Thread(id="main-conversation", messages=[Message(role="user", content="Search for information about Python 3.12")]))
     
     # Second interaction (agent remembers context)
-    await agent.run("What were the main features we just found?")
+    await agent.go(Thread(id="main-conversation", messages=[Message(role="user", content="What were the main features we just found?")]))
 
 if __name__ == "__main__":
-    import asyncio
     asyncio.run(main())
 ```
 </CodeGroup>
@@ -105,14 +286,19 @@ Transform your agent into a Slack bot:
 
 <CodeGroup>
 ```python slack_bot.py
+import asyncio
 from space_monkey import SlackApp
-from tyler import Agent
-from lye import web, files
+from tyler import Agent, Thread, Message, ThreadStore, FileStore
+from lye import WEB_TOOLS, FILES_TOOLS
 
 # Create your agent
 agent = Agent(
     name="slack-assistant",
-    tools=[web.search, files.read, files.write]
+    model_name="gpt-4",
+    purpose="To interact with Slack users",
+    thread_store=await ThreadStore.create("sqlite+aiosqlite:///slack_conversations.db"),
+    file_store=await FileStore.create(base_path="./slack_files"),
+    tools=[WEB_TOOLS.search, FILES_TOOLS.read, FILES_TOOLS.write]
 )
 
 # Create Slack app
@@ -125,8 +311,8 @@ app = SlackApp(
 # Handle mentions
 @app.event("app_mention")
 async def handle_mention(event, say):
-    response = await agent.run(event["text"])
-    await say(response)
+    response = await agent.go(Thread(messages=[Message(role="user", content=event["text"])]))
+    await say(response.messages[-1].content)
 
 # Start the app
 if __name__ == "__main__":
@@ -144,7 +330,8 @@ Slide's Tyler package supports the Model Context Protocol for advanced integrati
 
 <CodeGroup>
 ```python mcp_example.py
-from tyler import Agent
+import asyncio
+from tyler import Agent, Thread, Message, ThreadStore, FileStore
 from tyler.mcp import MCPAdapter
 
 # Connect to an MCP server
@@ -154,11 +341,15 @@ await adapter.connect("stdio://./my-mcp-server")
 # Create agent with MCP tools
 agent = Agent(
     name="mcp-agent",
+    model_name="gpt-4",
+    purpose="To use MCP tools for a task",
+    thread_store=await ThreadStore.create("sqlite+aiosqlite:///mcp_conversations.db"),
+    file_store=await FileStore.create(base_path="./mcp_files"),
     mcp_adapter=adapter
 )
 
 # Use MCP tools
-result = await agent.run("Use the available MCP tools to complete this task")
+result = await agent.go(Thread(messages=[Message(role="user", content="Use the available MCP tools to complete this task")]))
 ```
 </CodeGroup>
 
@@ -167,35 +358,43 @@ result = await agent.run("Use the available MCP tools to complete this task")
 ### Combining Multiple Tools
 
 ```python
-from tyler import Agent
-from lye import audio, browser, files
+import asyncio
+from tyler import Agent, Thread, Message, ThreadStore, FileStore
+from lye import AUDIO_TOOLS, WEB_TOOLS, FILES_TOOLS
+from lye.browser import screenshot, extract_text
 
 agent = Agent(
     name="researcher",
+    model_name="gpt-4",
+    purpose="To perform complex research tasks",
+    thread_store=await ThreadStore.create("sqlite+aiosqlite:///research_conversations.db"),
+    file_store=await FileStore.create(base_path="./research_files"),
     tools=[
-        audio.transcribe,
-        browser.screenshot,
-        browser.extract_text,
-        files.write
+        *AUDIO_TOOLS,
+        *WEB_TOOLS,
+        *FILES_TOOLS,
+        screenshot,
+        extract_text
     ]
 )
 
 # Agent can now transcribe audio, browse web, and save results
-await agent.run("""
+await agent.go(Thread(messages=[Message(role="user", content="""
     1. Transcribe the podcast at this URL
     2. Search for related articles
     3. Create a summary report and save it
-""")
+""")]))
 ```
 
 ### Error Handling
 
 ```python
-from tyler import Agent
+import asyncio
+from tyler import Agent, Thread, Message, ThreadStore, FileStore
 from tyler.exceptions import AgentError
 
 try:
-    result = await agent.run("Complex task")
+    result = await agent.go(Thread(messages=[Message(role="user", content="Complex task")]))
 except AgentError as e:
     print(f"Agent encountered an error: {e}")
     # Handle gracefully
@@ -204,8 +403,40 @@ except AgentError as e:
 ### Streaming Responses
 
 ```python
-async for chunk in agent.stream("Generate a long analysis"):
-    print(chunk, end="", flush=True)
+import asyncio
+from tyler import Agent, Thread, Message, StreamUpdate
+
+async for update in agent.stream(thread):
+    if isinstance(update, StreamUpdate):
+        if update.type == "content":
+            print(update.content, end="", flush=True)
+        elif update.type == "tool_call":
+            print(f"\n[Using tool: {update.tool_name}]", end="", flush=True)
+```
+
+### Testing Your Agents
+
+Tyler includes a powerful evaluation framework for testing agents:
+
+```python
+import asyncio
+from tyler import Agent, Thread, Message, ThreadStore, FileStore
+from tyler.eval import AgentEval, Conversation, Expectation
+
+# Create test scenarios
+eval = AgentEval(
+    name="basic_test",
+    conversations=[
+        Conversation(
+            user="What's 2+2?",
+            expect=Expectation(mentions=["4"])
+        )
+    ]
+)
+
+# Run evaluation (uses mock tools)
+results = await eval.run(agent)
+print(f"Tests passed: {results.pass_rate:.0%}")
 ```
 
 ## Next Steps

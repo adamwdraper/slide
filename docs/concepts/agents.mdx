@@ -251,6 +251,42 @@ agent = Agent(
   </Accordion>
 </AccordionGroup>
 
+## Testing Agents
+
+Tyler provides a comprehensive evaluation framework for testing your agents:
+
+```python
+from tyler.eval import AgentEval, Conversation, Expectation, ToolUsageScorer
+
+# Define test scenarios
+eval = AgentEval(
+    name="agent_test",
+    conversations=[
+        Conversation(
+            user="Calculate the sum of 15 and 27",
+            expect=Expectation(
+                mentions=["42"],
+                completes_task=True
+            )
+        )
+    ],
+    scorers=[ToolUsageScorer()]
+)
+
+# Run tests with mock tools
+results = await eval.run(agent)
+```
+
+Key testing features:
+- **Mock Tools**: Prevent real API calls during testing
+- **Flexible Expectations**: Test content, behavior, and tool usage
+- **Multiple Scorers**: Evaluate tone, task completion, and more
+- **Multi-turn Conversations**: Test complex interaction flows
+
+<Tip>
+  Always test your agents with the evaluation framework before deployment. See the [full evaluation guide](/packages/tyler/evaluations) for details.
+</Tip>
+
 ## Performance Considerations
 
 - **Token Usage**: Monitor and optimize prompts to reduce token consumption

@@ -276,6 +276,37 @@ tyler chat --tools web.search,files.read
 tyler chat --mcp stdio://./my-server
 ```
 
+## Testing & Evaluation
+
+Tyler includes a comprehensive evaluation framework for testing your agents:
+
+```python
+from tyler.eval import AgentEval, Conversation, Expectation, ToolUsageScorer
+
+# Define test scenarios
+eval = AgentEval(
+    name="agent_test",
+    conversations=[
+        Conversation(
+            user="What's the weather?",
+            expect=Expectation(
+                uses_tools=["web-search"],
+                tone="helpful"
+            )
+        )
+    ],
+    scorers=[ToolUsageScorer()]
+)
+
+# Run evaluation (uses mock tools by default)
+results = await eval.run(agent)
+print(f"Pass rate: {results.pass_rate:.2%}")
+```
+
+<Note>
+  Evaluations use mock tools by default to prevent real API calls during testing.
+</Note>
+
 ## Performance Tips
 
 1. **Enable Parallel Tool Calls**: Set `parallel_tool_calls=True` for concurrent execution
@@ -287,6 +318,13 @@ tyler chat --mcp stdio://./my-server
 ## Next Steps
 
 <CardGroup cols={2}>
+  <Card
+    title="Agent Evaluations"
+    icon="flask"
+    href="/packages/tyler/evaluations"
+  >
+    Test and evaluate your agents
+  </Card>
   <Card
     title="Agent Configuration"
     icon="cog"
@@ -307,12 +345,5 @@ tyler chat --mcp stdio://./my-server
     href="/packages/tyler/examples"
   >
     See practical examples
-  </Card>
-  <Card
-    title="API Reference"
-    icon="book"
-    href="/api-reference/tyler"
-  >
-    Complete API documentation
   </Card>
 </CardGroup> 

@@ -71,6 +71,7 @@
           "group": "Tyler",
           "pages": [
             "packages/tyler/introduction",
+            "packages/tyler/evaluations",
             "packages/tyler/agents",
             "packages/tyler/mcp-adapters",
             "packages/tyler/examples"

@@ -94,13 +94,8 @@
       "anchors": [
         {
           "anchor": "GitHub",
-          "href": "https://github.com/yourusername/slide",
+          "href": "https://github.com/adamwdraper/slide",
           "icon": "github"
-        },
-        {
-          "anchor": "Community",
-          "href": "https://slide-community.slack.com",
-          "icon": "slack"
         }
       ]
     }
@@ -118,19 +113,18 @@
     "links": [
       {
         "label": "GitHub",
-        "href": "https://github.com/yourusername/slide"
+        "href": "https://github.com/adamwdraper/slide"
       }
     ],
     "primary": {
       "type": "button",
       "label": "Get Started",
-      "href": "https://github.com/yourusername/slide"
+      "href": "https://github.com/adamwdraper/slide"
     }
   },
   "footer": {
     "socials": {
-      "github": "https://github.com/yourusername/slide",
-      "slack": "https://slide-community.slack.com"
+      "github": "https://github.com/adamwdraper/slide"
     }
   }
 }
