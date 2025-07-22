@@ -26,85 +26,96 @@ TOOLS = []
 
 # Try to import each tool module
 try:
-    from . import web as web_module
-    from . import slack as slack_module
-    from . import command_line as command_line_module
-    from . import notion as notion_module
-    from . import image as image_module
-    from . import audio as audio_module
-    from . import files as files_module
-    from . import browser as browser_module
+    from . import web
+    from . import slack
+    from . import command_line
+    from . import notion
+    from . import image
+    from . import audio
+    from . import files
+    from . import browser
+    
 except ImportError as e:
     print(f"Warning: Some tool modules could not be imported: {e}")
 
 # Get tool lists from each module and maintain both individual and combined lists
 try:
-    module_tools = getattr(web_module, "TOOLS", [])
+    module_tools = getattr(web, "TOOLS", [])
     WEB_TOOLS.extend(module_tools)
     TOOLS.extend(module_tools)
 except Exception as e:
     print(f"Warning: Could not load web tools: {e}")
 
 try:
-    module_tools = getattr(slack_module, "TOOLS", [])
+    module_tools = getattr(slack, "TOOLS", [])
     SLACK_TOOLS.extend(module_tools)
     TOOLS.extend(module_tools)
 except Exception as e:
     print(f"Warning: Could not load slack tools: {e}")
 
 try:
-    module_tools = getattr(command_line_module, "TOOLS", [])
+    module_tools = getattr(command_line, "TOOLS", [])
     COMMAND_LINE_TOOLS.extend(module_tools)
     TOOLS.extend(module_tools)
 except Exception as e:
     print(f"Warning: Could not load command line tools: {e}")
 
 try:
-    module_tools = getattr(notion_module, "TOOLS", [])
+    module_tools = getattr(notion, "TOOLS", [])
     NOTION_TOOLS.extend(module_tools)
     TOOLS.extend(module_tools)
 except Exception as e:
     print(f"Warning: Could not load notion tools: {e}")
 
 try:
-    module_tools = getattr(image_module, "TOOLS", [])
+    module_tools = getattr(image, "TOOLS", [])
     IMAGE_TOOLS.extend(module_tools)
     TOOLS.extend(module_tools)
 except Exception as e:
     print(f"Warning: Could not load image tools: {e}")
 
 try:
-    module_tools = getattr(audio_module, "TOOLS", [])
+    module_tools = getattr(audio, "TOOLS", [])
     AUDIO_TOOLS.extend(module_tools)
     TOOLS.extend(module_tools)
 except Exception as e:
     print(f"Warning: Could not load audio tools: {e}")
 
 try:
-    module_tools = getattr(files_module, "TOOLS", [])
+    module_tools = getattr(files, "TOOLS", [])
     FILES_TOOLS.extend(module_tools)
     TOOLS.extend(module_tools)
 except Exception as e:
     print(f"Warning: Could not load files tools: {e}")
 
 try:
-    module_tools = getattr(browser_module, "TOOLS", [])
+    module_tools = getattr(browser, "TOOLS", [])
     BROWSER_TOOLS.extend(module_tools)
     TOOLS.extend(module_tools)
 except Exception as e:
     print(f"Warning: Could not load browser tools: {e}")
 
-__all__ = [
-    'TOOLS',
-    'WEB_TOOLS',
-    'SLACK_TOOLS',
-    'COMMAND_LINE_TOOLS',
-    'NOTION_TOOLS',
-    'IMAGE_TOOLS',
-    'AUDIO_TOOLS',
-    'FILES_TOOLS',
-    'BROWSER_TOOLS'
-]
+    __all__ = [
+        # Module-level tool lists
+        'TOOLS',
+        'WEB_TOOLS',
+        'FILES_TOOLS',
+        'COMMAND_LINE_TOOLS',
+        'AUDIO_TOOLS',
+        'IMAGE_TOOLS',
+        'BROWSER_TOOLS',
+        'SLACK_TOOLS',
+        'NOTION_TOOLS',
+        # Module namespaces for cleaner imports
+        'web',
+        'files',
+        'command_line',
+        'audio',
+        'image',
+        'browser',
+        'slack',
+        'notion',
+    ]
 
 # Map of module names to their tools for dynamic loading
 TOOL_MODULES: Dict[str, List] = {

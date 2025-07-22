@@ -8,6 +8,7 @@ agent-focused expectations and scoring.
 from dotenv import load_dotenv
 load_dotenv()
 
+import os
 import asyncio
 import weave
 from tyler import Agent
@@ -21,10 +22,15 @@ from tyler.eval import (
     TaskCompletionScorer,
     ConversationFlowScorer
 )
-from lye import web, files  # Example tools
+# Namespace-based imports - avoids name collisions!
+from lye import web, files
 
 # Initialize weave
-weave.init("tyler-eval-example")
+try:
+    if os.getenv("WANDB_API_KEY"):
+        weave.init("tyler-eval-example")
+except Exception as e:
+    print(f"Failed to initialize weave tracing: {e}. Continuing without weave.")
 
 
 async def main():
@@ -37,9 +43,17 @@ async def main():
         name="travel_assistant",
         model_name="gpt-4.1",
         purpose="To help users plan and book travel arrangements",
-        tools=[web.search, files.write],  # Real tools, but will be mocked!
+        tools=[web.fetch_page, files.write_file],  # Namespace-based references!
         temperature=0.7
     )
+    
+    # IMPORTANT: Tool naming in expectations
+    # When referencing tools in expectations, use their registered names:
+    # - "web-fetch_page" (not "web.fetch_page" or "fetch_page")
+    # - "files-read_file" (not "files.read_file" or "read_file")
+    # - "files-write_file" (not "files.write_file" or "write_file") 
+    # - "audio-text_to_speech" (not "audio.text_to_speech")
+    # All Lye tools follow the pattern: "module-method_name"
     
     # Define test conversations
     conversations = [
@@ -61,7 +75,7 @@ async def main():
             id="vague_request",
             user="I need to travel somewhere warm",
             expect=Expectation(
-                does_not_use_tools=["web.search"],  # Shouldn't search yet
+                does_not_use_tools=["web-fetch_page"],  # Use actual tool name
                 asks_clarification=True,
                 mentions_any=["destination", "where", "location", "dates", "when"],
                 tone="friendly"
@@ -82,11 +96,11 @@ async def main():
                 Turn(role="assistant", expect=Expectation(
                     confirms_details=["NYC", "London"],
                     mentions_any=["date", "when", "departure"],
-                    does_not_use_tools=["web.search"]  # Still needs dates
+                    does_not_use_tools=["web-fetch_page"]  # Still needs dates
                 )),
                 Turn(role="user", content="Next Tuesday, returning the following Sunday"),
                 Turn(role="assistant", expect=Expectation(
-                    uses_tools=["web.search"],  # Now it should search (mock!)
+                    uses_tools=["web-fetch_page"],  # Now it should search (mock!)
                     mentions=["Tuesday", "Sunday"],
                     completes_task=True
                 ))
@@ -111,7 +125,7 @@ async def main():
             id="save_search_results", 
             user="Search for flights to Tokyo next month and save the results",
             expect=Expectation(
-                uses_tools_in_order=["web.search", "files.write"],
+                uses_tools_in_order=["web-fetch_page", "files-write_file"],
                 mentions=["Tokyo", "save"],
                 completes_task=True,
                 custom=lambda response: "saved" in response.get("content", "").lower()

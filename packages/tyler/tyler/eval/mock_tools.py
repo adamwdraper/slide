@@ -1,5 +1,6 @@
 """Mock tools for safe agent evaluation"""
 from typing import Dict, Any, List, Optional, Callable, Union
+import asyncio
 import weave
 
 

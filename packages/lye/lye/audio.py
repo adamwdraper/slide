@@ -194,8 +194,8 @@ TOOLS = [
         "definition": {
             "type": "function",
             "function": {
-                "name": "text-to-speech",
-                "description": "Converts text to speech audio using AI voices. Use this for generating spoken audio from text.",
+                "name": "audio-text_to_speech",
+                "description": "Convert text to natural-sounding speech using OpenAI's TTS API",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -239,8 +239,8 @@ TOOLS = [
         "definition": {
             "type": "function",
             "function": {
-                "name": "speech-to-text",
-                "description": "Transcribes speech from an audio file to text.",
+                "name": "audio-speech_to_text",
+                "description": "Transcribe audio to text using OpenAI's Whisper API",
                 "parameters": {
                     "type": "object",
                     "properties": {

@@ -1,6 +1,5 @@
 import os
-os.environ["OPENAI_API_KEY"] = "dummy"
-os.environ["OPENAI_ORG_ID"] = "dummy"
+# Removed dummy environment variables to avoid interfering with examples tests
 import pytest
 from unittest.mock import patch, MagicMock, create_autospec, Mock, AsyncMock
 from tyler import Agent, Thread, Message, ThreadStore

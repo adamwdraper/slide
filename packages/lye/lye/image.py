@@ -191,8 +191,8 @@ TOOLS = [
         "definition": {
             "type": "function",
             "function": {
-                "name": "image-generate",
-                "description": "Generates images based on text descriptions using DALL-E 3. Use this for creating images from text descriptions.",
+                "name": "image-generate_image",
+                "description": "Generate images using DALL-E 3 AI model based on text descriptions",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -229,8 +229,8 @@ TOOLS = [
         "definition": {
             "type": "function",
             "function": {
-                "name": "analyze-image",
-                "description": "Analyzes and describes the contents of an image.",
+                "name": "image-analyze_image",
+                "description": "Analyze images using GPT-4 Vision to extract information or answer questions about them",
                 "parameters": {
                     "type": "object",
                     "properties": {

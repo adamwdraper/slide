@@ -122,7 +122,7 @@ class AgentEval:
             "content": last_message.content or "",
             "tool_calls": last_message.tool_calls or [],
             "all_messages": [{"role": m.role, "content": m.content} for m in new_messages],
-            "thread_id": processed_thread.thread_id,
+            "thread_id": processed_thread.id,
             "mock_tools_used": self.use_mock_tools
         }
         

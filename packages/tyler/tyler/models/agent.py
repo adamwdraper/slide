@@ -3,7 +3,8 @@ import os
 import weave
 from weave import Model, Prompt
 import json
-from typing import List, Dict, Any, Optional, Union, AsyncGenerator, Tuple
+import types
+from typing import List, Dict, Any, Optional, Union, AsyncGenerator, Tuple, Callable
 from datetime import datetime, UTC
 from pydantic import Field, PrivateAttr
 from litellm import acompletion
@@ -131,8 +132,16 @@ This ensures the user can access the file correctly.
         else:
             tools_description_str = self._tools_cache['description']
 
-        formatted_purpose = purpose.format() if isinstance(purpose, Prompt) else purpose
-        formatted_notes = notes.format() if isinstance(notes, Prompt) else notes
+        # Handle both string and Prompt types
+        if isinstance(purpose, Prompt):
+            formatted_purpose = str(purpose)  # StringPrompt has __str__ method
+        else:
+            formatted_purpose = purpose
+            
+        if isinstance(notes, Prompt):
+            formatted_notes = str(notes)  # StringPrompt has __str__ method
+        else:
+            formatted_notes = notes
 
         return self.system_template.format(
             current_date=datetime.now().strftime("%Y-%m-%d %A"),
@@ -160,7 +169,7 @@ class Agent(Model):
     purpose: Union[str, Prompt] = Field(default_factory=lambda: weave.StringPrompt("To be a helpful assistant."))
     notes: Union[str, Prompt] = Field(default_factory=lambda: weave.StringPrompt(""))
     version: str = Field(default="1.0.0")
-    tools: List[Union[str, Dict]] = Field(default_factory=list, description="List of tools available to the agent. Can include built-in tool module names (as strings) and custom tools (as dicts with required 'definition' and 'implementation' keys, and an optional 'attributes' key for tool metadata). For built-in tools, you can specify specific tools to include using the format 'module:tool1,tool2'.")
+    tools: List[Union[str, Dict, Callable, types.ModuleType]] = Field(default_factory=list, description="List of tools available to the agent. Can include: 1) Direct tool function references (callables), 2) Tool module namespaces (modules like web, files), 3) Built-in tool module names (strings), 4) Custom tool definitions (dicts with 'definition', 'implementation', and optional 'attributes' keys). For module names, you can specify specific tools using 'module:tool1,tool2'.")
     max_tool_iterations: int = Field(default=10)
     agents: List["Agent"] = Field(default_factory=list, description="List of agents that this agent can delegate tasks to.")
     thread_store: Optional[ThreadStore] = Field(default=None, description="Thread store instance for managing conversation threads", exclude=True)
@@ -197,24 +206,80 @@ class Agent(Model):
                 loaded_tools = tool_runner.load_tool_module(tool)
                 if loaded_tools:
                     self._processed_tools.extend(loaded_tools)
+            elif hasattr(tool, 'TOOLS'):
+                # Handle module objects (e.g., lye.web, lye.files)
+                # This allows passing entire modules like: tools=[web, files]
+                module_tools = getattr(tool, 'TOOLS', [])
+                for module_tool in module_tools:
+                    if isinstance(module_tool, dict) and 'definition' in module_tool and 'implementation' in module_tool:
+                        tool_name = module_tool['definition']['function']['name']
+                        tool_runner.register_tool(
+                            name=tool_name,
+                            implementation=module_tool['implementation'],
+                            definition=module_tool['definition']['function']
+                        )
+                        
+                        # Register any tool attributes
+                        if 'attributes' in module_tool:
+                            tool_runner.register_tool_attributes(tool_name, module_tool['attributes'])
+                            
+                        self._processed_tools.append(module_tool['definition'])
             elif isinstance(tool, dict):
-                # Add custom tool
-                if 'definition' not in tool or 'implementation' not in tool:
+                # Add custom tool or tool from a group (e.g., from WEB_TOOLS)
+                if 'definition' in tool and 'implementation' in tool:
+                    # This is a complete tool definition (like from Lye's TOOLS lists)
+                    tool_name = tool['definition']['function']['name']
+                    tool_runner.register_tool(
+                        name=tool_name,
+                        implementation=tool['implementation'],
+                        definition=tool['definition']['function']
+                    )
+                    
+                    # Register any tool attributes
+                    if 'attributes' in tool:
+                        tool_runner.register_tool_attributes(tool_name, tool['attributes'])
+                        
+                    self._processed_tools.append(tool['definition'])
+                elif 'definition' not in tool or 'implementation' not in tool:
+                    # This is a custom tool definition without proper structure
                     raise ValueError("Custom tools must have 'definition' and 'implementation' keys")
+            elif callable(tool):
+                # Handle direct function references
+                # Try to get tool info from Lye's TOOLS registry
+                tool_def = self._get_tool_definition_from_function(tool)
+                if tool_def:
+                    self._processed_tools.append(tool_def['definition'])
+                    # Register the tool with tool_runner
+                    tool_runner.register_tool(
+                        name=tool_def['definition']['function']['name'],
+                        implementation=tool_def['implementation'],
+                        definition=tool_def['definition']['function']
+                    )
+                else:
+                    # If not a Lye tool, create a basic definition from the function
+                    tool_name = getattr(tool, '__name__', str(tool))
+                    logger.warning(f"Tool '{tool_name}' not found in Lye registry. Creating basic definition.")
                     
-                # Register the tool
-                tool_name = tool['definition']['function']['name']
-                tool_runner.register_tool(
-                    name=tool_name,
-                    implementation=tool['implementation'],
-                    definition=tool['definition']['function']
-                )
-                
-                # Register any tool attributes
-                if 'attributes' in tool:
-                    tool_runner.register_tool_attributes(tool_name, tool['attributes'])
+                    # Create a minimal tool definition
+                    tool_def = {
+                        "type": "function",
+                        "function": {
+                            "name": tool_name,
+                            "description": getattr(tool, '__doc__', f"Function {tool_name}"),
+                            "parameters": {
+                                "type": "object",
+                                "properties": {},
+                                "required": []
+                            }
+                        }
+                    }
                     
-                self._processed_tools.append(tool['definition'])
+                    self._processed_tools.append(tool_def)
+                    tool_runner.register_tool(
+                        name=tool_name,
+                        implementation=tool,
+                        definition=tool_def['function']
+                    )
             else:
                 raise ValueError(f"Invalid tool type: {type(tool)}")
         
@@ -265,7 +330,7 @@ class Agent(Model):
                     "type": "function",
                     "function": {
                         "name": f"delegate_to_{agent.name}",
-                        "description": f"Delegate task to {agent.name}: {agent.purpose}",
+                        "description": f"Delegate task to {agent.name}: {str(agent.purpose) if isinstance(agent.purpose, Prompt) else agent.purpose}",
                         "parameters": {
                             "type": "object",
                             "properties": {
@@ -1229,3 +1294,31 @@ class Agent(Model):
         should_break = tool_attributes and tool_attributes.get('type') == 'interrupt'
         
         return tool_message, should_break 
+
+    def _get_tool_definition_from_function(self, func: Callable) -> Optional[Dict]:
+        """Look up a tool definition from a function reference using Lye's registry."""
+        try:
+            # Import Lye to access the TOOLS registry
+            import lye
+            
+            # Check each module's tools
+            for module_name, tools_list in lye.TOOL_MODULES.items():
+                for tool_info in tools_list:
+                    if (isinstance(tool_info, dict) and 
+                        'implementation' in tool_info and 
+                        tool_info['implementation'] == func):
+                        return tool_info
+                        
+            # Also check the combined TOOLS list
+            for tool_info in lye.TOOLS:
+                if (isinstance(tool_info, dict) and 
+                    'implementation' in tool_info and 
+                    tool_info['implementation'] == func):
+                    return tool_info
+                    
+        except ImportError:
+            logger.warning("Could not import lye to look up tool definitions")
+        except Exception as e:
+            logger.warning(f"Error looking up tool definition: {e}")
+            
+        return None 
