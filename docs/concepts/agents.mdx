@@ -36,12 +36,17 @@ graph TD
 from tyler import Agent
 
 # Minimal agent configuration
-agent = Agent(name="assistant")
+agent = Agent(
+    name="assistant",
+    model_name="gpt-4",
+    purpose="To be a helpful assistant"
+)
 
-# With specific model
+# With additional configuration
 agent = Agent(
     name="gpt4-assistant",
-    model="gpt-4",
+    model_name="gpt-4",
+    purpose="To assist with various tasks",
     temperature=0.7
 )
 ```
@@ -50,18 +55,29 @@ agent = Agent(
 
 ```python
 from tyler import Agent
-from lye import web, files, image
+from lye import WEB_TOOLS, FILES_TOOLS, IMAGE_TOOLS
+from lye.web import search, fetch
+from lye.files import read_file, write_file
+from lye.image import analyze_image
 
+# Using tool groups
 agent = Agent(
     name="research-assistant",
+    model_name="gpt-4",
+    purpose="To help with research tasks",
     tools=[
-        web.search,
-        web.fetch,
-        files.read,
-        files.write,
-        image.analyze
-    ],
-    system_prompt="You are a helpful research assistant."
+        *WEB_TOOLS,      # All web tools
+        *FILES_TOOLS,    # All file tools
+        analyze_image    # Specific image tool
+    ]
+)
+
+# Or using specific tools
+agent = Agent(
+    name="focused-assistant",
+    model_name="gpt-4",
+    purpose="To search and save information",
+    tools=[search, fetch, read_file, write_file]
 )
 ```
 
@@ -72,10 +88,18 @@ agent = Agent(
 Agents can intelligently select and use tools based on the task:
 
 ```python
-# Agent automatically chooses the right tool
-result = await agent.run(
-    "Search for recent AI developments and save a summary"
+from tyler import Agent, Thread, Message
+
+# Create thread and message
+thread = Thread()
+message = Message(
+    role="user",
+    content="Search for recent AI developments and save a summary"
 )
+thread.add_message(message)
+
+# Agent automatically chooses the right tools
+processed_thread, new_messages = await agent.go(thread)
 # Agent will: 1) Use web.search, 2) Use web.fetch for details, 3) Use files.write
 ```
 
@@ -84,29 +108,53 @@ result = await agent.run(
 Agents can break down complex tasks:
 
 ```python
-result = await agent.run("""
+thread = Thread()
+message = Message(
+    role="user",
+    content="""
     1. Find the top 3 Python web frameworks
     2. Compare their features
     3. Create a comparison chart
     4. Save the analysis
-""")
+    """
+)
+thread.add_message(message)
+
+processed_thread, new_messages = await agent.go(thread)
 ```
 
 ### 3. Context Awareness
 
-With Narrator integration, agents maintain conversation context:
+With proper thread management, agents maintain conversation context:
 
 ```python
-from narrator import Thread
+from tyler import Agent, Thread, Message, ThreadStore
 
-thread = Thread(thread_id="research-session")
-agent = Agent(name="assistant", thread=thread)
+# Set up persistent storage
+thread_store = await ThreadStore.create("sqlite+aiosqlite:///conversations.db")
+
+agent = Agent(
+    name="assistant",
+    model_name="gpt-4",
+    thread_store=thread_store
+)
+
+# Create a thread
+thread = Thread(id="research-session")
 
 # First query
-await agent.run("What is FastAPI?")
+message1 = Message(role="user", content="What is FastAPI?")
+thread.add_message(message1)
+processed_thread, _ = await agent.go(thread)
+
+# Save the thread
+await thread_store.save_thread(processed_thread)
 
 # Follow-up uses context
-await agent.run("How does it compare to Flask?")  # Knows we're talking about FastAPI
+message2 = Message(role="user", content="How does it compare to Flask?")
+processed_thread.add_message(message2)
+final_thread, new_messages = await agent.go(processed_thread)
+# Agent knows we're talking about FastAPI
 ```
 
 ## Advanced Features
@@ -116,8 +164,18 @@ await agent.run("How does it compare to Flask?")  # Knows we're talking about Fa
 For long-running tasks or real-time interaction:
 
 ```python
-async for chunk in agent.stream("Write a detailed analysis of..."):
-    print(chunk, end="", flush=True)
+from tyler import Agent, Thread, Message, StreamUpdate
+
+thread = Thread()
+message = Message(role="user", content="Write a detailed analysis of...")
+thread.add_message(message)
+
+async for update in agent.stream(thread):
+    if isinstance(update, StreamUpdate):
+        if update.type == "content":
+            print(update.content, end="", flush=True)
+        elif update.type == "tool_call":
+            print(f"\n[Using tool: {update.tool_name}]")
 ```
 
 ### Custom System Prompts
@@ -127,7 +185,8 @@ Fine-tune agent behavior:
 ```python
 agent = Agent(
     name="code-reviewer",
-    system_prompt="""You are an expert code reviewer. 
+    model_name="gpt-4",
+    purpose="""You are an expert code reviewer. 
     Focus on: 
     - Security vulnerabilities
     - Performance optimizations
@@ -141,9 +200,13 @@ agent = Agent(
 Control how agents use tools:
 
 ```python
+from lye import FILES_TOOLS
+
 agent = Agent(
     name="safe-agent",
-    tools=[files.read],  # Read-only access
+    model_name="gpt-4",
+    purpose="To safely read and analyze files",
+    tools=[FILES_TOOLS[0]],  # Just read_file tool
     tool_choice="auto",  # or "none", "required", or specific tool name
     parallel_tool_calls=True  # Enable parallel execution
 )
@@ -154,41 +217,69 @@ agent = Agent(
 ### 1. Supervisor Pattern
 
 ```python
+# Note: This is a conceptual pattern - implement delegate_task and create_sub_agent
 supervisor = Agent(
     name="supervisor",
-    tools=[create_sub_agent, delegate_task],
-    system_prompt="You coordinate work between specialized agents"
+    model_name="gpt-4",
+    purpose="You coordinate work between specialized agents",
+    tools=[delegate_task, create_sub_agent]
 )
 
-researcher = Agent(name="researcher", tools=[web.search, web.fetch])
-writer = Agent(name="writer", tools=[files.write])
+researcher = Agent(
+    name="researcher", 
+    model_name="gpt-4",
+    purpose="To conduct research",
+    tools=[*WEB_TOOLS]
+)
+
+writer = Agent(
+    name="writer",
+    model_name="gpt-4", 
+    purpose="To write content",
+    tools=[*FILES_TOOLS]
+)
 ```
 
 ### 2. Tool Specialist Pattern
 
 ```python
+from lye import IMAGE_TOOLS
+from lye.files import read_csv, write_file
+
 # Image specialist
 image_agent = Agent(
     name="image-expert",
-    tools=[image.analyze, image.extract_text, image.edit],
-    system_prompt="You are an expert at image analysis and manipulation"
+    model_name="gpt-4",
+    purpose="You are an expert at image analysis and manipulation",
+    tools=IMAGE_TOOLS
 )
 
 # Data specialist
 data_agent = Agent(
     name="data-analyst",
-    tools=[files.read_csv, analyze_data, create_chart],
-    system_prompt="You are a data analysis expert"
+    model_name="gpt-4",
+    purpose="You are a data analysis expert",
+    tools=[read_csv, write_file]  # Add your data analysis tools
 )
 ```
 
 ### 3. Validation Pattern
 
 ```python
-agent = Agent(
-    name="validated-agent",
-    tools=[web.search, web.fetch],
-    validation_fn=lambda response: len(response) > 100  # Ensure substantial responses
+# Note: validation_fn is not a current Tyler feature
+# Instead, use the evaluation framework for validation
+from tyler.eval import AgentEval, Conversation, Expectation
+
+eval = AgentEval(
+    name="validation_test",
+    conversations=[
+        Conversation(
+            user="Analyze this data",
+            expect=Expectation(
+                custom=lambda response: len(response["content"]) > 100
+            )
+        )
+    ]
 )
 ```
 
@@ -199,26 +290,37 @@ agent = Agent(
     Use clear, descriptive names that indicate the agent's purpose:
     ```python
     # Good
-    agent = Agent(name="customer-support-agent")
+    agent = Agent(
+        name="customer-support-agent",
+        model_name="gpt-4",
+        purpose="To help customers with product questions"
+    )
     
     # Not as clear
-    agent = Agent(name="agent1")
+    agent = Agent(name="agent1", model_name="gpt-4")
     ```
   </Accordion>
 
   <Accordion title="2. Limit tool access">
     Only provide tools the agent actually needs:
     ```python
+    from lye.slack import send_message, read_channel
+    from lye.notion import search_pages
+    
     # Good - specific tools for the task
     email_agent = Agent(
         name="email-assistant",
-        tools=[email.send, email.read, contacts.search]
+        model_name="gpt-4",
+        purpose="To manage email communications",
+        tools=[send_message, read_channel, search_pages]
     )
     
     # Avoid - too many unnecessary tools
+    from lye import TOOLS  # All available tools
     email_agent = Agent(
-        name="email-assistant", 
-        tools=all_available_tools  # Includes unrelated tools
+        name="email-assistant",
+        model_name="gpt-4", 
+        tools=TOOLS  # Includes unrelated tools
     )
     ```
   </Accordion>
@@ -227,10 +329,18 @@ agent = Agent(
     Match model capabilities to task complexity:
     ```python
     # Simple tasks
-    simple_agent = Agent(name="formatter", model="gpt-3.5-turbo")
+    simple_agent = Agent(
+        name="formatter",
+        model_name="gpt-3.5-turbo",
+        purpose="To format text"
+    )
     
     # Complex reasoning
-    complex_agent = Agent(name="analyzer", model="gpt-4")
+    complex_agent = Agent(
+        name="analyzer",
+        model_name="gpt-4",
+        purpose="To perform deep analysis"
+    )
     ```
   </Accordion>
 
@@ -240,7 +350,11 @@ agent = Agent(
     from tyler.exceptions import AgentError, ToolError
     
     try:
-        result = await agent.run(task)
+        thread = Thread()
+        message = Message(role="user", content=task)
+        thread.add_message(message)
+        
+        processed_thread, new_messages = await agent.go(thread)
     except ToolError as e:
         print(f"Tool failed: {e}")
         # Retry with different approach

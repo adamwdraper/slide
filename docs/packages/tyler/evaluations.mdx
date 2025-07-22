@@ -41,12 +41,14 @@ from tyler.eval import (
     ToolUsageScorer,
     ToneScorer
 )
+from lye import WEB_TOOLS, FILES_TOOLS
 
 # Create your agent
 agent = Agent(
     name="assistant",
-    model="gpt-4",
-    tools=[web.search, files.write]
+    model_name="gpt-4",
+    purpose="To be a helpful assistant",
+    tools=[*WEB_TOOLS, *FILES_TOOLS]
 )
 
 # Define test conversations
@@ -133,8 +135,8 @@ Expectation(
 <Warning>
   When referencing Lye tools in expectations, use their registered names:
   - `"web-search"` not `"web.search"`
-  - `"files-write_file"` not `"files.write_file"`
-  - `"audio-text_to_speech"` not `"audio.text_to_speech"`
+  - `"files-write"` not `"files.write"`  
+  - `"audio-transcribe"` not `"audio.transcribe"`
 </Warning>
 
 #### Content Expectations
@@ -370,14 +372,14 @@ from tyler.eval import (
     AgentEval, Conversation, Turn, Expectation,
     ToolUsageScorer, ToneScorer, TaskCompletionScorer, ConversationFlowScorer
 )
-from lye import web, files
+from lye import WEB_TOOLS, FILES_TOOLS
 
 # Create agent
 agent = Agent(
     name="travel_assistant",
-    model="gpt-4",
+    model_name="gpt-4",
     purpose="Help users book flights and plan trips",
-    tools=[web.search, web.fetch, files.write]
+    tools=[*WEB_TOOLS, *FILES_TOOLS]
 )
 
 # Define comprehensive test suite

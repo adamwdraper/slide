@@ -32,9 +32,15 @@ All Slide APIs are designed to be async-first:
 
 ```python
 # All main operations are async
-result = await agent.run("Task")
-data = await tool.execute(params)
-thread = await Thread.create()
+from tyler import Agent, Thread, Message
+
+thread = Thread()
+message = Message(role="user", content="Task")
+thread.add_message(message)
+
+processed_thread, new_messages = await agent.go(thread)
+data = await tool.implementation(params)
+thread_store = await ThreadStore.create()
 ```
 
 ### Consistent Error Handling
@@ -78,8 +84,16 @@ async def create_agent(
 
 1. **Instance Methods**: Called on object instances
    ```python
-   agent = Agent(name="bot")
-   result = await agent.run("task")
+   agent = Agent(
+       name="bot",
+       model_name="gpt-4",
+       purpose="To help with tasks"
+   )
+   thread = Thread()
+   message = Message(role="user", content="task")
+   thread.add_message(message)
+   
+   processed_thread, new_messages = await agent.go(thread)
    ```
 
 2. **Class Methods**: Called on the class itself
@@ -97,17 +111,17 @@ async def create_agent(
 Most APIs follow consistent return patterns:
 
 ```python
-# Single values
-result: str = await agent.run("task")
+# Thread and messages
+processed_thread, new_messages = await agent.go(thread)
 
 # Structured data
-response: Dict[str, Any] = await tool.execute(params)
+response: Dict[str, Any] = await tool["implementation"](params)
 
 # Lists
 tools: List[Tool] = await adapter.list_tools()
 
 # Optional values
-thread: Optional[Thread] = await Thread.get_by_id(id)
+thread: Optional[Thread] = await thread_store.get_thread(thread_id)
 ```
 
 ## Authentication & Configuration
@@ -127,8 +141,9 @@ Or pass directly:
 ```python
 agent = Agent(
     name="bot",
-    api_key="sk-...",  # Not recommended
-    model="gpt-4"
+    model_name="gpt-4",
+    purpose="To be a helpful assistant"
+    # API keys are typically set via environment variables
 )
 ```
 
@@ -205,12 +220,22 @@ print(tyler.__version__)  # "1.0.0"
 ### Tyler
 
 ```python
-from tyler import Agent
+from tyler import Agent, Thread, Message, ThreadStore, FileStore
 from tyler.mcp import MCPAdapter
 
 # Create agent
-agent = Agent(name="bot", tools=[...])
-result = await agent.run("task")
+agent = Agent(
+    name="bot", 
+    model_name="gpt-4",
+    purpose="To help with tasks",
+    tools=[...]
+)
+
+# Use agent
+thread = Thread()
+message = Message(role="user", content="task")
+thread.add_message(message)
+processed_thread, new_messages = await agent.go(thread)
 
 # MCP integration
 adapter = MCPAdapter()
@@ -220,32 +245,60 @@ await adapter.connect("stdio://server")
 ### Lye
 
 ```python
-from lye import audio, browser, files, image, web
+from lye import AUDIO_TOOLS, BROWSER_TOOLS, FILES_TOOLS, IMAGE_TOOLS, WEB_TOOLS
+from lye.audio import transcribe
+from lye.browser import screenshot
+from lye.files import read_file
 
-# Use tools
-transcript = await audio.transcribe("file.mp3")
-screenshot = await browser.screenshot("https://example.com")
-content = await files.read("data.txt")
+# Use tool groups
+agent = Agent(tools=[*AUDIO_TOOLS, *WEB_TOOLS])
+
+# Or specific tools
+agent = Agent(tools=[transcribe, screenshot, read_file])
 ```
 
 ### Narrator
 
 ```python
-from narrator import Thread, FileStore
+from tyler import Thread, Message, ThreadStore, FileStore
+
+# Create stores
+thread_store = await ThreadStore.create("sqlite+aiosqlite:///data.db")
+file_store = await FileStore.create(base_path="./files")
 
 # Create thread
-store = FileStore("./data")
-thread = Thread(store=store)
-await thread.add_message("user", "Hello")
+thread = Thread(id="main-thread")
+message = Message(role="user", content="Hello")
+thread.add_message(message)
+
+# Save thread
+await thread_store.save_thread(thread)
 ```
 
 ### Space Monkey
 
 ```python
 from space_monkey import SlackApp
+from tyler import Agent, ThreadStore, FileStore
+
+# Create agent with storage
+thread_store = await ThreadStore.create()
+file_store = await FileStore.create()
+
+agent = Agent(
+    name="slack-bot",
+    model_name="gpt-4",
+    purpose="To help in Slack",
+    thread_store=thread_store,
+    file_store=file_store
+)
 
 # Create Slack app
-app = SlackApp(agent=agent)
+app = SlackApp(
+    agent=agent,
+    slack_token="xoxb-...",
+    signing_secret="..."
+)
 app.start(port=3000)
 ```
 

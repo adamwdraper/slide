@@ -14,186 +14,215 @@ Slide comes with a rich set of tools organized by category:
 <Tabs>
   <Tab title="Audio Tools">
     ```python
-    from lye import audio
+    from lye import AUDIO_TOOLS
+    from lye.audio import transcribe, text_to_speech
     
-    # Available tools:
-    audio.transcribe      # Convert audio to text
-    audio.analyze         # Analyze audio properties
-    audio.generate_speech # Text to speech
+    # Use all audio tools
+    agent = Agent(tools=AUDIO_TOOLS)
+    
+    # Or specific tools
+    agent = Agent(tools=[transcribe, text_to_speech])
     ```
   </Tab>
   <Tab title="Browser Tools">
     ```python
-    from lye import browser
+    from lye import BROWSER_TOOLS
+    from lye.browser import screenshot, extract_text
     
-    # Available tools:
-    browser.screenshot    # Capture webpage screenshots
-    browser.extract_text  # Extract text from pages
-    browser.click        # Interact with elements
-    browser.fill_form    # Fill out forms
+    # Use all browser tools
+    agent = Agent(tools=BROWSER_TOOLS)
+    
+    # Or specific tools
+    agent = Agent(tools=[screenshot, extract_text])
     ```
   </Tab>
   <Tab title="File Tools">
     ```python
-    from lye import files
+    from lye import FILES_TOOLS
+    from lye.files import read_file, write_file, list_directory
     
-    # Available tools:
-    files.read           # Read file contents
-    files.write          # Write to files
-    files.list           # List directory contents
-    files.delete         # Delete files
-    files.move           # Move/rename files
+    # Use all file tools
+    agent = Agent(tools=FILES_TOOLS)
+    
+    # Or specific tools
+    agent = Agent(tools=[read_file, write_file])
     ```
   </Tab>
   <Tab title="Image Tools">
     ```python
-    from lye import image
+    from lye import IMAGE_TOOLS
+    from lye.image import analyze_image, extract_text_from_image
     
-    # Available tools:
-    image.analyze        # Analyze image content
-    image.extract_text   # OCR text extraction
-    image.resize         # Resize images
-    image.convert        # Convert formats
+    # Use all image tools
+    agent = Agent(tools=IMAGE_TOOLS)
+    
+    # Or specific tools  
+    agent = Agent(tools=[analyze_image, extract_text_from_image])
     ```
   </Tab>
   <Tab title="Web Tools">
     ```python
-    from lye import web
+    from lye import WEB_TOOLS
+    from lye.web import search, fetch_page
     
-    # Available tools:
-    web.search          # Search the internet
-    web.fetch           # Fetch webpage content
-    web.api_call        # Make API requests
+    # Use all web tools
+    agent = Agent(tools=WEB_TOOLS)
+    
+    # Or specific tools
+    agent = Agent(tools=[search, fetch_page])
     ```
   </Tab>
 </Tabs>
 
 ## Tool Structure
 
-Every tool in Slide follows a consistent structure:
+Every tool in Slide follows the OpenAI function calling format:
 
 ```python
-from typing import Dict, Any
-from lye.utils import Tool
+# Example of a Lye tool definition
+def custom_tool_implementation(param1: str, param2: int = 10) -> str:
+    """Implementation of the tool."""
+    # Your logic here
+    return f"Processed {param1} with value {param2}"
 
-class MyTool(Tool):
-    """Tool for doing something specific."""
-    
-    name = "my_tool"
-    description = "Does something useful"
-    
-    parameters = {
-        "type": "object",
-        "properties": {
-            "input_text": {
-                "type": "string",
-                "description": "The text to process"
-            },
-            "options": {
+# Tool definition
+custom_tool = {
+    "definition": {
+        "type": "function",
+        "function": {
+            "name": "custom_tool",
+            "description": "Does something useful with the input",
+            "parameters": {
                 "type": "object",
                 "properties": {
-                    "format": {"type": "string", "enum": ["json", "text"]}
-                }
+                    "param1": {
+                        "type": "string",
+                        "description": "The main input parameter"
+                    },
+                    "param2": {
+                        "type": "integer",
+                        "description": "Optional configuration value",
+                        "default": 10
+                    }
+                },
+                "required": ["param1"]
             }
-        },
-        "required": ["input_text"]
-    }
-    
-    async def execute(self, **kwargs) -> Dict[str, Any]:
-        """Execute the tool with given parameters."""
-        input_text = kwargs.get("input_text")
-        options = kwargs.get("options", {})
-        
-        # Tool logic here
-        result = process_text(input_text, options)
-        
-        return {
-            "success": True,
-            "result": result
         }
+    },
+    "implementation": custom_tool_implementation
+}
 ```
 
 ## Creating Custom Tools
 
 ### Simple Function Tool
 
-The easiest way to create a tool is using the `@tool` decorator:
+The easiest way to create a tool:
 
 ```python
-from lye.utils import tool
-
-@tool(
-    name="word_counter",
-    description="Count words in text"
-)
-async def count_words(text: str) -> dict:
+def word_counter_implementation(text: str) -> str:
     """Count words in the provided text."""
     words = text.split()
-    return {
+    result = {
         "word_count": len(words),
         "character_count": len(text),
         "unique_words": len(set(words))
     }
+    return str(result)
+
+# Create tool definition
+word_counter = {
+    "definition": {
+        "type": "function",
+        "function": {
+            "name": "word_counter",
+            "description": "Count words in text",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "text": {
+                        "type": "string",
+                        "description": "The text to analyze"
+                    }
+                },
+                "required": ["text"]
+            }
+        }
+    },
+    "implementation": word_counter_implementation
+}
 
 # Use with an agent
 from tyler import Agent
 
 agent = Agent(
     name="text-analyzer",
-    tools=[count_words]
+    model_name="gpt-4",
+    purpose="To analyze text",
+    tools=[word_counter]
 )
 ```
 
-### Class-Based Tool
+### Advanced Tool Example
 
-For more complex tools, use the class-based approach:
+For more complex tools with external dependencies:
 
 ```python
-from lye.utils import Tool
 import aiohttp
+import json
 
-class WeatherTool(Tool):
-    """Get weather information for a location."""
+async def weather_tool_implementation(city: str, units: str = "celsius") -> str:
+    """Get current weather for a city."""
+    api_key = "your-api-key"  # In practice, use environment variables
     
-    name = "get_weather"
-    description = "Get current weather for a city"
-    
-    parameters = {
-        "type": "object",
-        "properties": {
-            "city": {
-                "type": "string",
-                "description": "City name"
-            },
-            "units": {
-                "type": "string",
-                "enum": ["celsius", "fahrenheit"],
-                "default": "celsius"
-            }
-        },
-        "required": ["city"]
-    }
-    
-    def __init__(self, api_key: str):
-        self.api_key = api_key
-    
-    async def execute(self, city: str, units: str = "celsius") -> dict:
-        async with aiohttp.ClientSession() as session:
-            url = f"https://api.weather.com/v1/current"
-            params = {
-                "city": city,
-                "units": units,
-                "api_key": self.api_key
-            }
-            
+    async with aiohttp.ClientSession() as session:
+        url = f"https://api.weather.com/v1/current"
+        params = {
+            "city": city,
+            "units": units,
+            "api_key": api_key
+        }
+        
+        try:
             async with session.get(url, params=params) as response:
-                data = await response.json()
-                
-                return {
-                    "temperature": data["temp"],
-                    "conditions": data["conditions"],
-                    "humidity": data["humidity"]
-                }
+                if response.status == 200:
+                    data = await response.json()
+                    return json.dumps({
+                        "temperature": data["temp"],
+                        "conditions": data["conditions"],
+                        "humidity": data["humidity"]
+                    })
+                else:
+                    return json.dumps({"error": f"API returned status {response.status}"})
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+# Tool definition
+weather_tool = {
+    "definition": {
+        "type": "function",
+        "function": {
+            "name": "get_weather",
+            "description": "Get current weather for a city",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "city": {
+                        "type": "string",
+                        "description": "City name"
+                    },
+                    "units": {
+                        "type": "string",
+                        "enum": ["celsius", "fahrenheit"],
+                        "default": "celsius"
+                    }
+                },
+                "required": ["city"]
+            }
+        }
+    },
+    "implementation": weather_tool_implementation
+}
 ```
 
 ## Tool Patterns
@@ -203,18 +232,39 @@ class WeatherTool(Tool):
 Always validate inputs:
 
 ```python
-@tool(name="safe_calculator", description="Safe math calculations")
-async def calculate(expression: str) -> dict:
+def safe_calculator_implementation(expression: str) -> str:
     # Validate input
     allowed_chars = set("0123456789+-*/()., ")
     if not all(c in allowed_chars for c in expression):
-        return {"error": "Invalid characters in expression"}
+        return json.dumps({"error": "Invalid characters in expression"})
     
     try:
-        result = eval(expression)  # Safe due to validation
-        return {"result": result}
+        # Safe evaluation after validation
+        result = eval(expression)
+        return json.dumps({"result": result})
     except Exception as e:
-        return {"error": str(e)}
+        return json.dumps({"error": str(e)})
+
+safe_calculator = {
+    "definition": {
+        "type": "function",
+        "function": {
+            "name": "safe_calculator",
+            "description": "Safe math calculations",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "expression": {
+                        "type": "string",
+                        "description": "Mathematical expression to evaluate"
+                    }
+                },
+                "required": ["expression"]
+            }
+        }
+    },
+    "implementation": safe_calculator_implementation
+}
 ```
 
 ### 2. Resource Management Pattern
@@ -222,16 +272,54 @@ async def calculate(expression: str) -> dict:
 Properly manage external resources:
 
 ```python
-class DatabaseTool(Tool):
-    name = "query_database"
-    
-    async def execute(self, query: str) -> dict:
-        conn = await self.get_connection()
-        try:
-            result = await conn.execute(query)
-            return {"data": result}
-        finally:
+import asyncpg
+import json
+
+async def database_query_implementation(query: str, database: str = "main") -> str:
+    """Execute a database query safely."""
+    conn = None
+    try:
+        # Connect to database
+        conn = await asyncpg.connect(f"postgresql://localhost/{database}")
+        
+        # Execute query
+        result = await conn.fetch(query)
+        
+        # Convert to JSON-serializable format
+        data = [dict(record) for record in result]
+        return json.dumps({"data": data, "count": len(data)})
+        
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+    finally:
+        if conn:
             await conn.close()  # Always cleanup
+
+database_tool = {
+    "definition": {
+        "type": "function",
+        "function": {
+            "name": "query_database",
+            "description": "Execute a database query",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "SQL query to execute"
+                    },
+                    "database": {
+                        "type": "string",
+                        "description": "Database name",
+                        "default": "main"
+                    }
+                },
+                "required": ["query"]
+            }
+        }
+    },
+    "implementation": database_query_implementation
+}
 ```
 
 ### 3. Error Handling Pattern
@@ -239,21 +327,113 @@ class DatabaseTool(Tool):
 Provide meaningful error messages:
 
 ```python
-@tool(name="api_caller", description="Make API calls")
-async def call_api(url: str, method: str = "GET", data: dict = None) -> dict:
+import aiohttp
+import json
+
+async def api_caller_implementation(url: str, method: str = "GET", data: dict = None) -> str:
+    """Make API calls with proper error handling."""
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.request(method, url, json=data) as response:
+            kwargs = {"url": url}
+            if data and method in ["POST", "PUT", "PATCH"]:
+                kwargs["json"] = data
+                
+            async with session.request(method, **kwargs) as response:
+                response_text = await response.text()
+                
                 if response.status >= 400:
-                    return {
+                    return json.dumps({
                         "error": f"API error: {response.status}",
-                        "details": await response.text()
-                    }
-                return {"data": await response.json()}
+                        "details": response_text
+                    })
+                
+                try:
+                    response_data = json.loads(response_text)
+                    return json.dumps({"data": response_data})
+                except json.JSONDecodeError:
+                    return json.dumps({"data": response_text})
+                    
     except aiohttp.ClientError as e:
-        return {"error": f"Network error: {str(e)}"}
+        return json.dumps({"error": f"Network error: {str(e)}"})
     except Exception as e:
-        return {"error": f"Unexpected error: {str(e)}"}
+        return json.dumps({"error": f"Unexpected error: {str(e)}"})
+
+api_tool = {
+    "definition": {
+        "type": "function",
+        "function": {
+            "name": "api_caller",
+            "description": "Make API calls",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "description": "API endpoint URL"
+                    },
+                    "method": {
+                        "type": "string",
+                        "enum": ["GET", "POST", "PUT", "DELETE", "PATCH"],
+                        "default": "GET"
+                    },
+                    "data": {
+                        "type": "object",
+                        "description": "Request body data"
+                    }
+                },
+                "required": ["url"]
+            }
+        }
+    },
+    "implementation": api_caller_implementation
+}
+```
+
+### 4. Rate Limiting
+
+Implement rate limiting for external services:
+
+```python
+import asyncio
+from datetime import datetime, timedelta
+import json
+
+class RateLimiter:
+    def __init__(self, max_calls: int, time_window: timedelta):
+        self.max_calls = max_calls
+        self.time_window = time_window
+        self.calls = []
+        self.lock = asyncio.Lock()
+    
+    async def acquire(self):
+        async with self.lock:
+            now = datetime.now()
+            # Remove old calls outside the time window
+            self.calls = [call_time for call_time in self.calls 
+                         if now - call_time < self.time_window]
+            
+            if len(self.calls) >= self.max_calls:
+                # Calculate wait time
+                oldest_call = min(self.calls)
+                wait_time = (oldest_call + self.time_window - now).total_seconds()
+                if wait_time > 0:
+                    await asyncio.sleep(wait_time)
+                    return await self.acquire()  # Retry
+            
+            self.calls.append(now)
+
+# Global rate limiter for API calls
+api_limiter = RateLimiter(max_calls=60, time_window=timedelta(minutes=1))
+
+async def rate_limited_api_implementation(endpoint: str) -> str:
+    """Make rate-limited API calls."""
+    await api_limiter.acquire()
+    
+    # Make the actual API call
+    async with aiohttp.ClientSession() as session:
+        async with session.get(f"https://api.example.com/{endpoint}") as response:
+            data = await response.json()
+            return json.dumps(data)
 ```
 
 ## Tool Best Practices
@@ -263,23 +443,33 @@ async def call_api(url: str, method: str = "GET", data: dict = None) -> dict:
     Write clear, concise descriptions that help agents understand when to use the tool:
     ```python
     # Good
-    @tool(
-        name="translate_text",
-        description="Translate text between languages using Google Translate"
-    )
+    weather_tool = {
+        "definition": {
+            "type": "function",
+            "function": {
+                "name": "get_weather",
+                "description": "Get current weather conditions for any city worldwide"
+            }
+        }
+    }
     
     # Too vague
-    @tool(
-        name="translate",
-        description="Translation tool"
-    )
+    weather_tool = {
+        "definition": {
+            "type": "function", 
+            "function": {
+                "name": "weather",
+                "description": "Weather tool"
+            }
+        }
+    }
     ```
   </Accordion>
 
   <Accordion title="2. Parameter Documentation">
     Document all parameters thoroughly:
     ```python
-    parameters = {
+    "parameters": {
         "type": "object",
         "properties": {
             "source_lang": {
@@ -288,7 +478,7 @@ async def call_api(url: str, method: str = "GET", data: dict = None) -> dict:
             },
             "target_lang": {
                 "type": "string",
-                "description": "Target language code"
+                "description": "Target language code (e.g., 'en', 'es', 'fr')"
             },
             "text": {
                 "type": "string",
@@ -303,31 +493,32 @@ async def call_api(url: str, method: str = "GET", data: dict = None) -> dict:
   <Accordion title="3. Idempotency">
     Make tools idempotent when possible:
     ```python
-    @tool(name="create_file", description="Create a file if it doesn't exist")
-    async def create_file(path: str, content: str) -> dict:
+    import os
+    import json
+    
+    def create_file_implementation(path: str, content: str) -> str:
+        """Create a file if it doesn't exist."""
         if os.path.exists(path):
-            return {"status": "already_exists", "path": path}
+            return json.dumps({"status": "already_exists", "path": path})
         
         with open(path, 'w') as f:
             f.write(content)
         
-        return {"status": "created", "path": path}
+        return json.dumps({"status": "created", "path": path})
     ```
   </Accordion>
 
-  <Accordion title="4. Rate Limiting">
-    Implement rate limiting for external services:
+  <Accordion title="4. Proper Return Types">
+    Always return strings (JSON) from tool implementations:
     ```python
-    from asyncio import Semaphore
+    # Good - returns JSON string
+    def tool_implementation(param: str) -> str:
+        result = {"data": process(param)}
+        return json.dumps(result)
     
-    class RateLimitedTool(Tool):
-        def __init__(self, max_concurrent: int = 5):
-            self.semaphore = Semaphore(max_concurrent)
-        
-        async def execute(self, **kwargs):
-            async with self.semaphore:
-                # Tool logic here
-                pass
+    # Bad - returns dict
+    def tool_implementation(param: str) -> dict:
+        return {"data": process(param)}  # Will cause errors!
     ```
   </Accordion>
 </AccordionGroup>
@@ -338,23 +529,38 @@ Always test your custom tools:
 
 ```python
 import pytest
-from your_tools import weather_tool
+import json
 
 @pytest.mark.asyncio
 async def test_weather_tool():
-    tool = WeatherTool(api_key="test_key")
-    result = await tool.execute(city="London")
+    # Mock the implementation for testing
+    async def mock_weather_implementation(city: str, units: str = "celsius") -> str:
+        if city == "London":
+            return json.dumps({
+                "temperature": 15,
+                "conditions": "Cloudy",
+                "humidity": 70
+            })
+        else:
+            return json.dumps({"error": "City not found"})
     
-    assert "temperature" in result
-    assert "conditions" in result
-    assert isinstance(result["temperature"], (int, float))
+    # Replace implementation for testing
+    weather_tool["implementation"] = mock_weather_implementation
+    
+    # Test successful call
+    result = await weather_tool["implementation"]("London")
+    data = json.loads(result)
+    
+    assert "temperature" in data
+    assert "conditions" in data
+    assert data["temperature"] == 15
 
 @pytest.mark.asyncio
 async def test_weather_tool_error():
-    tool = WeatherTool(api_key="invalid")
-    result = await tool.execute(city="InvalidCity")
+    result = await weather_tool["implementation"]("InvalidCity")
+    data = json.loads(result)
     
-    assert "error" in result
+    assert "error" in data
 ```
 
 ## Tool Composition
@@ -362,25 +568,35 @@ async def test_weather_tool_error():
 Combine multiple tools for complex operations:
 
 ```python
-from tyler import Agent
-from lye import web, files, image
+from tyler import Agent, Thread, Message
+from lye import WEB_TOOLS, FILES_TOOLS, IMAGE_TOOLS
 
-# Create a research agent with multiple tools
+# Create a research agent with multiple tool categories
 agent = Agent(
     name="researcher",
+    model_name="gpt-4",
+    purpose="To conduct comprehensive research",
     tools=[
-        web.search,
-        web.fetch,
-        image.analyze,
-        files.write
+        *WEB_TOOLS,      # search, fetch
+        *FILES_TOOLS,    # read_file, write_file
+        *IMAGE_TOOLS     # analyze_image, extract_text_from_image
     ]
 )
 
-# Agent can now:
-# 1. Search for information
-# 2. Fetch detailed content
-# 3. Analyze images found
-# 4. Save results to files
+# Example usage
+thread = Thread()
+message = Message(
+    role="user",
+    content="""
+    1. Search for information about the James Webb telescope
+    2. Fetch detailed content from NASA's website
+    3. Analyze any images found
+    4. Save a comprehensive report
+    """
+)
+thread.add_message(message)
+
+processed_thread, new_messages = await agent.go(thread)
 ```
 
 ## Next Steps

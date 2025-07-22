@@ -31,27 +31,44 @@ graph LR
 ### Connecting to an MCP Server
 
 ```python
-from tyler import Agent
+import asyncio
+from tyler import Agent, Thread, Message
 from tyler.mcp import MCPAdapter
 
-# Create MCP adapter
-adapter = MCPAdapter()
+async def main():
+    # Create MCP adapter
+    adapter = MCPAdapter()
+    
+    # Connect to a local MCP server
+    await adapter.connect("stdio://./my-mcp-server")
+    
+    # Or connect to a remote server
+    # await adapter.connect("ws://localhost:8080")
+    
+    # Create agent with MCP tools
+    agent = Agent(
+        name="mcp-enhanced-agent",
+        model_name="gpt-4",
+        purpose="To use MCP tools for tasks",
+        mcp_adapter=adapter
+    )
+    
+    # List available tools
+    tools = await adapter.list_tools()
+    print(f"Available MCP tools: {[t.name for t in tools]}")
+    
+    # Use the agent
+    thread = Thread()
+    message = Message(
+        role="user",
+        content="Use the database query tool to find all users created this week"
+    )
+    thread.add_message(message)
+    
+    processed_thread, new_messages = await agent.go(thread)
 
-# Connect to a local MCP server
-await adapter.connect("stdio://./my-mcp-server")
-
-# Or connect to a remote server
-await adapter.connect("ws://localhost:8080")
-
-# Create agent with MCP tools
-agent = Agent(
-    name="mcp-enhanced-agent",
-    mcp_adapter=adapter
-)
-
-# List available tools
-tools = await adapter.list_tools()
-print(f"Available MCP tools: {[t.name for t in tools]}")
+if __name__ == "__main__":
+    asyncio.run(main())
 ```
 
 ### Using MCP Tools
@@ -59,10 +76,16 @@ print(f"Available MCP tools: {[t.name for t in tools]}")
 Once connected, MCP tools are automatically available to your agent:
 
 ```python
-# Agent can now use any tools exposed by the MCP server
-result = await agent.run(
-    "Use the database query tool to find all users created this week"
+# Create thread and message
+thread = Thread()
+message = Message(
+    role="user",
+    content="Use the database query tool to find all users created this week"
 )
+thread.add_message(message)
+
+# Agent can now use any tools exposed by the MCP server
+processed_thread, new_messages = await agent.go(thread)
 ```
 
 ## MCP Server Types
@@ -174,26 +197,40 @@ if __name__ == "__main__":
 Connect to multiple MCP servers simultaneously:
 
 ```python
-from tyler import Agent
+import asyncio
+from tyler import Agent, Thread, Message
 from tyler.mcp import MCPAdapter
 
-# Create adapter
-adapter = MCPAdapter()
+async def main():
+    # Create adapter
+    adapter = MCPAdapter()
+    
+    # Connect to multiple servers
+    await adapter.connect("stdio://./database-tools")
+    await adapter.connect("ws://localhost:8080")  # API tools
+    await adapter.connect("stdio://./ml-tools")    # ML model tools
+    
+    # Agent has access to all tools
+    agent = Agent(
+        name="multi-server-agent",
+        model_name="gpt-4",
+        purpose="To use tools from multiple MCP servers",
+        mcp_adapter=adapter
+    )
+    
+    # List all available tools
+    all_tools = await adapter.list_tools()
+    print(f"Total tools available: {len(all_tools)}")
+    
+    # Use the agent
+    thread = Thread()
+    message = Message(role="user", content="Analyze the latest data and create predictions")
+    thread.add_message(message)
+    
+    processed_thread, new_messages = await agent.go(thread)
 
-# Connect to multiple servers
-await adapter.connect("stdio://./database-tools")
-await adapter.connect("ws://localhost:8080")  # API tools
-await adapter.connect("stdio://./ml-tools")    # ML model tools
-
-# Agent has access to all tools
-agent = Agent(
-    name="multi-server-agent",
-    mcp_adapter=adapter
-)
-
-# List all available tools
-all_tools = await adapter.list_tools()
-print(f"Total tools available: {len(all_tools)}")
+if __name__ == "__main__":
+    asyncio.run(main())
 ```
 
 ### Dynamic Tool Discovery
@@ -216,11 +253,18 @@ async def discover_and_use_tools(adapter: MCPAdapter, task: str):
     # Create specialized agent
     agent = Agent(
         name="dynamic-agent",
-        mcp_adapter=adapter,
-        system_prompt=f"You have access to these tools: {relevant_tools}"
+        model_name="gpt-4",
+        purpose=f"You have access to these tools: {relevant_tools}",
+        mcp_adapter=adapter
     )
     
-    return await agent.run(task)
+    # Create thread and execute task
+    thread = Thread()
+    message = Message(role="user", content=task)
+    thread.add_message(message)
+    
+    processed_thread, new_messages = await agent.go(thread)
+    return processed_thread
 ```
 
 ### Context Sharing
@@ -236,10 +280,15 @@ await adapter.set_context({
 })
 
 # Context is now available to all MCP tools
-result = await agent.run(
-    "Get personalized recommendations"  
+thread = Thread()
+message = Message(
+    role="user",
+    content="Get personalized recommendations"
     # MCP tools can access the context
 )
+thread.add_message(message)
+
+processed_thread, new_messages = await agent.go(thread)
 ```
 
 ## MCP Security
@@ -359,19 +408,33 @@ adapter = MCPAdapter(
 Combine MCP tools with native Slide tools:
 
 ```python
-from tyler import Agent
-from lye import web, files
+from tyler import Agent, Thread, Message
+from tyler.mcp import MCPAdapter
+from lye import WEB_TOOLS, FILES_TOOLS
 
-# Connect to MCP server for specialized tools
-adapter = MCPAdapter()
-await adapter.connect("stdio://./domain-specific-tools")
-
-# Create agent with both MCP and native tools
-agent = Agent(
-    name="hybrid-agent",
-    tools=[web.search, files.read],  # Native Slide tools
-    mcp_adapter=adapter  # MCP tools
-)
+async def main():
+    # Connect to MCP server for specialized tools
+    adapter = MCPAdapter()
+    await adapter.connect("stdio://./domain-specific-tools")
+    
+    # Create agent with both MCP and native tools
+    agent = Agent(
+        name="hybrid-agent",
+        model_name="gpt-4",
+        purpose="To use both native and MCP tools",
+        tools=[*WEB_TOOLS, *FILES_TOOLS],  # Native Slide tools
+        mcp_adapter=adapter  # MCP tools
+    )
+    
+    # Agent can use both tool sets
+    thread = Thread()
+    message = Message(
+        role="user",
+        content="Search the web for data and then process it with our custom analyzer"
+    )
+    thread.add_message(message)
+    
+    processed_thread, new_messages = await agent.go(thread)
 ```
 
 ### 2. Fallback Pattern
@@ -379,17 +442,27 @@ agent = Agent(
 Use MCP tools as fallbacks:
 
 ```python
+from tyler.exceptions import ToolError
+
 async def execute_with_fallback(agent: Agent, task: str):
+    thread = Thread()
+    message = Message(role="user", content=task)
+    thread.add_message(message)
+    
     try:
         # Try with native tools first
-        return await agent.run(task)
-    except ToolNotFoundError:
+        return await agent.go(thread)
+    except ToolError:
         # Fallback to MCP tools
         if agent.mcp_adapter:
-            return await agent.run(
-                task, 
-                tool_choice="mcp"  # Force MCP tool usage
+            # Force MCP tool usage by modifying the prompt
+            fallback_message = Message(
+                role="user",
+                content=f"Use MCP tools to: {task}"
             )
+            fallback_thread = Thread()
+            fallback_thread.add_message(fallback_message)
+            return await agent.go(fallback_thread)
         raise
 ```
 
@@ -398,15 +471,31 @@ async def execute_with_fallback(agent: Agent, task: str):
 Create a network of specialized MCP servers:
 
 ```python
-# Connect to specialized servers
-await adapter.connect("stdio://./nlp-tools")      # NLP tasks
-await adapter.connect("stdio://./vision-tools")   # Computer vision
-await adapter.connect("stdio://./data-tools")     # Data processing
-
-# Agent automatically routes to appropriate tools
-result = await agent.run(
-    "Analyze this image and create a summary report"
-)
+async def create_federated_agent():
+    adapter = MCPAdapter()
+    
+    # Connect to specialized servers
+    await adapter.connect("stdio://./nlp-tools")      # NLP tasks
+    await adapter.connect("stdio://./vision-tools")   # Computer vision
+    await adapter.connect("stdio://./data-tools")     # Data processing
+    
+    agent = Agent(
+        name="federated-agent",
+        model_name="gpt-4",
+        purpose="To coordinate across specialized tool servers",
+        mcp_adapter=adapter
+    )
+    
+    # Agent automatically routes to appropriate tools
+    thread = Thread()
+    message = Message(
+        role="user",
+        content="Analyze this image and create a summary report with data visualizations"
+    )
+    thread.add_message(message)
+    
+    processed_thread, new_messages = await agent.go(thread)
+    return processed_thread
 ```
 
 ## Troubleshooting
