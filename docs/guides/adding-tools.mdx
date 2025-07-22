@@ -1,0 +1,398 @@
+---
+title: 'Adding Tools to Agents'
+description: 'Learn how to give your agents new capabilities with tools'
+---
+
+Tools are what make agents powerful. They allow your agent to interact with the world - searching the web, processing files, analyzing images, and much more. In this guide, you'll learn how to add tools to your agents.
+
+## Understanding Tools in Slide
+
+Tools in Slide follow the OpenAI function calling format. Each tool has:
+- A **definition** that describes what it does
+- An **implementation** that executes the action
+
+## Using Lye's Built-in Tools
+
+The easiest way to add tools is using Lye's pre-built tool groups:
+
+```python
+from tyler import Agent
+from lye import WEB_TOOLS, IMAGE_TOOLS, FILES_TOOLS, AUDIO_TOOLS, BROWSER_TOOLS
+
+# Agent with all capabilities
+agent = Agent(
+    name="powerful-assistant",
+    model_name="gpt-4",
+    purpose="To help with any task",
+    tools=[
+        *WEB_TOOLS,      # search, fetch
+        *IMAGE_TOOLS,    # analyze_image, extract_text_from_image
+        *FILES_TOOLS,    # read_file, write_file, list_files
+        *AUDIO_TOOLS,    # transcribe, text_to_speech
+        *BROWSER_TOOLS   # screenshot, extract_text_from_webpage
+    ]
+)
+```
+
+## Tool Groups Explained
+
+### Web Tools
+Perfect for research and information gathering:
+
+```python
+from lye import WEB_TOOLS
+
+# Includes:
+# - search: Search the web for information
+# - fetch: Get content from a specific URL
+```
+
+### Image Tools
+For visual analysis and OCR:
+
+```python
+from lye import IMAGE_TOOLS
+
+# Includes:
+# - analyze_image: Describe images and answer questions
+# - extract_text_from_image: OCR text extraction
+```
+
+### File Tools
+For reading and writing files:
+
+```python
+from lye import FILES_TOOLS
+
+# Includes:
+# - read_file: Read file contents
+# - write_file: Create or update files
+# - list_files: List directory contents
+```
+
+### Audio Tools
+For speech processing:
+
+```python
+from lye import AUDIO_TOOLS
+
+# Includes:
+# - transcribe: Convert speech to text
+# - text_to_speech: Generate speech from text
+```
+
+### Browser Tools
+For web automation:
+
+```python
+from lye import BROWSER_TOOLS
+
+# Includes:
+# - screenshot: Capture webpage screenshots
+# - extract_text_from_webpage: Get clean text from pages
+```
+
+## Selective Tool Usage
+
+Sometimes you only need specific tools:
+
+```python
+from lye.web import search
+from lye.files import write_file
+from lye.image import analyze_image
+
+agent = Agent(
+    name="research-writer",
+    model_name="gpt-4",
+    purpose="To research topics and write reports",
+    tools=[search, write_file, analyze_image]  # Only what's needed
+)
+```
+
+## Creating Custom Tools
+
+You can create your own tools by following the OpenAI function format:
+
+```python
+def get_weather(location: str, unit: str = "celsius") -> str:
+    """Get the current weather for a location."""
+    # Your implementation here
+    return f"The weather in {location} is sunny and 22°{unit[0].upper()}"
+
+# Tool definition
+weather_tool = {
+    "definition": {
+        "name": "get_weather",
+        "description": "Get the current weather for a location",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "location": {
+                    "type": "string",
+                    "description": "The city and country, e.g. San Francisco, USA"
+                },
+                "unit": {
+                    "type": "string",
+                    "enum": ["celsius", "fahrenheit"],
+                    "description": "Temperature unit"
+                }
+            },
+            "required": ["location"]
+        }
+    },
+    "implementation": get_weather
+}
+
+# Use your custom tool
+agent = Agent(
+    name="weather-assistant",
+    model_name="gpt-4",
+    purpose="To provide weather information",
+    tools=[weather_tool]
+)
+```
+
+## Advanced Custom Tools
+
+Here's a more complex example with async support and error handling:
+
+```python
+import aiohttp
+import json
+
+async def call_api(endpoint: str, method: str = "GET", data: dict = None) -> str:
+    """Make an API call to an external service."""
+    async with aiohttp.ClientSession() as session:
+        try:
+            if method == "GET":
+                async with session.get(endpoint) as response:
+                    result = await response.json()
+            else:
+                async with session.post(endpoint, json=data) as response:
+                    result = await response.json()
+            
+            return json.dumps(result, indent=2)
+        except Exception as e:
+            return f"Error calling API: {str(e)}"
+
+api_tool = {
+    "definition": {
+        "name": "call_api",
+        "description": "Make HTTP API calls to external services",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "endpoint": {
+                    "type": "string",
+                    "description": "The API endpoint URL"
+                },
+                "method": {
+                    "type": "string",
+                    "enum": ["GET", "POST"],
+                    "description": "HTTP method"
+                },
+                "data": {
+                    "type": "object",
+                    "description": "Data to send with POST request"
+                }
+            },
+            "required": ["endpoint"]
+        }
+    },
+    "implementation": call_api
+}
+```
+
+## Tool Combinations for Common Tasks
+
+### Research Assistant
+```python
+from lye import WEB_TOOLS, FILES_TOOLS
+
+research_agent = Agent(
+    name="researcher",
+    model_name="gpt-4",
+    purpose="To conduct thorough research and create reports",
+    tools=[*WEB_TOOLS, *FILES_TOOLS]
+)
+```
+
+### Content Analyzer
+```python
+from lye import IMAGE_TOOLS, AUDIO_TOOLS, FILES_TOOLS
+
+analyzer_agent = Agent(
+    name="content-analyzer",
+    model_name="gpt-4",
+    purpose="To analyze multimedia content",
+    tools=[*IMAGE_TOOLS, *AUDIO_TOOLS, *FILES_TOOLS]
+)
+```
+
+### Web Scraper
+```python
+from lye import WEB_TOOLS, BROWSER_TOOLS, FILES_TOOLS
+
+scraper_agent = Agent(
+    name="web-scraper",
+    model_name="gpt-4",
+    purpose="To extract and save information from websites",
+    tools=[*WEB_TOOLS, *BROWSER_TOOLS, *FILES_TOOLS]
+)
+```
+
+## Tool Usage Examples
+
+### Example 1: Research and Report
+```python
+import asyncio
+from tyler import Agent, Thread, Message
+from lye import WEB_TOOLS, FILES_TOOLS
+
+agent = Agent(
+    name="researcher",
+    model_name="gpt-4",
+    purpose="To research topics and create detailed reports",
+    tools=[*WEB_TOOLS, *FILES_TOOLS]
+)
+
+async def research_topic(topic: str):
+    thread = Thread()
+    message = Message(
+        role="user",
+        content=f"""
+        Research '{topic}' and create a comprehensive report.
+        Include recent developments, key facts, and save it as a markdown file.
+        """
+    )
+    thread.add_message(message)
+    
+    processed_thread, new_messages = await agent.go(thread)
+    
+    for msg in new_messages:
+        if msg.role == "assistant":
+            print(f"✅ {msg.content}")
+
+asyncio.run(research_topic("quantum computing"))
+```
+
+### Example 2: Image Analysis Pipeline
+```python
+from lye import IMAGE_TOOLS, FILES_TOOLS
+
+agent = Agent(
+    name="image-processor",
+    model_name="gpt-4",
+    purpose="To analyze images and extract information",
+    tools=[*IMAGE_TOOLS, *FILES_TOOLS]
+)
+
+async def process_images(image_folder: str):
+    thread = Thread()
+    message = Message(
+        role="user",
+        content=f"""
+        1. List all images in '{image_folder}'
+        2. Analyze each image
+        3. Extract any text found
+        4. Create a summary report with findings
+        """
+    )
+    thread.add_message(message)
+    
+    await agent.go(thread)
+```
+
+## Best Practices
+
+### 1. Tool Selection
+Only give your agent the tools it needs:
+```python
+# ❌ Too many tools
+tools=[*WEB_TOOLS, *IMAGE_TOOLS, *AUDIO_TOOLS, *FILES_TOOLS, *BROWSER_TOOLS]
+
+# ✅ Just what's needed
+tools=[*WEB_TOOLS, *FILES_TOOLS]
+```
+
+### 2. Clear Tool Descriptions
+When creating custom tools, write clear descriptions:
+```python
+# ❌ Vague
+"description": "Does something with data"
+
+# ✅ Clear
+"description": "Fetches user data from the API and returns formatted profile information"
+```
+
+### 3. Error Handling
+Always handle errors in custom tools:
+```python
+async def safe_api_call(url: str) -> str:
+    try:
+        # API call logic
+        return result
+    except Exception as e:
+        return f"Error: {str(e)}"
+```
+
+### 4. Tool Composition
+Combine tools for complex workflows:
+```python
+# Agent that can research, analyze, and report
+agent = Agent(
+    name="analyst",
+    model_name="gpt-4",
+    purpose="To analyze data from multiple sources",
+    tools=[
+        *WEB_TOOLS,      # Gather data
+        *IMAGE_TOOLS,    # Analyze visuals
+        *FILES_TOOLS     # Save results
+    ]
+)
+```
+
+## Debugging Tool Usage
+
+Enable logging to see tool calls:
+```python
+import logging
+logging.basicConfig(level=logging.INFO)
+
+# Now you'll see:
+# INFO: Calling tool: web-search
+# INFO: Tool result: [search results...]
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Custom Tools"
+    icon="wrench"
+    href="/guides/custom-tools"
+  >
+    Deep dive into creating custom tools
+  </Card>
+  <Card
+    title="Tool Patterns"
+    icon="diagram-project"
+    href="/guides/patterns"
+  >
+    Advanced patterns for tool usage
+  </Card>
+  <Card
+    title="Testing with Tools"
+    icon="vial"
+    href="/guides/testing-agents"
+  >
+    Test agents with mock tools
+  </Card>
+  <Card
+    title="MCP Integration"
+    icon="plug"
+    href="/guides/mcp-integration"
+  >
+    Use MCP tools with your agents
+  </Card>
+</CardGroup> 

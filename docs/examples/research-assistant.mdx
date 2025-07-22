@@ -1,0 +1,638 @@
+---
+title: 'Research Assistant'
+description: 'Build a powerful AI research assistant that gathers, analyzes, and reports on any topic'
+---
+
+This example demonstrates how to build a comprehensive research assistant using Tyler, Lye, and Narrator. The assistant can research topics, analyze findings, and create detailed reports.
+
+## Complete Code
+
+```python
+import asyncio
+import os
+from datetime import datetime
+from typing import List, Dict, Any
+from tyler import Agent, Thread, Message, ThreadStore, FileStore
+from lye import WEB_TOOLS, FILES_TOOLS, IMAGE_TOOLS
+import json
+
+class ResearchAssistant:
+    """A comprehensive research assistant that can gather, analyze, and report on topics."""
+    
+    def __init__(self, save_reports: bool = True):
+        self.save_reports = save_reports
+        self.agent = None
+        self.thread_store = None
+        self.file_store = None
+        self.research_history = []
+    
+    async def setup(self):
+        """Initialize the research assistant with storage and tools."""
+        
+        # Set up storage
+        self.thread_store = await ThreadStore.create("sqlite+aiosqlite:///research.db")
+        self.file_store = await FileStore.create(base_path="./research_files")
+        
+        # Create agent with research capabilities
+        self.agent = Agent(
+            name="research-assistant",
+            model_name="gpt-4",
+            purpose="""You are an expert research assistant capable of:
+            - Finding reliable information from multiple sources
+            - Analyzing and synthesizing complex topics
+            - Creating well-structured reports
+            - Fact-checking and verifying information
+            - Identifying key insights and trends
+            """,
+            tools=[*WEB_TOOLS, *FILES_TOOLS, *IMAGE_TOOLS],
+            thread_store=self.thread_store,
+            file_store=self.file_store
+        )
+        
+        print("✅ Research Assistant initialized!")
+    
+    async def research_topic(
+        self, 
+        topic: str, 
+        questions: List[str] = None,
+        depth: str = "comprehensive"  # quick, standard, comprehensive
+    ) -> Dict[str, Any]:
+        """Research a topic with optional specific questions."""
+        
+        print(f"\n🔍 Starting research on: {topic}")
+        print(f"📊 Depth level: {depth}")
+        
+        # Create research thread
+        thread_id = f"research-{topic.lower().replace(' ', '-')}-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+        thread = Thread(id=thread_id)
+        
+        # Build research prompt
+        research_prompt = self._build_research_prompt(topic, questions, depth)
+        thread.add_message(Message(role="user", content=research_prompt))
+        
+        # Execute research
+        print("\n⏳ Researching... This may take a few minutes.")
+        start_time = datetime.now()
+        
+        processed_thread, new_messages = await self.agent.go(thread)
+        
+        # Save thread
+        await self.thread_store.save_thread(processed_thread)
+        
+        # Extract results
+        research_results = {
+            "topic": topic,
+            "thread_id": thread_id,
+            "timestamp": datetime.now().isoformat(),
+            "duration": (datetime.now() - start_time).total_seconds(),
+            "depth": depth,
+            "questions": questions or [],
+            "findings": self._extract_findings(new_messages),
+            "sources": self._extract_sources(new_messages),
+            "report_path": None
+        }
+        
+        # Save report if enabled
+        if self.save_reports:
+            report_path = await self._save_report(research_results)
+            research_results["report_path"] = report_path
+            print(f"\n💾 Report saved to: {report_path}")
+        
+        # Add to history
+        self.research_history.append(research_results)
+        
+        print(f"\n✅ Research completed in {research_results['duration']:.1f} seconds!")
+        
+        return research_results
+    
+    def _build_research_prompt(self, topic: str, questions: List[str], depth: str) -> str:
+        """Build a detailed research prompt based on parameters."""
+        
+        depth_instructions = {
+            "quick": "Provide a brief overview with key points (5-10 minutes of research)",
+            "standard": "Conduct thorough research with multiple sources (15-30 minutes)",
+            "comprehensive": "Deep dive with extensive analysis and cross-referencing (30+ minutes)"
+        }
+        
+        prompt = f"""Please conduct {depth} research on: {topic}
+
+{depth_instructions[depth]}
+
+Requirements:
+1. Search for recent and authoritative information
+2. Use multiple sources to verify facts
+3. Identify key insights and trends
+4. Note any controversies or differing viewpoints
+5. Provide specific examples and data when available
+"""
+        
+        if questions:
+            prompt += "\n\nSpecific questions to address:\n"
+            for i, question in enumerate(questions, 1):
+                prompt += f"{i}. {question}\n"
+        
+        prompt += """
+        
+Format your research as a comprehensive report with:
+- Executive Summary
+- Key Findings
+- Detailed Analysis
+- Sources and References
+- Recommendations (if applicable)
+
+Save the complete report as 'research_report.md' when finished.
+"""
+        
+        return prompt
+    
+    def _extract_findings(self, messages: List[Message]) -> List[str]:
+        """Extract key findings from research messages."""
+        findings = []
+        
+        for msg in messages:
+            if msg.role == "assistant" and any(keyword in msg.content.lower() 
+                for keyword in ["finding", "discovered", "learned", "insight"]):
+                # Extract bullet points or key sentences
+                lines = msg.content.split('\n')
+                for line in lines:
+                    if line.strip().startswith(('-', '•', '*')) or 'finding' in line.lower():
+                        findings.append(line.strip())
+        
+        return findings[:10]  # Top 10 findings
+    
+    def _extract_sources(self, messages: List[Message]) -> List[str]:
+        """Extract sources used in research."""
+        sources = []
+        
+        for msg in messages:
+            if msg.role == "tool" and "web-search" in msg.name:
+                # Extract URLs from search results
+                # This is simplified - actual implementation would parse the results
+                sources.append(f"Web search: {msg.content[:100]}...")
+        
+        return sources
+    
+    async def _save_report(self, research_results: Dict[str, Any]) -> str:
+        """Save research results as a formatted report."""
+        
+        # Generate report filename
+        safe_topic = research_results["topic"].replace(" ", "_").replace("/", "-")
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"research_{safe_topic}_{timestamp}.md"
+        
+        # Format report content
+        report = f"""# Research Report: {research_results['topic']}
+
+**Generated:** {research_results['timestamp']}
+**Research Depth:** {research_results['depth']}
+**Duration:** {research_results['duration']:.1f} seconds
+
+## Executive Summary
+
+This report presents comprehensive research findings on "{research_results['topic']}".
+
+## Key Findings
+
+"""
+        
+        for finding in research_results['findings']:
+            report += f"- {finding}\n"
+        
+        if research_results['questions']:
+            report += "\n## Specific Questions Addressed\n\n"
+            for question in research_results['questions']:
+                report += f"### {question}\n\n[Answer would be extracted from full research]\n\n"
+        
+        report += "\n## Sources\n\n"
+        for source in research_results['sources']:
+            report += f"- {source}\n"
+        
+        # Save report
+        await self.file_store.save_file(filename, report.encode())
+        
+        return filename
+    
+    async def compare_topics(self, topics: List[str]) -> Dict[str, Any]:
+        """Research and compare multiple topics."""
+        
+        print(f"\n📊 Comparing {len(topics)} topics...")
+        
+        # Research each topic
+        results = []
+        for topic in topics:
+            result = await self.research_topic(topic, depth="standard")
+            results.append(result)
+        
+        # Create comparison
+        comparison_thread = Thread()
+        comparison_prompt = f"""Based on the research conducted on these topics:
+{', '.join(topics)}
+
+Please create a comparative analysis that:
+1. Identifies similarities and differences
+2. Highlights unique aspects of each topic
+3. Draws connections between topics
+4. Provides a synthesis of insights
+
+Format as a structured comparison report.
+"""
+        
+        comparison_thread.add_message(Message(role="user", content=comparison_prompt))
+        
+        # Add research summaries as context
+        for result in results:
+            summary = f"Research on {result['topic']}: Key findings include: "
+            summary += "; ".join(result['findings'][:3])
+            comparison_thread.add_message(Message(role="system", content=summary))
+        
+        # Generate comparison
+        processed_thread, messages = await self.agent.go(comparison_thread)
+        
+        comparison_results = {
+            "topics": topics,
+            "individual_results": results,
+            "comparison": messages[-1].content if messages else "No comparison generated",
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        return comparison_results
+    
+    async def fact_check(self, claim: str) -> Dict[str, Any]:
+        """Fact-check a specific claim."""
+        
+        print(f"\n✓ Fact-checking: {claim}")
+        
+        thread = Thread()
+        fact_check_prompt = f"""Please fact-check this claim: "{claim}"
+
+1. Search for reliable sources
+2. Find supporting or contradicting evidence
+3. Check multiple perspectives
+4. Rate the claim's accuracy (True/False/Partially True/Misleading/Unverifiable)
+5. Provide evidence and sources
+
+Be thorough and objective in your analysis.
+"""
+        
+        thread.add_message(Message(role="user", content=fact_check_prompt))
+        
+        processed_thread, messages = await self.agent.go(thread)
+        
+        # Parse results
+        result = {
+            "claim": claim,
+            "verdict": "Unverifiable",  # Default
+            "evidence": [],
+            "sources": [],
+            "analysis": messages[-1].content if messages else "No analysis available",
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        # Extract verdict from response
+        response = messages[-1].content.lower() if messages else ""
+        for verdict in ["true", "false", "partially true", "misleading", "unverifiable"]:
+            if verdict in response:
+                result["verdict"] = verdict.title()
+                break
+        
+        return result
+    
+    async def generate_bibliography(self, topic: str, num_sources: int = 10) -> List[str]:
+        """Generate a bibliography of sources on a topic."""
+        
+        thread = Thread()
+        thread.add_message(Message(
+            role="user",
+            content=f"Find and list {num_sources} authoritative sources about '{topic}'. "
+                   f"Include academic papers, books, reputable websites, and recent articles. "
+                   f"Format each as a proper citation."
+        ))
+        
+        processed_thread, messages = await self.agent.go(thread)
+        
+        # Extract citations
+        bibliography = []
+        if messages:
+            lines = messages[-1].content.split('\n')
+            for line in lines:
+                if line.strip() and (line[0].isdigit() or line.startswith('-')):
+                    bibliography.append(line.strip())
+        
+        return bibliography[:num_sources]
+    
+    def get_research_history(self) -> List[Dict[str, Any]]:
+        """Get history of all research conducted."""
+        return self.research_history
+    
+    async def export_all_research(self, format: str = "json") -> str:
+        """Export all research history to a file."""
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        if format == "json":
+            filename = f"research_history_{timestamp}.json"
+            content = json.dumps(self.research_history, indent=2)
+        else:  # markdown
+            filename = f"research_history_{timestamp}.md"
+            content = "# Research History\n\n"
+            
+            for research in self.research_history:
+                content += f"## {research['topic']}\n"
+                content += f"- **Date:** {research['timestamp']}\n"
+                content += f"- **Depth:** {research['depth']}\n"
+                content += f"- **Duration:** {research['duration']:.1f}s\n"
+                content += f"- **Key Findings:**\n"
+                
+                for finding in research['findings'][:5]:
+                    content += f"  - {finding}\n"
+                
+                content += "\n---\n\n"
+        
+        await self.file_store.save_file(filename, content.encode())
+        
+        return filename
+
+
+# Example usage
+async def main():
+    # Initialize research assistant
+    assistant = ResearchAssistant(save_reports=True)
+    await assistant.setup()
+    
+    # Example 1: Basic research
+    print("\n=== Example 1: Basic Research ===")
+    results = await assistant.research_topic(
+        "Artificial Intelligence in Healthcare",
+        depth="standard"
+    )
+    
+    print("\nKey Findings:")
+    for finding in results['findings'][:5]:
+        print(f"- {finding}")
+    
+    # Example 2: Research with specific questions
+    print("\n=== Example 2: Targeted Research ===")
+    questions = [
+        "What are the latest breakthroughs in quantum computing?",
+        "Which companies are leading in quantum research?",
+        "What are the main challenges facing quantum computing?"
+    ]
+    
+    quantum_research = await assistant.research_topic(
+        "Quantum Computing 2024",
+        questions=questions,
+        depth="comprehensive"
+    )
+    
+    # Example 3: Comparative research
+    print("\n=== Example 3: Comparative Analysis ===")
+    comparison = await assistant.compare_topics([
+        "Solar Energy",
+        "Wind Energy",
+        "Nuclear Energy"
+    ])
+    
+    print("\nComparison Summary:")
+    print(comparison['comparison'][:500] + "...")
+    
+    # Example 4: Fact checking
+    print("\n=== Example 4: Fact Checking ===")
+    fact_check_result = await assistant.fact_check(
+        "ChatGPT has over 100 million users"
+    )
+    
+    print(f"Claim: {fact_check_result['claim']}")
+    print(f"Verdict: {fact_check_result['verdict']}")
+    
+    # Example 5: Generate bibliography
+    print("\n=== Example 5: Bibliography Generation ===")
+    bibliography = await assistant.generate_bibliography(
+        "Climate Change Mitigation",
+        num_sources=5
+    )
+    
+    print("\nBibliography:")
+    for i, source in enumerate(bibliography, 1):
+        print(f"{i}. {source}")
+    
+    # Export all research
+    export_file = await assistant.export_all_research(format="markdown")
+    print(f"\n📁 All research exported to: {export_file}")
+    
+    # Show research history summary
+    history = assistant.get_research_history()
+    print(f"\n📚 Total research sessions: {len(history)}")
+    print("Topics researched:")
+    for item in history:
+        print(f"  - {item['topic']} ({item['depth']})")
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+## Key Features
+
+### 1. Multi-Depth Research
+The assistant supports three research depth levels:
+- **Quick**: 5-10 minute overview
+- **Standard**: 15-30 minute thorough research  
+- **Comprehensive**: 30+ minute deep dive
+
+### 2. Targeted Questions
+Research specific aspects of a topic by providing questions:
+```python
+questions = [
+    "What are the environmental impacts?",
+    "What are the economic considerations?",
+    "What does the future outlook suggest?"
+]
+
+results = await assistant.research_topic(
+    "Electric Vehicles",
+    questions=questions,
+    depth="comprehensive"
+)
+```
+
+### 3. Comparative Analysis
+Compare multiple topics side-by-side:
+```python
+comparison = await assistant.compare_topics([
+    "Machine Learning",
+    "Deep Learning", 
+    "Reinforcement Learning"
+])
+```
+
+### 4. Fact Checking
+Verify claims with evidence:
+```python
+result = await assistant.fact_check(
+    "Python is the most popular programming language"
+)
+print(f"Verdict: {result['verdict']}")
+```
+
+### 5. Bibliography Generation
+Create academic-style bibliographies:
+```python
+sources = await assistant.generate_bibliography(
+    "Renewable Energy",
+    num_sources=20
+)
+```
+
+## Customization Options
+
+### Custom Research Templates
+```python
+class CustomResearchAssistant(ResearchAssistant):
+    def _build_research_prompt(self, topic, questions, depth):
+        # Add industry-specific requirements
+        prompt = super()._build_research_prompt(topic, questions, depth)
+        prompt += """
+        
+Additional Requirements:
+- Focus on peer-reviewed sources
+- Include statistical data
+- Highlight regulatory considerations
+- Address ethical implications
+"""
+        return prompt
+```
+
+### Add Specialized Tools
+```python
+# Add custom tools for specialized research
+custom_tool = {
+    "definition": {
+        "name": "academic_search",
+        "description": "Search academic databases",
+        "parameters": {...}
+    },
+    "implementation": search_academic_databases
+}
+
+self.agent = Agent(
+    name="academic-researcher",
+    model_name="gpt-4",
+    purpose="Academic research specialist",
+    tools=[*WEB_TOOLS, custom_tool]
+)
+```
+
+### Export Formats
+```python
+async def export_to_pdf(self, research_results):
+    """Export research as PDF"""
+    # Implementation using reportlab or similar
+    pass
+
+async def export_to_notion(self, research_results):
+    """Export directly to Notion"""
+    # Implementation using Notion API
+    pass
+```
+
+## Advanced Usage
+
+### Scheduled Research
+```python
+import schedule
+
+def scheduled_research():
+    asyncio.run(assistant.research_topic(
+        "AI News and Developments",
+        depth="quick"
+    ))
+
+# Daily research at 9 AM
+schedule.every().day.at("09:00").do(scheduled_research)
+```
+
+### Research Pipeline
+```python
+async def research_pipeline(topics: List[str]):
+    """Research multiple topics in sequence"""
+    all_results = []
+    
+    for topic in topics:
+        # Research
+        results = await assistant.research_topic(topic)
+        all_results.append(results)
+        
+        # Extract subtopics for deeper research
+        subtopics = extract_subtopics(results)
+        for subtopic in subtopics[:3]:
+            sub_results = await assistant.research_topic(
+                subtopic,
+                depth="quick"
+            )
+            all_results.append(sub_results)
+    
+    return all_results
+```
+
+### Integration with Other Systems
+```python
+# Slack integration
+async def handle_slack_research(command: str):
+    topic = command.replace("/research", "").strip()
+    results = await assistant.research_topic(topic, depth="quick")
+    
+    # Format for Slack
+    slack_message = {
+        "text": f"Research on: {topic}",
+        "attachments": [{
+            "color": "good",
+            "fields": [
+                {"title": "Finding", "value": finding}
+                for finding in results['findings'][:3]
+            ]
+        }]
+    }
+    
+    return slack_message
+```
+
+## Performance Tips
+
+1. **Use appropriate depth levels** - Don't use "comprehensive" for simple queries
+2. **Cache frequent searches** - Store common research results
+3. **Batch related topics** - Research similar topics together
+4. **Set timeouts** - Prevent indefinite research sessions
+5. **Monitor API usage** - Track tool calls to optimize costs
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Automation Example"
+    icon="robot"
+    href="/examples/automation"
+  >
+    Build automation workflows
+  </Card>
+  <Card
+    title="Multimodal Agent"
+    icon="images"
+    href="/examples/multimodal-agent"
+  >
+    Work with images and audio
+  </Card>
+  <Card
+    title="Advanced Patterns"
+    icon="diagram-project"
+    href="/guides/patterns"
+  >
+    Learn advanced patterns
+  </Card>
+  <Card
+    title="Testing"
+    icon="vial"
+    href="/guides/testing-agents"
+  >
+    Test your research agent
+  </Card>
+</CardGroup> 

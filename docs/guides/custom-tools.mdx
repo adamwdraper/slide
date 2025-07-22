@@ -1,0 +1,788 @@
+---
+title: 'Custom Tools'
+description: 'Create powerful custom tools for your agents'
+---
+
+Learn how to create custom tools that extend your agents' capabilities beyond the built-in Lye tools. Custom tools let you integrate with APIs, databases, hardware, and any other systems your agent needs to interact with.
+
+## Tool Structure
+
+Tools in Slide follow the OpenAI function calling format with two parts:
+
+1. **Definition**: Describes what the tool does (for the LLM)
+2. **Implementation**: The actual code that runs
+
+```python
+# Basic tool structure
+my_tool = {
+    "definition": {
+        "name": "tool_name",
+        "description": "What this tool does",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "param1": {
+                    "type": "string",
+                    "description": "Description of param1"
+                }
+            },
+            "required": ["param1"]
+        }
+    },
+    "implementation": my_function
+}
+```
+
+## Creating Your First Tool
+
+Let's create a simple weather tool:
+
+```python
+import aiohttp
+import json
+
+async def get_weather(location: str, unit: str = "celsius") -> str:
+    """Get current weather for a location."""
+    # In real implementation, use actual weather API
+    # This is a mock response
+    weather_data = {
+        "location": location,
+        "temperature": 22 if unit == "celsius" else 72,
+        "condition": "sunny",
+        "humidity": 65,
+        "wind": "10 km/h"
+    }
+    
+    return json.dumps(weather_data, indent=2)
+
+# Tool definition
+weather_tool = {
+    "definition": {
+        "name": "get_weather",
+        "description": "Get current weather conditions for any location",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "location": {
+                    "type": "string",
+                    "description": "City and country (e.g., 'London, UK')"
+                },
+                "unit": {
+                    "type": "string",
+                    "enum": ["celsius", "fahrenheit"],
+                    "description": "Temperature unit preference"
+                }
+            },
+            "required": ["location"]
+        }
+    },
+    "implementation": get_weather
+}
+
+# Use with agent
+from tyler import Agent
+
+agent = Agent(
+    name="weather-bot",
+    model_name="gpt-4",
+    purpose="To provide weather information",
+    tools=[weather_tool]
+)
+```
+
+## Advanced Tool Patterns
+
+### API Integration Tool
+
+```python
+import aiohttp
+from typing import Dict, Any
+import os
+
+async def call_api(
+    endpoint: str, 
+    method: str = "GET", 
+    headers: Dict[str, str] = None,
+    data: Dict[str, Any] = None
+) -> str:
+    """Make HTTP API calls with proper error handling."""
+    
+    # Default headers
+    default_headers = {
+        "User-Agent": "SlideAgent/1.0",
+        "Accept": "application/json"
+    }
+    
+    if headers:
+        default_headers.update(headers)
+    
+    timeout = aiohttp.ClientTimeout(total=30)
+    
+    async with aiohttp.ClientSession(timeout=timeout) as session:
+        try:
+            if method.upper() == "GET":
+                async with session.get(endpoint, headers=default_headers) as response:
+                    response.raise_for_status()
+                    result = await response.json()
+            elif method.upper() == "POST":
+                async with session.post(endpoint, json=data, headers=default_headers) as response:
+                    response.raise_for_status()
+                    result = await response.json()
+            else:
+                return f"Unsupported method: {method}"
+            
+            return json.dumps(result, indent=2)
+            
+        except aiohttp.ClientError as e:
+            return f"API call failed: {str(e)}"
+        except Exception as e:
+            return f"Unexpected error: {str(e)}"
+
+api_tool = {
+    "definition": {
+        "name": "call_api",
+        "description": "Make HTTP API calls to external services",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "endpoint": {
+                    "type": "string",
+                    "description": "The full URL of the API endpoint"
+                },
+                "method": {
+                    "type": "string",
+                    "enum": ["GET", "POST"],
+                    "description": "HTTP method to use"
+                },
+                "headers": {
+                    "type": "object",
+                    "description": "Optional HTTP headers as key-value pairs"
+                },
+                "data": {
+                    "type": "object",
+                    "description": "Data to send with POST requests"
+                }
+            },
+            "required": ["endpoint"]
+        }
+    },
+    "implementation": call_api
+}
+```
+
+### Database Query Tool
+
+```python
+import asyncpg
+from typing import List, Dict, Any
+
+class DatabaseTool:
+    def __init__(self, connection_string: str):
+        self.connection_string = connection_string
+        self.pool = None
+    
+    async def init(self):
+        self.pool = await asyncpg.create_pool(self.connection_string)
+    
+    async def query_database(
+        self, 
+        query: str, 
+        params: List[Any] = None
+    ) -> str:
+        """Execute a database query safely."""
+        
+        # Basic SQL injection prevention
+        forbidden_keywords = ["DROP", "DELETE", "UPDATE", "INSERT", "ALTER"]
+        query_upper = query.upper()
+        
+        for keyword in forbidden_keywords:
+            if keyword in query_upper:
+                return f"Error: {keyword} operations are not allowed"
+        
+        try:
+            async with self.pool.acquire() as conn:
+                if params:
+                    rows = await conn.fetch(query, *params)
+                else:
+                    rows = await conn.fetch(query)
+                
+                # Convert to list of dicts
+                result = [dict(row) for row in rows]
+                
+                return json.dumps(result, indent=2, default=str)
+                
+        except Exception as e:
+            return f"Database error: {str(e)}"
+    
+    def get_tool(self):
+        return {
+            "definition": {
+                "name": "query_database",
+                "description": "Query the database for information (read-only)",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "SQL SELECT query to execute"
+                        },
+                        "params": {
+                            "type": "array",
+                            "description": "Query parameters for safe substitution",
+                            "items": {"type": "string"}
+                        }
+                    },
+                    "required": ["query"]
+                }
+            },
+            "implementation": self.query_database
+        }
+
+# Usage
+db_tool = DatabaseTool("postgresql://user:pass@localhost/mydb")
+await db_tool.init()
+
+agent = Agent(
+    name="data-analyst",
+    model_name="gpt-4",
+    purpose="To analyze database information",
+    tools=[db_tool.get_tool()]
+)
+```
+
+### System Command Tool
+
+```python
+import asyncio
+import subprocess
+from typing import Optional
+
+async def run_command(
+    command: str, 
+    timeout: int = 30,
+    allowed_commands: List[str] = None
+) -> str:
+    """Execute system commands safely."""
+    
+    # Default safe commands
+    if allowed_commands is None:
+        allowed_commands = ["ls", "pwd", "echo", "date", "whoami"]
+    
+    # Extract base command
+    base_command = command.split()[0]
+    
+    # Security check
+    if base_command not in allowed_commands:
+        return f"Error: Command '{base_command}' is not allowed"
+    
+    try:
+        # Run command with timeout
+        process = await asyncio.create_subprocess_shell(
+            command,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        
+        stdout, stderr = await asyncio.wait_for(
+            process.communicate(), 
+            timeout=timeout
+        )
+        
+        if process.returncode != 0:
+            return f"Command failed: {stderr.decode()}"
+        
+        return stdout.decode()
+        
+    except asyncio.TimeoutError:
+        process.kill()
+        return f"Command timed out after {timeout} seconds"
+    except Exception as e:
+        return f"Error executing command: {str(e)}"
+
+command_tool = {
+    "definition": {
+        "name": "run_command",
+        "description": "Execute safe system commands",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "command": {
+                    "type": "string",
+                    "description": "The command to execute"
+                },
+                "timeout": {
+                    "type": "integer",
+                    "description": "Maximum execution time in seconds"
+                }
+            },
+            "required": ["command"]
+        }
+    },
+    "implementation": run_command
+}
+```
+
+## Tool Composition
+
+Create tools that use other tools:
+
+```python
+from lye import WEB_TOOLS
+from lye.web import search, fetch
+
+async def research_topic(topic: str, depth: int = 3) -> str:
+    """Deep research on a topic using multiple sources."""
+    
+    results = {
+        "topic": topic,
+        "sources": [],
+        "summary": ""
+    }
+    
+    # First, search for the topic
+    search_results = await search(f"{topic} latest research 2024")
+    
+    # Parse search results (simplified)
+    urls = extract_urls_from_results(search_results)[:depth]
+    
+    # Fetch content from each URL
+    for url in urls:
+        try:
+            content = await fetch(url)
+            results["sources"].append({
+                "url": url,
+                "content_preview": content[:500]
+            })
+        except:
+            continue
+    
+    return json.dumps(results, indent=2)
+
+research_tool = {
+    "definition": {
+        "name": "deep_research",
+        "description": "Conduct deep research on a topic using multiple sources",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "topic": {
+                    "type": "string",
+                    "description": "The topic to research"
+                },
+                "depth": {
+                    "type": "integer",
+                    "description": "Number of sources to analyze (1-10)",
+                    "minimum": 1,
+                    "maximum": 10
+                }
+            },
+            "required": ["topic"]
+        }
+    },
+    "implementation": research_topic
+}
+```
+
+## Tool Validation
+
+Add validation to ensure tools work correctly:
+
+```python
+from typing import Callable, Any
+import inspect
+
+class ValidatedTool:
+    def __init__(self, definition: dict, implementation: Callable):
+        self.definition = definition
+        self.implementation = implementation
+        self.validate()
+    
+    def validate(self):
+        """Validate tool definition matches implementation."""
+        
+        # Check function signature
+        sig = inspect.signature(self.implementation)
+        params = self.definition["parameters"]["properties"]
+        required = self.definition["parameters"].get("required", [])
+        
+        # Verify all required params exist in function
+        for param in required:
+            if param not in sig.parameters:
+                raise ValueError(f"Required parameter '{param}' not in function signature")
+        
+        # Check if function is async
+        if not inspect.iscoroutinefunction(self.implementation):
+            raise ValueError("Tool implementation must be async")
+    
+    async def execute(self, **kwargs) -> str:
+        """Execute tool with validation."""
+        try:
+            # Validate input types
+            for param, value in kwargs.items():
+                if param in self.definition["parameters"]["properties"]:
+                    expected_type = self.definition["parameters"]["properties"][param]["type"]
+                    if not self.validate_type(value, expected_type):
+                        return f"Invalid type for {param}: expected {expected_type}"
+            
+            # Execute
+            result = await self.implementation(**kwargs)
+            
+            # Ensure string return
+            if not isinstance(result, str):
+                result = json.dumps(result)
+            
+            return result
+            
+        except Exception as e:
+            return f"Tool execution error: {str(e)}"
+    
+    def validate_type(self, value: Any, expected: str) -> bool:
+        """Validate parameter types."""
+        type_map = {
+            "string": str,
+            "integer": int,
+            "number": (int, float),
+            "boolean": bool,
+            "array": list,
+            "object": dict
+        }
+        
+        expected_type = type_map.get(expected)
+        if expected_type:
+            return isinstance(value, expected_type)
+        return True
+    
+    def to_dict(self):
+        """Convert to tool dict format."""
+        return {
+            "definition": self.definition,
+            "implementation": self.execute
+        }
+
+# Usage
+validated_tool = ValidatedTool(
+    definition={
+        "name": "calculate",
+        "description": "Perform calculations",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "expression": {"type": "string"},
+                "precision": {"type": "integer"}
+            },
+            "required": ["expression"]
+        }
+    },
+    implementation=calculate_expression
+)
+
+agent = Agent(
+    name="calculator",
+    model_name="gpt-4",
+    purpose="To perform calculations",
+    tools=[validated_tool.to_dict()]
+)
+```
+
+## Testing Custom Tools
+
+Always test your tools thoroughly:
+
+```python
+import pytest
+from tyler.eval import mock_tools
+
+@pytest.mark.asyncio
+async def test_weather_tool():
+    # Test the tool directly
+    result = await get_weather("London, UK", "celsius")
+    data = json.loads(result)
+    
+    assert "location" in data
+    assert data["location"] == "London, UK"
+    assert "temperature" in data
+    assert isinstance(data["temperature"], (int, float))
+
+@pytest.mark.asyncio
+async def test_tool_with_agent():
+    # Create agent with tool
+    agent = Agent(
+        name="test-agent",
+        model_name="gpt-3.5-turbo",
+        purpose="To test tools",
+        tools=[weather_tool]
+    )
+    
+    # Test with mock
+    thread = Thread()
+    thread.add_message(Message(
+        role="user",
+        content="What's the weather in Paris?"
+    ))
+    
+    # Run with mocked tools
+    with mock_tools({"get_weather": {"Paris": "Sunny, 20°C"}}):
+        processed_thread, messages = await agent.go(thread)
+    
+    # Verify tool was called
+    tool_calls = [m for m in messages if m.role == "tool"]
+    assert len(tool_calls) > 0
+    assert "Paris" in tool_calls[0].content
+```
+
+## Best Practices
+
+### 1. Clear Descriptions
+```python
+# ❌ Bad
+"description": "Gets data"
+
+# ✅ Good
+"description": "Retrieves user profile data from the company database including name, email, and preferences"
+```
+
+### 2. Error Handling
+```python
+async def safe_tool(param: str) -> str:
+    try:
+        # Tool logic
+        result = await risky_operation(param)
+        return json.dumps({"success": True, "data": result})
+    except SpecificError as e:
+        return json.dumps({"success": False, "error": str(e)})
+    except Exception as e:
+        return json.dumps({"success": False, "error": "Unexpected error occurred"})
+```
+
+### 3. Parameter Validation
+```python
+"parameters": {
+    "type": "object",
+    "properties": {
+        "email": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
+            "description": "Valid email address"
+        },
+        "age": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 150,
+            "description": "Age in years"
+        }
+    }
+}
+```
+
+### 4. Async by Default
+```python
+# Always use async functions for tools
+async def my_tool(param: str) -> str:
+    # Even for sync operations, maintain async interface
+    result = sync_operation(param)
+    return result
+```
+
+## Real-World Example: CRM Integration
+
+```python
+class CRMTools:
+    def __init__(self, api_key: str, base_url: str):
+        self.api_key = api_key
+        self.base_url = base_url
+        self.session = None
+    
+    async def __aenter__(self):
+        self.session = aiohttp.ClientSession(
+            headers={"Authorization": f"Bearer {self.api_key}"}
+        )
+        return self
+    
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        if self.session:
+            await self.session.close()
+    
+    async def search_customers(
+        self, 
+        query: str, 
+        limit: int = 10,
+        fields: List[str] = None
+    ) -> str:
+        """Search for customers in the CRM."""
+        
+        params = {
+            "q": query,
+            "limit": limit,
+            "fields": ",".join(fields) if fields else "id,name,email,phone"
+        }
+        
+        async with self.session.get(
+            f"{self.base_url}/api/customers/search",
+            params=params
+        ) as response:
+            if response.status == 200:
+                data = await response.json()
+                return json.dumps(data, indent=2)
+            else:
+                return f"Error: {response.status} - {await response.text()}"
+    
+    async def get_customer_details(self, customer_id: str) -> str:
+        """Get detailed information about a customer."""
+        
+        async with self.session.get(
+            f"{self.base_url}/api/customers/{customer_id}"
+        ) as response:
+            if response.status == 200:
+                data = await response.json()
+                return json.dumps(data, indent=2)
+            else:
+                return f"Error: Customer {customer_id} not found"
+    
+    async def add_note(
+        self, 
+        customer_id: str, 
+        note: str,
+        category: str = "general"
+    ) -> str:
+        """Add a note to a customer record."""
+        
+        data = {
+            "customer_id": customer_id,
+            "note": note,
+            "category": category,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        async with self.session.post(
+            f"{self.base_url}/api/customers/{customer_id}/notes",
+            json=data
+        ) as response:
+            if response.status == 201:
+                return "Note added successfully"
+            else:
+                return f"Error adding note: {await response.text()}"
+    
+    def get_tools(self):
+        """Get all CRM tools for the agent."""
+        return [
+            {
+                "definition": {
+                    "name": "search_customers",
+                    "description": "Search for customers in the CRM by name, email, or phone",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": "Search query"
+                            },
+                            "limit": {
+                                "type": "integer",
+                                "description": "Maximum results to return"
+                            },
+                            "fields": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "Fields to include in results"
+                            }
+                        },
+                        "required": ["query"]
+                    }
+                },
+                "implementation": self.search_customers
+            },
+            {
+                "definition": {
+                    "name": "get_customer_details",
+                    "description": "Get detailed information about a specific customer",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "customer_id": {
+                                "type": "string",
+                                "description": "The customer's ID"
+                            }
+                        },
+                        "required": ["customer_id"]
+                    }
+                },
+                "implementation": self.get_customer_details
+            },
+            {
+                "definition": {
+                    "name": "add_customer_note",
+                    "description": "Add a note to a customer's record",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "customer_id": {
+                                "type": "string",
+                                "description": "The customer's ID"
+                            },
+                            "note": {
+                                "type": "string",
+                                "description": "The note content"
+                            },
+                            "category": {
+                                "type": "string",
+                                "enum": ["general", "support", "sales", "feedback"],
+                                "description": "Note category"
+                            }
+                        },
+                        "required": ["customer_id", "note"]
+                    }
+                },
+                "implementation": self.add_note
+            }
+        ]
+
+# Usage
+async def main():
+    async with CRMTools(
+        api_key=os.getenv("CRM_API_KEY"),
+        base_url="https://crm.example.com"
+    ) as crm:
+        agent = Agent(
+            name="customer-service",
+            model_name="gpt-4",
+            purpose="To help with customer service inquiries",
+            tools=crm.get_tools()
+        )
+        
+        # Agent can now search customers, get details, and add notes
+
+asyncio.run(main())
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Tool Patterns"
+    icon="diagram-project"
+    href="/guides/patterns"
+  >
+    Advanced tool patterns
+  </Card>
+  <Card
+    title="Testing Tools"
+    icon="vial"
+    href="/guides/testing-agents"
+  >
+    Test custom tools
+  </Card>
+  <Card
+    title="MCP Integration"
+    icon="plug"
+    href="/guides/mcp-integration"
+  >
+    Use MCP for tools
+  </Card>
+  <Card
+    title="Tool Examples"
+    icon="code"
+    href="/examples/custom-tools"
+  >
+    More tool examples
+  </Card>
+</CardGroup> 

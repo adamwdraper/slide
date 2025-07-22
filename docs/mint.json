@@ -23,28 +23,13 @@
   ],
   "topbarCtaButton": {
     "name": "Get Started",
-    "url": "https://github.com/yourusername/slide"
+    "url": "/quickstart"
   },
-  "tabs": [
-    {
-      "name": "API Reference",
-      "url": "api-reference"
-    },
-    {
-      "name": "Packages",
-      "url": "packages"
-    }
-  ],
   "anchors": [
     {
       "name": "GitHub",
       "icon": "github",
-      "url": "https://github.com/yourusername/slide"
-    },
-    {
-      "name": "Community",
-      "icon": "slack",
-      "url": "https://slide-community.slack.com"
+      "url": "https://github.com/adamwdraper/slide"
     }
   ],
   "navigation": [
@@ -52,71 +37,78 @@
       "group": "Getting Started",
       "pages": [
         "introduction",
-        "quickstart"
+        "quickstart",
+        "installation"
       ]
     },
     {
-      "group": "Core Concepts",
+      "group": "Building Agents",
       "pages": [
-        "concepts/agents",
-        "concepts/tools",
-        "concepts/mcp"
+        "guides/your-first-agent",
+        "guides/adding-tools",
+        "guides/conversation-memory",
+        "guides/streaming-responses",
+        "guides/testing-agents"
       ]
     },
     {
-      "group": "Packages",
+      "group": "Building Slack Bots",
       "pages": [
-        "packages/overview",
-        {
-          "group": "Tyler",
-          "pages": [
-            "packages/tyler/introduction",
-            "packages/tyler/evaluations",
-            "packages/tyler/agents",
-            "packages/tyler/mcp-adapters",
-            "packages/tyler/examples"
-          ]
-        },
-        {
-          "group": "Lye",
-          "pages": [
-            "packages/lye/introduction",
-            "packages/lye/audio",
-            "packages/lye/browser",
-            "packages/lye/files",
-            "packages/lye/image",
-            "packages/lye/web"
-          ]
-        },
-        {
-          "group": "Narrator",
-          "pages": [
-            "packages/narrator/introduction",
-            "packages/narrator/threads",
-            "packages/narrator/storage",
-            "packages/narrator/database"
-          ]
-        },
-        {
-          "group": "Space Monkey",
-          "pages": [
-            "packages/space-monkey/introduction",
-            "packages/space-monkey/slack-setup",
-            "packages/space-monkey/message-handling"
-          ]
-        }
+        "guides/slack-bot",
+        "guides/slack-events",
+        "guides/slack-deployment"
+      ]
+    },
+    {
+      "group": "Guides & Recipes",
+      "pages": [
+        "guides/using-narrator",
+        "guides/using-lye",
+        "guides/mcp-integration",
+        "guides/patterns"
+      ]
+    },
+    {
+      "group": "Concepts",
+      "pages": [
+        "concepts/how-agents-work",
+        "concepts/architecture",
+        "packages/overview"
       ]
     },
     {
       "group": "API Reference",
       "pages": [
-        "api-reference/introduction"
+        {
+          "group": "Tyler",
+          "pages": [
+            "packages/tyler/introduction",
+            "packages/tyler/evaluations"
+          ]
+        },
+        {
+          "group": "Lye",
+          "pages": [
+            "packages/lye/introduction"
+          ]
+        },
+        {
+          "group": "Narrator",
+          "pages": [
+            "packages/narrator/introduction"
+          ]
+        },
+        {
+          "group": "Space Monkey",
+          "pages": [
+            "packages/space-monkey/introduction"
+          ]
+        }
       ]
     }
   ],
   "footerSocials": {
-    "github": "https://github.com/yourusername/slide",
-    "slack": "https://slide-community.slack.com"
+    "github": "https://github.com/yourusername/slide"
   },
   "api": {
     "playground": {

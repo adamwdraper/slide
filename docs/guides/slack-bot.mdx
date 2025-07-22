@@ -1,0 +1,671 @@
+---
+title: 'Building Slack Bots'
+description: 'Deploy your AI agents as Slack bots'
+---
+
+Space Monkey makes it easy to deploy your Slide agents as Slack bots. In this guide, you'll learn how to create a Slack bot that can respond to messages, handle events, and interact with your workspace.
+
+## Prerequisites
+
+Before starting, you'll need:
+1. A Slack workspace where you can install apps
+2. Slack app credentials (we'll create these)
+3. A way to expose your bot to the internet (ngrok for development)
+
+## Quick Start
+
+### Step 1: Install Space Monkey
+
+```bash
+uv add slide-tyler slide-lye slide-narrator slide-space-monkey
+```
+
+### Step 2: Create Your Bot
+
+```python
+import asyncio
+from space_monkey import SlackApp
+from tyler import Agent, Thread, Message
+from lye import WEB_TOOLS
+
+# Create your agent
+agent = Agent(
+    name="slack-assistant",
+    model_name="gpt-4",
+    purpose="To help Slack users with their questions",
+    tools=WEB_TOOLS
+)
+
+# Create Slack app
+app = SlackApp(
+    agent=agent,
+    slack_token="xoxb-your-bot-token",
+    signing_secret="your-signing-secret"
+)
+
+# Handle mentions
+@app.event("app_mention")
+async def handle_mention(event, say):
+    # Create thread for context
+    thread = Thread()
+    message = Message(role="user", content=event["text"])
+    thread.add_message(message)
+    
+    # Get response from agent
+    processed_thread, new_messages = await agent.go(thread)
+    
+    # Send response
+    response = new_messages[-1].content if new_messages else "I'm not sure how to help with that."
+    await say(response)
+
+# Start the app
+if __name__ == "__main__":
+    app.start(port=3000)
+```
+
+## Setting Up Slack App
+
+### 1. Create a Slack App
+
+1. Go to [api.slack.com/apps](https://api.slack.com/apps)
+2. Click "Create New App" → "From scratch"
+3. Name your app and select your workspace
+
+### 2. Configure Bot User
+
+1. Go to "OAuth & Permissions"
+2. Add these Bot Token Scopes:
+   - `app_mentions:read` - Read mentions
+   - `chat:write` - Send messages
+   - `channels:history` - Read channel messages
+   - `groups:history` - Read private channel messages
+   - `im:history` - Read direct messages
+   - `mpim:history` - Read group DMs
+   - `files:read` - Read files (if using file tools)
+   - `files:write` - Upload files (if creating files)
+
+### 3. Install to Workspace
+
+1. Click "Install to Workspace"
+2. Authorize the app
+3. Copy the Bot User OAuth Token (starts with `xoxb-`)
+
+### 4. Enable Events
+
+1. Go to "Event Subscriptions"
+2. Turn on "Enable Events"
+3. For the request URL, use your bot's URL + `/slack/events`
+   - Development: `https://your-ngrok-url.ngrok.io/slack/events`
+   - Production: `https://your-domain.com/slack/events`
+4. Subscribe to bot events:
+   - `app_mention`
+   - `message.channels`
+   - `message.groups`
+   - `message.im`
+   - `message.mpim`
+
+### 5. Get Signing Secret
+
+1. Go to "Basic Information"
+2. Copy the Signing Secret
+
+## Advanced Bot Features
+
+### Conversation Memory
+
+Give your bot memory across conversations:
+
+```python
+from tyler import ThreadStore, FileStore
+
+async def create_bot_with_memory():
+    # Set up persistent storage
+    thread_store = await ThreadStore.create("postgresql://localhost/slackbot")
+    file_store = await FileStore.create("./slack_files")
+    
+    # Create agent with memory
+    agent = Agent(
+        name="memory-bot",
+        model_name="gpt-4",
+        purpose="To be a helpful Slack assistant with memory",
+        thread_store=thread_store,
+        file_store=file_store,
+        tools=WEB_TOOLS
+    )
+    
+    return SlackApp(
+        agent=agent,
+        slack_token=os.getenv("SLACK_BOT_TOKEN"),
+        signing_secret=os.getenv("SLACK_SIGNING_SECRET")
+    )
+
+app = await create_bot_with_memory()
+
+@app.event("app_mention")
+async def handle_mention_with_memory(event, say):
+    # Use channel ID as thread ID for conversation continuity
+    thread_id = f"slack-{event['channel']}"
+    
+    try:
+        thread = await app.agent.thread_store.get_thread(thread_id)
+    except:
+        thread = Thread(id=thread_id)
+    
+    # Add user message
+    user_text = event["text"].replace(f"<@{event['user']}>", "").strip()
+    message = Message(
+        role="user",
+        content=user_text,
+        metadata={"slack_user": event["user"]}
+    )
+    thread.add_message(message)
+    
+    # Process and save
+    processed_thread, new_messages = await app.agent.go(thread)
+    await app.agent.thread_store.save_thread(processed_thread)
+    
+    # Respond
+    await say(new_messages[-1].content)
+```
+
+### Handling Direct Messages
+
+```python
+@app.event("message")
+async def handle_dm(event, say):
+    # Only respond to DMs, not channel messages
+    if event.get("channel_type") == "im":
+        thread = Thread()
+        message = Message(role="user", content=event["text"])
+        thread.add_message(message)
+        
+        processed_thread, new_messages = await app.agent.go(thread)
+        
+        await say(new_messages[-1].content)
+```
+
+### Thread Support
+
+Respond in Slack threads:
+
+```python
+@app.event("app_mention")
+async def handle_mention_in_thread(event, say):
+    thread = Thread()
+    message = Message(role="user", content=event["text"])
+    thread.add_message(message)
+    
+    processed_thread, new_messages = await app.agent.go(thread)
+    
+    # Respond in thread if the mention was in a thread
+    await say(
+        text=new_messages[-1].content,
+        thread_ts=event.get("thread_ts", event["ts"])
+    )
+```
+
+### File Handling
+
+Process files shared in Slack:
+
+```python
+from lye import IMAGE_TOOLS, FILES_TOOLS
+
+agent = Agent(
+    name="file-processor",
+    model_name="gpt-4",
+    purpose="To help analyze files and images",
+    tools=[*IMAGE_TOOLS, *FILES_TOOLS]
+)
+
+@app.event("file_shared")
+async def handle_file(event, say, client):
+    file_id = event["file_id"]
+    
+    # Get file info
+    file_info = await client.files_info(file=file_id)
+    file_data = file_info["file"]
+    
+    # Download file
+    response = await app.download_file(file_data["url_private"])
+    
+    # Create message with attachment
+    thread = Thread()
+    message = Message(
+        role="user",
+        content=f"Please analyze this {file_data['mimetype']} file"
+    )
+    
+    # Add as attachment
+    from tyler import Attachment
+    attachment = Attachment(
+        filename=file_data["name"],
+        content=response.content,
+        mime_type=file_data["mimetype"]
+    )
+    message.add_attachment(attachment)
+    
+    thread.add_message(message)
+    
+    # Process
+    processed_thread, new_messages = await agent.go(thread)
+    
+    await say(new_messages[-1].content)
+```
+
+### Slash Commands
+
+Add custom slash commands:
+
+```python
+@app.command("/research")
+async def handle_research_command(ack, body, say):
+    await ack()  # Acknowledge command
+    
+    query = body.get("text", "")
+    if not query:
+        await say("Please provide a topic to research. Usage: `/research <topic>`")
+        return
+    
+    # Create research request
+    thread = Thread()
+    message = Message(
+        role="user",
+        content=f"Please research: {query}"
+    )
+    thread.add_message(message)
+    
+    # Process (this might take time)
+    await say(f"🔍 Researching '{query}'...")
+    processed_thread, new_messages = await agent.go(thread)
+    
+    # Send results
+    await say(new_messages[-1].content)
+```
+
+### Interactive Messages
+
+Use buttons and interactive elements:
+
+```python
+@app.event("app_mention")
+async def send_interactive_message(event, say):
+    await say(
+        blocks=[
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": "How can I help you today?"
+                }
+            },
+            {
+                "type": "actions",
+                "elements": [
+                    {
+                        "type": "button",
+                        "text": {"type": "plain_text", "text": "Research"},
+                        "action_id": "research_click"
+                    },
+                    {
+                        "type": "button", 
+                        "text": {"type": "plain_text", "text": "Summarize"},
+                        "action_id": "summarize_click"
+                    }
+                ]
+            }
+        ]
+    )
+
+@app.action("research_click")
+async def handle_research_button(ack, body, say):
+    await ack()
+    await say("What would you like me to research?")
+```
+
+## Production Deployment
+
+### Environment Variables
+
+```bash
+# .env file
+SLACK_BOT_TOKEN=xoxb-your-bot-token
+SLACK_SIGNING_SECRET=your-signing-secret
+OPENAI_API_KEY=sk-your-openai-key
+DATABASE_URL=postgresql://user:pass@localhost/slackbot
+```
+
+### Docker Deployment
+
+```dockerfile
+# Dockerfile
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install dependencies
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+
+# Copy bot code
+COPY . .
+
+# Run bot
+CMD ["python", "bot.py"]
+```
+
+### Health Checks
+
+```python
+from fastapi import FastAPI
+import uvicorn
+
+# Create FastAPI app for health checks
+api = FastAPI()
+
+@api.get("/health")
+async def health_check():
+    return {"status": "healthy"}
+
+# Run both Slack app and API
+if __name__ == "__main__":
+    import threading
+    
+    # Start Slack app in thread
+    slack_thread = threading.Thread(target=app.start, kwargs={"port": 3000})
+    slack_thread.start()
+    
+    # Start health check API
+    uvicorn.run(api, host="0.0.0.0", port=8080)
+```
+
+## Real-World Example: Team Assistant Bot
+
+```python
+import os
+import asyncio
+from datetime import datetime
+from space_monkey import SlackApp
+from tyler import Agent, Thread, Message, ThreadStore, FileStore
+from lye import WEB_TOOLS, FILES_TOOLS, IMAGE_TOOLS
+
+class TeamAssistantBot:
+    def __init__(self):
+        self.app = None
+        self.agent = None
+    
+    async def setup(self):
+        # Initialize storage
+        thread_store = await ThreadStore.create(
+            os.getenv("DATABASE_URL", "sqlite+aiosqlite:///slack_bot.db")
+        )
+        file_store = await FileStore.create("./team_files")
+        
+        # Create agent
+        self.agent = Agent(
+            name="team-assistant",
+            model_name="gpt-4",
+            purpose="""To be a helpful team assistant that can:
+            - Answer questions about any topic
+            - Research information
+            - Analyze images and files
+            - Remember context within channels
+            """,
+            tools=[*WEB_TOOLS, *FILES_TOOLS, *IMAGE_TOOLS],
+            thread_store=thread_store,
+            file_store=file_store
+        )
+        
+        # Create Slack app
+        self.app = SlackApp(
+            agent=self.agent,
+            slack_token=os.getenv("SLACK_BOT_TOKEN"),
+            signing_secret=os.getenv("SLACK_SIGNING_SECRET")
+        )
+        
+        # Register handlers
+        self.register_handlers()
+    
+    def register_handlers(self):
+        @self.app.event("app_mention")
+        async def handle_mention(event, say, client):
+            """Handle @mentions of the bot"""
+            channel_id = event["channel"]
+            thread_ts = event.get("thread_ts", event["ts"])
+            
+            # Get or create thread for this channel
+            thread_id = f"slack-{channel_id}"
+            try:
+                thread = await self.agent.thread_store.get_thread(thread_id)
+            except:
+                thread = Thread(id=thread_id)
+                # Add context about the channel
+                channel_info = await client.conversations_info(channel=channel_id)
+                thread.add_message(Message(
+                    role="system",
+                    content=f"You are in the #{channel_info['channel']['name']} channel"
+                ))
+            
+            # Extract message without bot mention
+            text = event["text"]
+            for mention in ["<@{}>".format(u) for u in event.get("mentions", [])]:
+                text = text.replace(mention, "").strip()
+            
+            # Add user message
+            message = Message(
+                role="user",
+                content=text,
+                metadata={
+                    "slack_user": event["user"],
+                    "timestamp": event["ts"]
+                }
+            )
+            thread.add_message(message)
+            
+            # Show typing indicator
+            await say("🤔 Thinking...", thread_ts=thread_ts)
+            
+            # Process with agent
+            processed_thread, new_messages = await self.agent.go(thread)
+            await self.agent.thread_store.save_thread(processed_thread)
+            
+            # Send response
+            if new_messages:
+                response = new_messages[-1].content
+                # Split long messages
+                if len(response) > 3000:
+                    chunks = [response[i:i+3000] for i in range(0, len(response), 3000)]
+                    for chunk in chunks:
+                        await say(chunk, thread_ts=thread_ts)
+                else:
+                    await say(response, thread_ts=thread_ts)
+        
+        @self.app.event("file_shared")
+        async def handle_file_shared(event, say, client):
+            """Handle file uploads"""
+            file_id = event["file_id"]
+            channel_id = event["channel_id"]
+            
+            # Get file info
+            file_info = await client.files_info(file=file_id)
+            file_data = file_info["file"]
+            
+            # Download file
+            file_content = await self.app.download_file(file_data["url_private"])
+            
+            # Create analysis request
+            thread = Thread()
+            message = Message(
+                role="user",
+                content=f"Analyze this {file_data['mimetype']} file: {file_data['name']}"
+            )
+            
+            from tyler import Attachment
+            attachment = Attachment(
+                filename=file_data["name"],
+                content=file_content,
+                mime_type=file_data["mimetype"]
+            )
+            message.add_attachment(attachment)
+            thread.add_message(message)
+            
+            # Process
+            await say(f"📎 Analyzing {file_data['name']}...")
+            processed_thread, new_messages = await self.agent.go(thread)
+            
+            # Send analysis
+            await say(new_messages[-1].content)
+        
+        @self.app.command("/summarize")
+        async def handle_summarize(ack, body, say, client):
+            """Summarize channel conversation"""
+            await ack()
+            
+            channel_id = body["channel_id"]
+            
+            # Get recent messages
+            history = await client.conversations_history(
+                channel=channel_id,
+                limit=50
+            )
+            
+            # Format messages
+            conversation = "\n".join([
+                f"{msg.get('user', 'Bot')}: {msg['text']}"
+                for msg in history["messages"]
+                if msg.get("text")
+            ])
+            
+            # Create summary request
+            thread = Thread()
+            message = Message(
+                role="user",
+                content=f"Summarize this conversation:\n\n{conversation}"
+            )
+            thread.add_message(message)
+            
+            # Process
+            await say("📝 Creating summary...")
+            processed_thread, new_messages = await self.agent.go(thread)
+            
+            # Send summary
+            await say(
+                blocks=[
+                    {
+                        "type": "header",
+                        "text": {
+                            "type": "plain_text",
+                            "text": "Channel Summary"
+                        }
+                    },
+                    {
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": new_messages[-1].content
+                        }
+                    }
+                ]
+            )
+    
+    async def start(self):
+        await self.setup()
+        self.app.start(port=3000)
+
+# Run the bot
+if __name__ == "__main__":
+    bot = TeamAssistantBot()
+    asyncio.run(bot.start())
+```
+
+## Monitoring and Logging
+
+```python
+import logging
+from datetime import datetime
+
+# Set up logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('slack_bot.log'),
+        logging.StreamHandler()
+    ]
+)
+
+@app.middleware
+async def log_requests(request, next):
+    start_time = datetime.now()
+    
+    # Log request
+    logging.info(f"Request: {request.type} from {request.user}")
+    
+    # Process request
+    response = await next(request)
+    
+    # Log response time
+    duration = (datetime.now() - start_time).total_seconds()
+    logging.info(f"Response time: {duration:.2f}s")
+    
+    return response
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Bot not responding">
+    1. Check your bot is online: Look for green dot in Slack
+    2. Verify tokens are correct
+    3. Check ngrok is running (for development)
+    4. Ensure bot is invited to channel
+    5. Check logs for errors
+  </Accordion>
+  
+  <Accordion title="Event subscriptions failing">
+    1. Verify request URL is correct
+    2. Check signing secret matches
+    3. Ensure your server is accessible from internet
+    4. Try re-verifying the URL in Slack settings
+  </Accordion>
+  
+  <Accordion title="Permission errors">
+    Review OAuth scopes - you may need additional permissions:
+    - `channels:read` for channel info
+    - `users:read` for user info
+    - `chat:write.public` for posting to channels bot isn't in
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Slack Events"
+    icon="bolt"
+    href="/guides/slack-events"
+  >
+    Handle advanced Slack events
+  </Card>
+  <Card
+    title="Slack Deployment"
+    icon="rocket"
+    href="/guides/slack-deployment"
+  >
+    Deploy to production
+  </Card>
+  <Card
+    title="Space Monkey Docs"
+    icon="book"
+    href="/packages/space-monkey/introduction"
+  >
+    Deep dive into Space Monkey
+  </Card>
+  <Card
+    title="Examples"
+    icon="code"
+    href="/examples/slack-bots"
+  >
+    More Slack bot examples
+  </Card>
+</CardGroup> 
