@@ -352,11 +352,45 @@ class TestAgentEval:
             }
         ]
         mock_result.id = "test-run-id"
-        mock_eval_instance.evaluate.return_value = mock_result
         
-        # Run evaluation
+        # Mock the evaluate method to actually call the agent_predict function
+        async def mock_evaluate(agent_predict_fn, **kwargs):
+            # Call the agent_predict function for each conversation
+            for conv in eval.conversations:
+                conv_data = conv.to_dict()
+                await agent_predict_fn(
+                    conversation_id=conv_data['conversation_id'],
+                    messages=conv_data['messages'],
+                    expectations=conv_data['expectations']
+                )
+            return mock_result
+        
+        mock_eval_instance.evaluate = mock_evaluate
+        
+        # Mock the agent's go method to return tool usage
+        from narrator import Message
+        import uuid
+        async def mock_go(thread):
+            # Return a response that uses the mock_tool
+            assistant_msg = Message(
+                role="assistant",
+                content="Using tool",
+                tool_calls=[{
+                    'id': str(uuid.uuid4()),
+                    'type': 'function',
+                    'function': {
+                        'name': 'mock_tool',
+                        'arguments': '{"param": "test"}'
+                    }
+                }]
+            )
+            thread.add_message(assistant_msg)
+            return thread, [assistant_msg]
+        
+        # Run evaluation with mocked go method
         with patch.object(simple_agent, 'tools', [mock_tool]):
-            results = await eval.run(simple_agent)
+            with patch.object(simple_agent, 'go', mock_go):
+                results = await eval.run(simple_agent)
         
         # Check results structure
         assert results.total_conversations == 1
@@ -371,7 +405,11 @@ class TestAgentEval:
             name="summary_test",
             conversations=[
                 Conversation(id="test1", user="Hello"),
-                Conversation(id="test2", user="Hi")
+                Conversation(
+                    id="test2", 
+                    user="Hi",
+                    expect=Expectation(uses_tools=["some_tool"])  # This will fail since no tools are used
+                )
             ],
             scorers=[ToolUsageScorer()]
         )
@@ -391,7 +429,20 @@ class TestAgentEval:
             }
         ]
         mock_result.id = "test-run-id"
-        mock_eval_instance.evaluate.return_value = mock_result
+        
+        # Mock the evaluate method to actually call the agent_predict function
+        async def mock_evaluate(agent_predict_fn, **kwargs):
+            # Call the agent_predict function for each conversation
+            for conv in eval.conversations:
+                conv_data = conv.to_dict()
+                await agent_predict_fn(
+                    conversation_id=conv_data['conversation_id'],
+                    messages=conv_data['messages'],
+                    expectations=conv_data['expectations']
+                )
+            return mock_result
+        
+        mock_eval_instance.evaluate = mock_evaluate
         
         results = await eval.run(simple_agent)
         
