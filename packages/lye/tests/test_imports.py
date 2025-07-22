@@ -7,13 +7,19 @@ from lye import (
     IMAGE_TOOLS,
     FILES_TOOLS,
     COMMAND_LINE_TOOLS,
+    BROWSER_TOOLS,
+    SLACK_TOOLS,
+    NOTION_TOOLS,
     TOOLS,
     # Module namespaces
     web,
     files,
     command_line,
     audio,
-    image
+    image,
+    browser,
+    slack,
+    notion
 )
 
 
@@ -83,7 +89,8 @@ class TestLyeImports:
         # TOOLS should contain tools from all modules
         all_module_tools = (
             WEB_TOOLS + FILES_TOOLS + COMMAND_LINE_TOOLS + 
-            AUDIO_TOOLS + IMAGE_TOOLS
+            AUDIO_TOOLS + IMAGE_TOOLS + BROWSER_TOOLS +
+            SLACK_TOOLS + NOTION_TOOLS
         )
         
         # Should have the same number of tools
