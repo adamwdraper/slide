@@ -14,19 +14,56 @@ Agents in Slide are autonomous AI entities that can perceive their environment, 
 
 ## Agent Architecture
 
+Tyler uses an iterative approach to process messages and execute tools. Here's how it works:
+
 ```mermaid
-graph TD
-    A[User Input] --> B[Agent]
-    B --> C[LLM]
-    B --> D[Tools]
-    B --> E[Memory/Thread]
-    C --> F[Decision Making]
-    D --> G[Tool Execution]
-    E --> H[Context Management]
-    F --> I[Response]
-    G --> I
-    H --> F
+graph LR
+    A[Thread] --> B[Agent.go]
+    B --> C[Agent.step]
+    C --> D[LLM Call]
+    D --> E{Has Tool Calls?}
+    E -->|No| F[Complete Response]
+    E -->|Yes| G[Execute Tools]
+    G --> C
 ```
+
+### Processing Flow
+
+When you call `agent.go()` or `go_stream()`, Tyler follows these steps:
+
+1. **Message Processing**
+   - Loads the conversation thread
+   - Processes any attached files (images, PDFs, etc.)
+   - Ensures the system prompt is set
+
+2. **Step Execution** 
+   - Makes an LLM call with the current context
+   - Processes the response for content and tool calls
+   - Streams responses in real-time (if using `go_stream`)
+
+3. **Tool Execution**
+   - If tool calls are present, executes them in parallel
+   - Adds tool results back to the conversation
+   - Returns to step execution if more tools are needed
+
+4. **Completion**
+   - Saves the final thread state
+   - Returns the processed thread and new messages
+
+### Key Components
+
+- **ToolRunner**: Manages the registry of available tools and handles execution
+- **Thread**: Maintains conversation history and context
+- **Message**: Represents user, assistant, and tool messages
+- **StreamUpdate**: Provides real-time updates during streaming
+
+### Error Handling & Limits
+
+Tyler includes built-in safeguards:
+- Maximum tool iteration limit (default: 10)
+- Automatic error recovery
+- Structured error responses
+- Tool execution timeout handling
 
 ## Creating an Agent
 
