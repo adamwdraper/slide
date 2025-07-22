@@ -13,82 +13,112 @@ We'll create an agent that can:
 - Save research reports to files
 - Remember previous conversations
 
-## Step 1: Set Up Your Project
+<Steps>
+  <Step title="Set Up Your Project">
+    First, create a new project directory:
 
-First, create a new project directory:
+    ```bash
+    mkdir research-agent
+    cd research-agent
+    ```
 
-```bash
-mkdir research-agent
-cd research-agent
-```
+    Install the required packages:
 
-Install the required packages:
+    <Tabs>
+      <Tab title="uv (Recommended)">
+        ```bash
+        # Initialize project with uv
+        uv init .
+        
+        # Add Slide packages
+        uv add slide-tyler slide-lye slide-narrator
+        ```
+      </Tab>
+      <Tab title="pip">
+        ```bash
+        # Create virtual environment
+        python -m venv venv
+        source venv/bin/activate  # On Windows: venv\Scripts\activate
+        
+        # Install packages
+        pip install slide-tyler slide-lye slide-narrator
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
 
-```bash
-uv add slide-tyler slide-lye slide-narrator
-```
+  <Step title="Create Your First Agent">
+    Create a file called `agent.py`:
 
-## Step 2: Create Your First Agent
+    ```python
+    import asyncio
+    from tyler import Agent, Thread, Message
+    from lye import WEB_TOOLS, FILES_TOOLS
 
-Create a file called `agent.py`:
-
-```python
-import asyncio
-from tyler import Agent, Thread, Message
-from lye import WEB_TOOLS, FILES_TOOLS
-
-# Create your agent
-agent = Agent(
-    name="research-assistant",
-    model_name="gpt-4",
-    purpose="To help with research by finding, analyzing, and summarizing information",
-    tools=[
-        *WEB_TOOLS,     # Can search and fetch web content
-        *FILES_TOOLS    # Can read and write files
-    ]
-)
-
-async def main():
-    # Create a conversation thread
-    thread = Thread()
-    
-    # Add a user message
-    message = Message(
-        role="user",
-        content="Research the latest developments in renewable energy and create a summary report"
+    # Create your agent
+    agent = Agent(
+        name="research-assistant",
+        model_name="gpt-4o",
+        purpose="To help with research by finding, analyzing, and summarizing information",
+        tools=[
+            *WEB_TOOLS,     # Can search and fetch web content
+            *FILES_TOOLS    # Can read and write files
+        ]
     )
-    thread.add_message(message)
-    
-    # Let the agent work
-    print("🔍 Researching renewable energy...")
-    processed_thread, new_messages = await agent.go(thread)
-    
-    # Print the results
-    for msg in new_messages:
-        if msg.role == "assistant":
-            print(f"\n💬 Assistant: {msg.content}")
-        elif msg.role == "tool":
-            print(f"\n🔧 Used {msg.name}")
 
-if __name__ == "__main__":
-    asyncio.run(main())
-```
+    async def main():
+        # Create a conversation thread
+        thread = Thread()
+        
+        # Add a user message
+        message = Message(
+            role="user",
+            content="Research the latest developments in renewable energy and create a summary report"
+        )
+        thread.add_message(message)
+        
+        # Let the agent work
+        print("🔍 Researching renewable energy...")
+        processed_thread, new_messages = await agent.go(thread)
+        
+        # Print the results
+        for msg in new_messages:
+            if msg.role == "assistant":
+                print(f"\n💬 Assistant: {msg.content}")
+            elif msg.role == "tool":
+                print(f"\n🔧 Used {msg.name}")
 
-Run your agent:
-```bash
-python agent.py
-```
+    if __name__ == "__main__":
+        asyncio.run(main())
+    ```
+  </Step>
 
-## Step 3: Understanding What Happened
+  <Step title="Run Your Agent">
+    <Tabs>
+      <Tab title="uv">
+        ```bash
+        uv run agent.py
+        ```
+      </Tab>
+      <Tab title="python">
+        ```bash
+        python agent.py
+        ```
+      </Tab>
+    </Tabs>
 
-When you run the agent, here's what happens:
+    When you run the agent, here's what happens:
 
-1. **Thread Creation**: A conversation thread is created to hold messages
-2. **Message Processing**: The agent receives your message and plans its approach
-3. **Tool Usage**: The agent uses web search tools to find information
-4. **Response Generation**: The agent synthesizes findings into a response
+    1. **Thread Creation**: A conversation thread is created to hold messages
+    2. **Message Processing**: The agent receives your message and plans its approach
+    3. **Tool Usage**: The agent uses web search tools to find information
+    4. **Response Generation**: The agent synthesizes findings into a response
+  </Step>
+</Steps>
 
-Let's add some visibility into this process:
+## Understanding What Happened
+
+Let's add some visibility into the agent's process:
 
 ```python
 # Enhanced version with detailed output
@@ -114,7 +144,7 @@ async def main():
             print(f"\n🔧 Tool [{msg.name}]: {msg.content[:100]}...")
 ```
 
-## Step 4: Add Memory to Your Agent
+## Add Memory to Your Agent
 
 Let's upgrade the agent to remember conversations:
 
@@ -175,7 +205,7 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-## Step 5: Interactive Research Session
+## Interactive Research Session
 
 Let's create an interactive version where you can have a conversation:
 
@@ -229,7 +259,7 @@ if __name__ == "__main__":
     asyncio.run(interactive_session())
 ```
 
-## Step 6: Understanding Tools
+## Understanding Tools
 
 Let's explore what tools your agent can use:
 
@@ -260,52 +290,10 @@ agent = Agent(
 )
 ```
 
-## Common Patterns
-
-### Pattern 1: Research and Report
-
-```python
-async def research_and_report(topic: str):
-    thread = Thread()
-    message = Message(
-        role="user",
-        content=f"""
-        Please research '{topic}' and create a comprehensive report that includes:
-        1. Overview and current state
-        2. Recent developments
-        3. Future outlook
-        4. Key players/companies
-        Save the report as '{topic.replace(' ', '_')}_report.md'
-        """
-    )
-    thread.add_message(message)
-    
-    processed_thread, _ = await agent.go(thread)
-    print(f"✅ Report created for {topic}")
-```
-
-### Pattern 2: Fact Checking
-
-```python
-async def fact_check(claim: str):
-    thread = Thread()
-    message = Message(
-        role="user",
-        content=f"""
-        Fact check this claim: "{claim}"
-        Search for reliable sources and provide:
-        1. Whether it's true, false, or partially true
-        2. Supporting evidence
-        3. Sources used
-        """
-    )
-    thread.add_message(message)
-    
-    processed_thread, new_messages = await agent.go(thread)
-    return new_messages[-1].content if new_messages else "No response"
-```
 
 ## Debugging Your Agent
+
+### Basic Logging
 
 Enable detailed logging to see what your agent is doing:
 
@@ -314,13 +302,31 @@ import logging
 
 # Enable debug logging
 logging.basicConfig(level=logging.INFO)
+```
 
-# You can also use Weave for advanced tracing
+### Advanced Tracing with Weave
+
+For comprehensive debugging and observability, Slide integrates with [Weights & Biases Weave](https://weave-docs.wandb.ai/). Weave provides:
+
+- **Visual traces** of every agent action and decision
+- **LLM call tracking** with inputs, outputs, and token usage
+- **Tool execution monitoring** to see which tools were called and their results
+- **Performance insights** to identify bottlenecks
+- **Error tracking** with full context
+
+```python
 import weave
+
+# Initialize Weave tracing
 weave.init("my-research-agent")
 
-# Now all agent operations will be traced
+# Now all agent operations will be traced automatically
+# View traces at https://wandb.ai/your-username/my-research-agent
 ```
+
+<Tip>
+  Weave traces are invaluable for debugging complex agent behaviors. You can see exactly what prompts were sent to the LLM, what tools were called, and how the agent made its decisions.
+</Tip>
 
 ## Next Steps
 
