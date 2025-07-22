@@ -91,13 +91,7 @@
       }
     ],
     "global": {
-      "anchors": [
-        {
-          "anchor": "GitHub",
-          "href": "https://github.com/adamwdraper/slide",
-          "icon": "github"
-        }
-      ]
+      "anchors": []
     }
   },
   "logo": {
@@ -113,14 +107,10 @@
     "links": [
       {
         "label": "GitHub",
-        "href": "https://github.com/adamwdraper/slide"
+        "href": "https://github.com/adamwdraper/slide",
+        "icon": "github"
       }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Get Started",
-      "href": "https://github.com/adamwdraper/slide"
-    }
+    ]
   },
   "footer": {
     "socials": {
