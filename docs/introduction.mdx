@@ -13,7 +13,7 @@ from lye import WEB_TOOLS, IMAGE_TOOLS
 # Create a powerful AI agent
 agent = Agent(
     name="assistant",
-    model_name="gpt-4",
+    model_name="gpt-4o",
     purpose="To help with research and analysis",
     tools=[*WEB_TOOLS, *IMAGE_TOOLS]
 )
@@ -30,16 +30,15 @@ That's it! Your agent can now search the web, analyze images, and complete compl
 
 ## Why use Slide?
 
+- **Extensible and open source**: Build on a foundation you can inspect, customize, and contribute to
 - **Flexible model support**: Use any LLM provider supported by LiteLLM (100+ providers including OpenAI, Anthropic, etc.)
 - **MCP compatibility**: Seamless integration with Model Context Protocol (MCP) compatible servers and tools
 - **Multimodal support**: Process and understand images, audio, PDFs, and more out of the box
+- **Persistent conversations**: Built-in support for threads, messages, and attachments with flexible storage options (in-memory, SQLite, or PostgreSQL)
 - **Ready-to-use tools**: Basic set of built-in tools for web interaction, file handling, and browser automation with support for custom tools
 - **Real-time streaming**: Build interactive applications with streaming responses from both agents and tools
-- **Structured data model**: Built-in support for threads, messages, and attachments to maintain conversation context
-- **Persistent storage**: Choose between in-memory, SQLite, or PostgreSQL to store conversation history and files
 - **Evaluation framework**: Test agents safely with mock tools, prebuilt LLM judges, and multi-turn conversation scenarios
 - **Advanced debugging**: Integration with W&B Weave for powerful tracing and debugging capabilities
-- **Extensible and open source**: Build on a foundation you can inspect, customize, and contribute to
 
 ## Ready to Build?
 
