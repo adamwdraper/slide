@@ -43,7 +43,7 @@ To create a release branch for any package:
 
 - `tyler` - The main tyler package
 - `narrator` - The narrator storage system
-- `space-monkey` - The Slack bot framework
+- `space-monkey` - The Slack agent framework
 
 ## Version types
 

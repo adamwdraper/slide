@@ -1,0 +1,403 @@
+---
+title: 'Building Slack Agents'
+description: 'Deploy your AI agents as Slack agents'
+---
+
+Space Monkey makes it easy to deploy your Slide agents as Slack agents. In this guide, you'll learn how to create a Slack agent that can respond to messages, handle events, and interact with your workspace.
+
+## Prerequisites
+
+Before starting, you'll need:
+1. A Slack workspace where you can install apps
+2. Slack app credentials (we'll create these)
+
+## Quick Start
+
+### Step 1: Install Space Monkey
+
+```bash
+uv add slide-space-monkey
+```
+
+### Step 2: Create Your Agent
+
+```python
+import asyncio
+from space_monkey import SlackApp
+from tyler import Agent
+from narrator import ThreadStore, FileStore
+from lye import WEB_TOOLS
+
+# Set environment variables first:
+# export SLACK_BOT_TOKEN=xoxb-your-bot-token
+# export SLACK_APP_TOKEN=xapp-your-app-token
+
+async def main():
+    # Initialize storage
+    thread_store = await ThreadStore.create()
+    file_store = await FileStore.create()
+    
+    # Create your agent
+    agent = Agent(
+        name="slack-assistant",
+        model_name="gpt-4",
+        purpose="To help Slack users with their questions",
+        tools=WEB_TOOLS
+    )
+    
+    # Create Slack app
+    app = SlackApp(
+        agent=agent,
+        thread_store=thread_store,
+        file_store=file_store
+    )
+    
+    # Start the app
+    await app.start(port=3000)
+
+# Run the app
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+## Setting Up Slack App
+
+### 1. Create a Slack App
+
+1. Go to [api.slack.com/apps](https://api.slack.com/apps)
+2. Click "Create New App" → "From scratch"
+3. Name your app and select your workspace
+
+### 2. Configure Agent User
+
+1. Go to "OAuth & Permissions"
+2. Add these Bot Token Scopes:
+   - `app_mentions:read` - Read mentions
+   - `chat:write` - Send messages
+   - `channels:history` - Read channel messages
+   - `groups:history` - Read private channel messages
+   - `im:history` - Read direct messages
+   - `mpim:history` - Read group DMs
+   - `files:read` - Read files (if using file tools)
+   - `files:write` - Upload files (if creating files)
+
+### 3. Install to Workspace
+
+1. Click "Install to Workspace"
+2. Authorize the app
+3. Copy the Bot User OAuth Token (starts with `xoxb-`)
+
+### 4. Enable Socket Mode
+
+1. Go to "Socket Mode" in the sidebar
+2. Enable Socket Mode
+3. Create an app-level token with `connections:write` scope
+4. Copy the token (starts with `xapp-`)
+
+### 5. Enable Events
+
+1. Go to "Event Subscriptions"
+2. Turn on "Enable Events"
+3. Subscribe to agent events:
+   - `app_mention`
+   - `message.channels`
+   - `message.groups`
+   - `message.im`
+   - `message.mpim`
+
+### 6. Set Environment Variables
+
+Set these environment variables before running your agent:
+
+```bash
+export SLACK_BOT_TOKEN=xoxb-your-bot-token
+export SLACK_APP_TOKEN=xapp-your-app-token
+export OPENAI_API_KEY=sk-your-openai-key
+```
+
+## Advanced Agent Features
+
+### Conversation Persistence
+
+Give your agent persistence across conversations:
+
+```python
+from tyler import ThreadStore, FileStore
+
+async def create_bot_with_persistence():
+    # Set up persistent storage
+    thread_store = await ThreadStore.create("postgresql://localhost/slackbot")
+    file_store = await FileStore.create("./slack_files")
+    
+    # Create agent with persistence
+    agent = Agent(
+        name="persistent-agent",
+        model_name="gpt-4",
+        purpose="To be a helpful Slack assistant with conversation history",
+        thread_store=thread_store,
+        file_store=file_store,
+        tools=WEB_TOOLS
+    )
+    
+    return SlackApp(
+        agent=agent,
+        thread_store=thread_store,
+        file_store=file_store
+    )
+
+app = await create_bot_with_persistence()
+
+@app.event("app_mention")
+async def handle_mention_with_persistence(event, say):
+    # Use channel ID as thread ID for conversation continuity
+    thread_id = f"slack-{event['channel']}"
+    
+    try:
+        thread = await app.agent.thread_store.get_thread(thread_id)
+    except:
+        thread = Thread(id=thread_id)
+    
+    # Add user message
+    user_text = event["text"].replace(f"<@{event['user']}>", "").strip()
+    message = Message(
+        role="user",
+        content=user_text,
+        metadata={"slack_user": event["user"]}
+    )
+    thread.add_message(message)
+    
+    # Process and save
+    processed_thread, new_messages = await app.agent.go(thread)
+    await app.agent.thread_store.save_thread(processed_thread)
+    
+    # Respond
+    await say(new_messages[-1].content)
+```
+
+### Message Routing
+
+SlackApp automatically handles:
+- Direct messages
+- App mentions in channels
+- Thread replies
+- File uploads
+- Intelligent routing based on context
+
+The agent will respond to:
+1. All direct messages
+2. Messages where the agent is @mentioned
+3. Replies in threads where the agent has participated
+4. Messages matching the configured `response_topics`
+
+### File Handling
+
+SlackApp automatically processes files shared in Slack when the agent has file tools:
+
+```python
+from lye import IMAGE_TOOLS, FILES_TOOLS
+
+agent = Agent(
+    name="file-processor",
+    model_name="gpt-4",
+    purpose="To help analyze files and images",
+    tools=[*IMAGE_TOOLS, *FILES_TOOLS]
+)
+
+app = SlackApp(
+    agent=agent,
+    thread_store=thread_store,
+    file_store=file_store
+)
+```
+
+Users can share files directly with the agent, and it will automatically download and process them.
+
+
+
+## Production Deployment
+
+### Environment Variables
+
+```bash
+# .env file
+SLACK_BOT_TOKEN=xoxb-your-bot-token
+SLACK_APP_TOKEN=xapp-your-app-token
+OPENAI_API_KEY=sk-your-openai-key
+DATABASE_URL=postgresql://user:pass@localhost/slackbot
+```
+
+### Docker Deployment
+
+Space Monkey includes Docker support for easy deployment:
+
+```bash
+# Clone your agent code
+cd your-slack-agent/
+
+# Build the Docker image
+docker build -t my-slack-agent .
+
+# Run with environment variables
+docker run -d \
+  --name slack-agent \
+  -p 8000:8000 \
+  -e SLACK_BOT_TOKEN=$SLACK_BOT_TOKEN \
+  -e SLACK_APP_TOKEN=$SLACK_APP_TOKEN \
+  -e OPENAI_API_KEY=$OPENAI_API_KEY \
+  my-slack-agent
+```
+
+#### Using Docker Compose
+
+For easier local development:
+
+```bash
+# Copy the example environment file
+cp .env.example .env
+# Edit .env with your credentials
+
+# Start the agent
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Stop the agent
+docker-compose down
+```
+
+To use PostgreSQL for persistence:
+
+```bash
+# Start with PostgreSQL
+docker-compose --profile with-postgres up -d
+```
+
+### Health Checks
+
+SlackApp includes built-in health monitoring:
+
+```python
+# Set environment variables for health monitoring
+export HEALTH_CHECK_URL=http://healthcheck:8000/ping-receiver
+export HEALTH_PING_INTERVAL_SECONDS=120
+
+# The app will automatically ping the health check URL
+```
+
+The app also provides a built-in health endpoint at `/health`.
+
+## Real-World Example: Team Assistant Agent
+
+```python
+import os
+import asyncio
+from space_monkey import SlackApp
+from tyler import Agent
+from narrator import ThreadStore, FileStore
+from lye import WEB_TOOLS, FILES_TOOLS, IMAGE_TOOLS
+
+async def create_team_assistant():
+    # Initialize storage
+    thread_store = await ThreadStore.create(
+        os.getenv("DATABASE_URL", "sqlite+aiosqlite:///slack_bot.db")
+    )
+    file_store = await FileStore.create("./team_files")
+    
+    # Create agent
+    agent = Agent(
+        name="team-assistant",
+        model_name="gpt-4",
+        purpose="""To be a helpful team assistant that can:
+        - Answer questions about any topic
+        - Research information
+        - Analyze images and files
+        - Remember context within channels
+        """,
+        tools=[*WEB_TOOLS, *FILES_TOOLS, *IMAGE_TOOLS],
+        thread_store=thread_store,
+        file_store=file_store
+    )
+    
+    # Create Slack app
+    app = SlackApp(
+        agent=agent,
+        thread_store=thread_store,
+        file_store=file_store,
+        response_topics="technical questions, research requests, and team productivity"
+    )
+    
+    return app
+
+# Run the agent
+async def main():
+    app = await create_team_assistant()
+    await app.start(port=3000)
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+## Monitoring and Logging
+
+SlackApp includes built-in logging. To configure logging levels:
+
+```python
+import logging
+
+# Set logging level for space_monkey
+logging.getLogger("space_monkey").setLevel(logging.INFO)
+```
+
+For production monitoring, you can also set up Weave tracing:
+
+```python
+# Set environment variables
+export WANDB_API_KEY=your-wandb-key
+export WANDB_PROJECT=slack-agent-prod
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Agent not responding">
+    1. Check your agent is online: Look for green dot in Slack
+    2. Verify tokens are correct
+    3. Check ngrok is running (for development)
+    4. Ensure agent is invited to channel
+    5. Check logs for errors
+  </Accordion>
+  
+  <Accordion title="Event subscriptions failing">
+    1. Verify request URL is correct
+    2. Check signing secret matches
+    3. Ensure your server is accessible from internet
+    4. Try re-verifying the URL in Slack settings
+  </Accordion>
+  
+  <Accordion title="Permission errors">
+    Review OAuth scopes - you may need additional permissions:
+    - `channels:read` for channel info
+    - `users:read` for user info
+    - `chat:write.public` for posting to channels agent isn't in
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Space Monkey Docs"
+    icon="book"
+    href="/packages/space-monkey/introduction"
+  >
+    Deep dive into Space Monkey
+  </Card>
+  <Card
+    title="Examples"
+    icon="code"
+    href="/examples/slack-bots"
+  >
+    More Slack agent examples
+  </Card>
+</CardGroup> 

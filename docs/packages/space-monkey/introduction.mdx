@@ -1,0 +1,235 @@
+---
+title: 'Space Monkey'
+description: 'Slack agent framework for AI agents'
+---
+
+Space Monkey makes it easy to deploy AI agents as Slack agents. It handles all the complexity of Slack's APIs, event handling, and message formatting, so you can focus on building great agent experiences.
+
+## Overview
+
+Space Monkey provides:
+- **Easy Setup**: Get a Slack agent running in minutes
+- **Event Handling**: Respond to messages, mentions, and commands
+- **Rich Messaging**: Support for blocks, attachments, and interactive elements
+- **Thread Management**: Automatic conversation threading
+- **Async Support**: Built for high-performance async operations
+
+## Installation
+
+```bash
+uv add slide-space-monkey
+```
+
+## Quick Start
+
+```python
+from space_monkey import SlackApp
+from tyler import Agent
+
+# Set environment variables:
+# export SLACK_BOT_TOKEN=xoxb-your-bot-token
+# export SLACK_APP_TOKEN=xapp-your-app-token
+
+import asyncio
+from narrator import ThreadStore, FileStore
+
+async def main():
+    # Initialize storage
+    thread_store = await ThreadStore.create()
+    file_store = await FileStore.create()
+    
+    # Create your agent
+    agent = Agent(
+        name="slack-assistant",
+        model_name="gpt-4",
+        purpose="To help the team with questions and tasks"
+    )
+    
+    # Create Slack app
+    app = SlackApp(
+        agent=agent,
+        thread_store=thread_store,
+        file_store=file_store
+    )
+    
+    # Run the agent
+    await app.start()
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+## Slack App Setup
+
+### 1. Create a Slack App
+
+1. Go to [api.slack.com/apps](https://api.slack.com/apps)
+2. Click "Create New App" → "From an app manifest"
+3. Use this manifest:
+
+```yaml
+display_information:
+  name: My AI Assistant
+features:
+  bot_user:
+    display_name: AI Assistant
+oauth_config:
+  scopes:
+    agent:
+      - channels:history
+      - channels:read
+      - chat:write
+      - groups:history
+      - groups:read
+      - im:history
+      - im:read
+      - mpim:history
+      - mpim:read
+settings:
+  event_subscriptions:
+    bot_events:
+      - app_mention
+      - message.channels
+      - message.groups
+      - message.im
+      - message.mpim
+  interactivity:
+    is_enabled: true
+  org_deploy_enabled: false
+  socket_mode_enabled: true
+```
+
+### 2. Install to Workspace
+
+1. Click "Install to Workspace"
+2. Copy the Bot User OAuth Token
+3. Go to "Basic Information" → "App-Level Tokens"
+4. Create a token with `connections:write` scope
+
+### 3. Configure Your Agent
+
+```python
+# Set environment variables
+os.environ["SLACK_BOT_TOKEN"] = "xoxb-..."  # Bot User OAuth Token
+os.environ["SLACK_APP_TOKEN"] = "xapp-..."  # App-Level Token
+
+# Create app - tokens are loaded from environment
+app = SlackApp(
+    agent=agent,
+    thread_store=thread_store,
+    file_store=file_store
+)
+```
+
+## How It Works
+
+Space Monkey automatically handles all Slack events internally:
+
+- **Message Events**: Processes direct messages and channel messages
+- **App Mentions**: Responds when the agent is @mentioned
+- **Thread Management**: Maintains conversation context automatically
+- **File Handling**: Downloads and processes shared files
+- **Intelligent Routing**: Uses AI to determine when to respond
+
+The agent will respond to:
+1. All direct messages
+2. Messages where the agent is @mentioned
+3. Replies in threads where the agent has participated
+4. Messages matching the configured `response_topics`
+
+## Advanced Features
+
+### Thread Management
+
+Space Monkey automatically maintains conversation context in threads:
+
+```python
+# Conversations in the same thread share context
+# No extra configuration needed!
+```
+
+### Rich Responses
+
+```python
+# Your agent can return formatted responses
+blocks = [
+    {
+        "type": "section",
+        "text": {
+            "type": "mrkdwn",
+            "text": "*Summary:* Here's what I found..."
+        }
+    }
+]
+await say(blocks=blocks)
+```
+
+### File Handling
+
+```python
+# Automatically handle file uploads
+@app.event("message")
+async def handle_files(event, files):
+    if files:
+        # Process uploaded files
+        pass
+```
+
+## Deployment
+
+### Local Development
+
+```bash
+python your_bot.py
+```
+
+### Production (Heroku)
+
+```python
+# Procfile
+web: python agent.py
+
+# agent.py
+import os
+import asyncio
+from space_monkey import SlackApp
+from tyler import Agent
+from narrator import ThreadStore, FileStore
+
+async def main():
+    thread_store = await ThreadStore.create()
+    file_store = await FileStore.create()
+    
+    agent = Agent(
+        name="slack-assistant",
+        model_name="gpt-4",
+        purpose="To help the team"
+    )
+    
+    app = SlackApp(
+        agent=agent,
+        thread_store=thread_store,
+        file_store=file_store
+    )
+    
+    await app.start()
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+### Production (AWS Lambda)
+
+Deploy your Slack agent to AWS Lambda or other cloud platforms for production use.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Slack Agent Guide"
+    icon="slack"
+    href="/apps/slack-agent"
+  >
+    Complete guide to building Slack agents
+  </Card>
+</CardGroup> 

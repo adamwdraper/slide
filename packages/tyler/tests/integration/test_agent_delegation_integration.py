@@ -5,7 +5,7 @@ These tests verify that the entire agent delegation system works
 correctly under various scenarios, with a focus on parallel execution.
 """
 import os
-os.environ["OPENAI_API_KEY"] = "dummy"
+# Removed dummy environment variables to avoid interfering with examples tests
 import pytest
 from unittest.mock import patch, MagicMock, AsyncMock
 import json

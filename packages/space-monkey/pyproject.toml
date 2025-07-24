@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "slide-space-monkey"
 version = "0.1.1"
-description = "A simple, powerful way to deploy Tyler AI agents as Slack bots"
+description = "A simple, powerful way to deploy Tyler AI agents as Slack agents"
 readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "MIT"}

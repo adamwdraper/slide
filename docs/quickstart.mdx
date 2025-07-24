@@ -1,249 +1,225 @@
 ---
 title: 'Quickstart'
-description: 'Get up and running with Slide in 5 minutes'
+description: 'Build your first AI agent in 5 minutes'
 ---
 
-## Installation
+In this quickstart, you'll build an AI agent that can search the web and analyze images. Let's dive in!
 
-<Tabs>
-  <Tab title="uv (Recommended)">
-    ```bash
-    # Install uv if you haven't already
-    curl -LsSf https://astral.sh/uv/install.sh | sh
+<Steps>
+  <Step title="Install Slide">
+    <Tabs>
+      <Tab title="uv (Recommended)">
+        ```bash
+        # Install uv if you haven't already
+        curl -LsSf https://astral.sh/uv/install.sh | sh
 
-    # Create a new project
-    uv init my-slide-project
-    cd my-slide-project
+        # Create a new project
+        uv init my-agent
+        cd my-agent
 
-    # Add Slide packages
-    uv add tyler lye narrator space-monkey
-    ```
-  </Tab>
-  <Tab title="pip">
-    ```bash
-    # Create a virtual environment
-    python -m venv venv
-    source venv/bin/activate  # On Windows: venv\Scripts\activate
+        # Install Slide
+        uv add slide-tyler slide-lye slide-narrator
+        ```
+      </Tab>
+      <Tab title="pip">
+        ```bash
+        # Create a virtual environment
+        python -m venv venv
+        source venv/bin/activate  # On Windows: venv\Scripts\activate
 
-    # Install Slide packages
-    pip install tyler lye narrator space-monkey
-    ```
-  </Tab>
-</Tabs>
+        # Install Slide
+        pip install slide-tyler slide-lye slide-narrator
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+  
+  <Step title="Set Up Your API Key">
+    Your agent needs an API key to use the LLM. Choose your provider:
 
-## Your First Agent
+    <Tabs>
+      <Tab title="OpenAI">
+        Create your API key from [platform.openai.com](https://platform.openai.com/api-keys) then add it to your environment:
+        ```bash
+        export OPENAI_API_KEY="sk-..."
+        ```
+      </Tab>
+      <Tab title="Anthropic">
+        Create your API key from [console.anthropic.com](https://console.anthropic.com/) then add it to your environment:
+        ```bash
+        export ANTHROPIC_API_KEY="sk-ant-..."
+        ```
+      </Tab>
+      <Tab title="Other Providers">
+        Slide supports 100+ providers via LiteLLM. See the [full list](https://docs.litellm.ai/docs/providers).
+        
+        Example for Google:
+        ```bash
+        export GOOGLE_API_KEY="..."
+        ```
+      </Tab>
+    </Tabs>
 
-Let's create a simple agent that can browse the web and process images:
+    <Tip>
+      For production, use a `.env` file.
+    </Tip>
+  </Step>
+  
+  <Step title="Create Your Agent">
+    Create a file called `agent.py`:
 
-<CodeGroup>
-```python basic_agent.py
-from tyler import Agent
-from lye import browser, image
+    ```python
+    import asyncio
+    from tyler import Agent, Thread, Message
+    from lye import WEB_TOOLS, IMAGE_TOOLS, FILES_TOOLS
 
-# Create an agent with browser and image tools
-agent = Agent(
-    name="web-analyzer",
-    tools=[
-        browser.screenshot,
-        browser.extract_text,
-        image.analyze,
-        image.extract_text
-    ],
-    model="gpt-4"  # or any other supported model
-)
-
-# Run the agent
-async def main():
-    result = await agent.run(
-        "Take a screenshot of python.org and analyze what you see"
+    # Create your agent
+    agent = Agent(
+        name="research-assistant",
+        model_name="gpt-4o",  # Use the model for your API key provider
+        purpose="To help with research and analysis tasks",
+        tools=[
+            *WEB_TOOLS,      # Can search and fetch web content
+            *IMAGE_TOOLS,    # Can analyze and describe images
+            *FILES_TOOLS     # Can read and write files
+        ]
     )
-    print(result)
 
-if __name__ == "__main__":
-    import asyncio
-    asyncio.run(main())
-```
-</CodeGroup>
+    async def main():
+        # Create a conversation thread
+        thread = Thread()
+        
+        # Add your request
+        message = Message(
+            role="user",
+            content="Search for information about the Mars Perseverance rover and create a summary"
+        )
+        thread.add_message(message)
+        
+        # Let the agent work
+        print("🤖 Agent is working...")
+        processed_thread, new_messages = await agent.go(thread)
+        
+        # Print the results
+        for msg in new_messages:
+            if msg.role == "assistant":
+                print(f"\n💬 Assistant: {msg.content}")
+            elif msg.role == "tool":
+                print(f"\n🔧 Used tool '{msg.name}'")
 
-## Using Narrator for Conversation History
+    if __name__ == "__main__":
+        asyncio.run(main())
+    ```
+  </Step>
+  
+  <Step title="Run Your Agent">
+    <Tabs>
+      <Tab title="uv">
+        ```bash
+        uv run agent.py
+        ```
+      </Tab>
+      <Tab title="python">
+        ```bash
+        python agent.py
+        ```
+      </Tab>
+    </Tabs>
 
-Slide includes Narrator for managing conversation threads:
+    Your agent will search for information about the Mars rover and create a summary. That's it! 🎉
+  </Step>
+</Steps>
 
-<CodeGroup>
-```python with_memory.py
-from tyler import Agent
-from narrator import Thread, FileStore
-from lye import web
+## What's Next?
 
-# Set up storage
-store = FileStore("./conversations")
-thread = Thread(store=store, thread_id="main-conversation")
-
-# Create agent with memory
-agent = Agent(
-    name="assistant",
-    tools=[web.search, web.fetch],
-    thread=thread  # Agent will remember past conversations
-)
-
-async def main():
-    # First interaction
-    await agent.run("Search for information about Python 3.12")
-    
-    # Second interaction (agent remembers context)
-    await agent.run("What were the main features we just found?")
-
-if __name__ == "__main__":
-    import asyncio
-    asyncio.run(main())
-```
-</CodeGroup>
-
-## Deploy to Slack with Space Monkey
-
-Transform your agent into a Slack bot:
-
-<CodeGroup>
-```python slack_bot.py
-from space_monkey import SlackApp
-from tyler import Agent
-from lye import web, files
-
-# Create your agent
-agent = Agent(
-    name="slack-assistant",
-    tools=[web.search, files.read, files.write]
-)
-
-# Create Slack app
-app = SlackApp(
-    agent=agent,
-    slack_token="xoxb-your-token",  # Set as environment variable
-    signing_secret="your-secret"    # Set as environment variable
-)
-
-# Handle mentions
-@app.event("app_mention")
-async def handle_mention(event, say):
-    response = await agent.run(event["text"])
-    await say(response)
-
-# Start the app
-if __name__ == "__main__":
-    app.start(port=3000)
-```
-</CodeGroup>
-
-<Note>
-  Remember to set your Slack tokens as environment variables. Never commit them to your repository!
-</Note>
-
-## MCP Integration
-
-Slide's Tyler package supports the Model Context Protocol for advanced integrations:
-
-<CodeGroup>
-```python mcp_example.py
-from tyler import Agent
-from tyler.mcp import MCPAdapter
-
-# Connect to an MCP server
-adapter = MCPAdapter()
-await adapter.connect("stdio://./my-mcp-server")
-
-# Create agent with MCP tools
-agent = Agent(
-    name="mcp-agent",
-    mcp_adapter=adapter
-)
-
-# Use MCP tools
-result = await agent.run("Use the available MCP tools to complete this task")
-```
-</CodeGroup>
-
-## Common Patterns
-
-### Combining Multiple Tools
-
-```python
-from tyler import Agent
-from lye import audio, browser, files
-
-agent = Agent(
-    name="researcher",
-    tools=[
-        audio.transcribe,
-        browser.screenshot,
-        browser.extract_text,
-        files.write
-    ]
-)
-
-# Agent can now transcribe audio, browse web, and save results
-await agent.run("""
-    1. Transcribe the podcast at this URL
-    2. Search for related articles
-    3. Create a summary report and save it
-""")
-```
-
-### Error Handling
-
-```python
-from tyler import Agent
-from tyler.exceptions import AgentError
-
-try:
-    result = await agent.run("Complex task")
-except AgentError as e:
-    print(f"Agent encountered an error: {e}")
-    # Handle gracefully
-```
-
-### Streaming Responses
-
-```python
-async for chunk in agent.stream("Generate a long analysis"):
-    print(chunk, end="", flush=True)
-```
-
-## Next Steps
+Now that you have a working agent, explore these guides to add more capabilities:
 
 <CardGroup cols={2}>
   <Card
-    title="Tyler Documentation"
-    icon="robot"
-    href="/packages/tyler/introduction"
+    title="Your First Agent"
+    icon="sparkles"
+    href="/guides/your-first-agent"
   >
-    Deep dive into the agent framework
+    Detailed walkthrough with persistence and interactive sessions
   </Card>
   <Card
-    title="Lye Tools"
-    icon="toolbox"
-    href="/packages/lye/introduction"
+    title="Conversation Persistence"
+    icon="database"
+    href="/guides/conversation-persistence"
   >
-    Explore all available tools
+    Make your agent maintain conversation history
   </Card>
   <Card
-    title="Examples"
-    icon="code"
-    href="/packages/tyler/examples"
+    title="Streaming Responses"
+    icon="stream"
+    href="/guides/streaming-responses"
   >
-    See more complex examples
+    See responses as they're generated in real-time
   </Card>
   <Card
-    title="MCP Guide"
-    icon="plug"
-    href="/concepts/mcp"
+    title="Testing Agents"
+    icon="vial"
+    href="/guides/testing-agents"
   >
-    Learn about MCP integration
+    Write tests to ensure your agent behaves correctly
   </Card>
 </CardGroup>
 
-## Getting Help
+## Deploy Your Agent
 
-- 📖 Read the [full documentation](/packages/overview)
-- 💬 Join our [Slack community](https://slide-community.slack.com)
-- 🐛 Report issues on [GitHub](https://github.com/yourusername/slide/issues)
-- 📧 Email us at support@slide-framework.com 
+<CardGroup cols={2}>
+  <Card
+    title="Deploy to Slack"
+    icon="slack"
+    href="/apps/slack-agent"
+  >
+    Turn your agent into a Slack agent
+  </Card>
+  <Card
+    title="Adding Tools"
+    icon="wrench"
+    href="/guides/adding-tools"
+  >
+    Add built-in and custom tools to agents
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="API Key Errors">
+    Make sure to set your OpenAI API key:
+    ```bash
+    export OPENAI_API_KEY="sk-..."
+    ```
+    
+    Or use a different model provider:
+    ```python
+    agent = Agent(
+        model_name="claude-3-opus-20240229",  # Anthropic
+        # or
+        model_name="gemini-pro",  # Google
+    )
+    ```
+  </Accordion>
+  
+  <Accordion title="Import Errors">
+    Make sure you've installed all packages:
+    ```bash
+    uv add slide-tyler slide-lye slide-narrator
+    ```
+  </Accordion>
+  
+  <Accordion title="Async Errors">
+    Remember to use `asyncio.run()` or run in an async context:
+    ```python
+    import asyncio
+    
+    async def main():
+        # Your agent code here
+        pass
+    
+    asyncio.run(main())
+    ```
+  </Accordion>
+</AccordionGroup> 

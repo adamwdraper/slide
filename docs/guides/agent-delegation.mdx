@@ -1,0 +1,520 @@
+---
+title: 'Agent Delegation'
+description: 'Build multi-agent systems where specialized agents work together'
+---
+
+Agent delegation is a powerful feature in Tyler that allows you to create specialized agents that can work together to solve complex problems. This pattern enables you to build sophisticated AI systems where each agent has a specific role and expertise.
+
+## Overview
+
+Agent delegation allows one agent (the coordinator) to delegate tasks to other specialized agents. This is useful when:
+
+- Different parts of a task require different expertise
+- You want to separate concerns and create modular systems
+- You need different models or configurations for different subtasks
+- You want to build scalable, maintainable AI systems
+
+## Basic Delegation
+
+Here's how to create a simple multi-agent system:
+
+```python
+from tyler import Agent
+from lye import WEB_TOOLS, FILES_TOOLS, IMAGE_TOOLS
+
+# Create specialized agents
+research_agent = Agent(
+    name="Researcher",
+    model_name="gpt-4",
+    purpose="To conduct thorough research on any topic",
+    tools=WEB_TOOLS
+)
+
+writer_agent = Agent(
+    name="Writer",
+    model_name="gpt-4",
+    purpose="To write clear, engaging content based on research",
+    tools=FILES_TOOLS
+)
+
+# Create coordinator that can delegate
+coordinator = Agent(
+    name="Project Manager",
+    model_name="gpt-4",
+    purpose="To coordinate research and writing tasks",
+    agents=[research_agent, writer_agent]
+)
+
+# The coordinator automatically delegates based on the task
+thread = Thread()
+thread.add_message(Message(
+    role="user",
+    content="Research the latest AI trends and write a report"
+))
+
+result = await coordinator.go(thread)
+```
+
+## How Delegation Works
+
+When an agent has access to other agents:
+
+1. **Automatic Detection**: The coordinator analyzes the task to determine if delegation would be helpful
+2. **Agent Selection**: It chooses the most appropriate agent based on their purpose and capabilities
+3. **Task Delegation**: The coordinator formulates a clear request for the specialized agent
+4. **Result Integration**: The coordinator receives and integrates the results into its response
+
+## Advanced Patterns
+
+### Hierarchical Teams
+
+Create multi-level agent hierarchies:
+
+```python
+# Data team
+data_analyst = Agent(
+    name="Data Analyst",
+    model_name="gpt-4",
+    purpose="To analyze data and create visualizations",
+    tools=[*IMAGE_TOOLS, "python_repl"]
+)
+
+data_engineer = Agent(
+    name="Data Engineer",
+    model_name="gpt-3.5-turbo",
+    purpose="To handle data pipelines and ETL processes",
+    tools=FILES_TOOLS
+)
+
+data_lead = Agent(
+    name="Data Team Lead",
+    model_name="gpt-4",
+    purpose="To coordinate data projects",
+    agents=[data_analyst, data_engineer]
+)
+
+# Engineering team
+backend_dev = Agent(
+    name="Backend Developer",
+    model_name="gpt-4",
+    purpose="To develop backend services and APIs",
+    tools=["python_repl", *FILES_TOOLS]
+)
+
+frontend_dev = Agent(
+    name="Frontend Developer",
+    model_name="gpt-4",
+    purpose="To build user interfaces",
+    tools=FILES_TOOLS
+)
+
+tech_lead = Agent(
+    name="Tech Lead",
+    model_name="gpt-4",
+    purpose="To coordinate development tasks",
+    agents=[backend_dev, frontend_dev]
+)
+
+# Project coordinator with access to team leads
+project_manager = Agent(
+    name="Project Manager",
+    model_name="gpt-4",
+    purpose="To manage complex projects requiring multiple teams",
+    agents=[data_lead, tech_lead]
+)
+```
+
+### Specialized Agent Networks
+
+Create agents that can collaborate peer-to-peer:
+
+```python
+# Create a network of specialized agents
+agents = {
+    "researcher": Agent(
+        name="Researcher",
+        model_name="gpt-4",
+        purpose="To find and synthesize information",
+        tools=WEB_TOOLS
+    ),
+    "fact_checker": Agent(
+        name="Fact Checker",
+        model_name="gpt-4",
+        purpose="To verify claims and check sources",
+        tools=WEB_TOOLS
+    ),
+    "editor": Agent(
+        name="Editor",
+        model_name="gpt-4",
+        purpose="To improve clarity and correctness",
+        tools=[]
+    )
+}
+
+# Give each agent access to others for collaboration
+for agent_name, agent in agents.items():
+    agent.agents = [a for n, a in agents.items() if n != agent_name]
+
+# Use any agent as entry point
+thread = Thread()
+thread.add_message(Message(
+    role="user",
+    content="Write a fact-checked article about quantum computing"
+))
+
+# The researcher might delegate to fact_checker and editor
+result = await agents["researcher"].go(thread)
+```
+
+### Dynamic Agent Selection
+
+Choose agents based on task requirements:
+
+```python
+class DynamicCoordinator:
+    def __init__(self):
+        self.agent_pool = {
+            "creative": Agent(
+                name="Creative",
+                model_name="gpt-4",
+                temperature=0.9,
+                purpose="For creative and imaginative tasks"
+            ),
+            "analytical": Agent(
+                name="Analytical",
+                model_name="gpt-4",
+                temperature=0.1,
+                purpose="For precise, logical analysis"
+            ),
+            "coder": Agent(
+                name="Coder",
+                model_name="gpt-4",
+                purpose="For programming tasks",
+                tools=["python_repl", *FILES_TOOLS]
+            )
+        }
+    
+    async def handle_task(self, task: str) -> Any:
+        # Analyze task to select agents
+        selected_agents = []
+        
+        task_lower = task.lower()
+        if any(word in task_lower for word in ["create", "imagine", "design"]):
+            selected_agents.append(self.agent_pool["creative"])
+        
+        if any(word in task_lower for word in ["analyze", "compare", "evaluate"]):
+            selected_agents.append(self.agent_pool["analytical"])
+        
+        if any(word in task_lower for word in ["code", "program", "implement"]):
+            selected_agents.append(self.agent_pool["coder"])
+        
+        # Create coordinator with selected agents
+        coordinator = Agent(
+            name="Dynamic Coordinator",
+            model_name="gpt-4",
+            purpose=f"To coordinate: {task}",
+            agents=selected_agents
+        )
+        
+        thread = Thread()
+        thread.add_message(Message(role="user", content=task))
+        return await coordinator.go(thread)
+```
+
+## Best Practices
+
+### 1. Clear Purpose Definition
+
+Each agent should have a well-defined purpose:
+
+```python
+# Good - specific and clear
+agent = Agent(
+    name="Python Expert",
+    purpose="To write, review, and debug Python code following PEP 8 standards"
+)
+
+# Too vague
+agent = Agent(
+    name="Helper",
+    purpose="To help with stuff"
+)
+```
+
+### 2. Appropriate Tool Assignment
+
+Give agents only the tools they need:
+
+```python
+# Security researcher doesn't need file write access
+security_agent = Agent(
+    name="Security Auditor",
+    purpose="To analyze code for security vulnerabilities",
+    tools=["read_file", "search"]  # Read-only tools
+)
+
+# Code fixer needs write access
+fix_agent = Agent(
+    name="Security Fixer",
+    purpose="To fix identified security issues",
+    tools=FILES_TOOLS  # Full file access
+)
+```
+
+### 3. Model Selection
+
+Choose appropriate models for each agent:
+
+```python
+# Use more powerful model for complex reasoning
+architect = Agent(
+    name="System Architect",
+    model_name="gpt-4",
+    purpose="To design complex system architectures"
+)
+
+# Use faster/cheaper model for simple tasks
+formatter = Agent(
+    name="Code Formatter",
+    model_name="gpt-3.5-turbo",
+    purpose="To format code according to style guides"
+)
+```
+
+### 4. Delegation Depth
+
+Limit delegation depth to avoid complexity:
+
+```python
+# Configure maximum delegation depth
+coordinator = Agent(
+    name="Coordinator",
+    agents=[agent1, agent2],
+    metadata={"max_delegation_depth": 2}
+)
+```
+
+## Common Patterns
+
+### Research and Analysis Pipeline
+
+```python
+# Sequential pipeline of agents
+pipeline = [
+    Agent(name="Gatherer", purpose="To collect raw information", tools=WEB_TOOLS),
+    Agent(name="Analyzer", purpose="To analyze and extract insights"),
+    Agent(name="Reporter", purpose="To create final report", tools=FILES_TOOLS)
+]
+
+async def run_pipeline(task: str):
+    context = task
+    for agent in pipeline:
+        thread = Thread()
+        thread.add_message(Message(role="user", content=context))
+        _, messages = await agent.go(thread)
+        context = messages[-1].content
+    return context
+```
+
+### Consensus Building
+
+Multiple agents provide input:
+
+```python
+# Get perspectives from different agents
+perspectives = []
+for agent in [optimist_agent, pessimist_agent, realist_agent]:
+    thread = Thread()
+    thread.add_message(Message(
+        role="user",
+        content="What are the implications of AGI?"
+    ))
+    _, messages = await agent.go(thread)
+    perspectives.append({
+        "agent": agent.name,
+        "view": messages[-1].content
+    })
+
+# Synthesizer agent combines perspectives
+synthesizer = Agent(
+    name="Synthesizer",
+    purpose="To combine multiple viewpoints into balanced analysis"
+)
+
+thread = Thread()
+thread.add_message(Message(
+    role="user",
+    content=f"Synthesize these perspectives on AGI: {perspectives}"
+))
+result = await synthesizer.go(thread)
+```
+
+## Performance Considerations
+
+### 1. Parallel Delegation
+
+When agents work independently, run them in parallel:
+
+```python
+import asyncio
+
+async def parallel_research(topics: List[str]):
+    research_tasks = []
+    
+    for topic in topics:
+        agent = Agent(
+            name=f"Researcher-{topic}",
+            purpose=f"To research {topic}",
+            tools=WEB_TOOLS
+        )
+        
+        thread = Thread()
+        thread.add_message(Message(
+            role="user",
+            content=f"Research {topic} and summarize findings"
+        ))
+        
+        research_tasks.append(agent.go(thread))
+    
+    # Run all research in parallel
+    results = await asyncio.gather(*research_tasks)
+    return results
+```
+
+### 2. Caching Agent Responses
+
+Cache responses from specialized agents:
+
+```python
+from functools import lru_cache
+
+class CachedCoordinator:
+    def __init__(self):
+        self.agents = {}
+        self.cache = {}
+    
+    async def delegate_with_cache(self, agent_name: str, task: str):
+        cache_key = f"{agent_name}:{task}"
+        
+        if cache_key in self.cache:
+            return self.cache[cache_key]
+        
+        result = await self.agents[agent_name].go_for_task(task)
+        self.cache[cache_key] = result
+        return result
+```
+
+### 3. Agent Pool Management
+
+Reuse agent instances:
+
+```python
+class AgentPool:
+    def __init__(self, agent_config: Dict):
+        self.available = {name: Agent(**config) 
+                         for name, config in agent_config.items()}
+        self.busy = set()
+    
+    async def get_agent(self, agent_type: str):
+        if agent_type in self.available:
+            agent = self.available.pop(agent_type)
+            self.busy.add(agent)
+            return agent
+        else:
+            # Wait for agent to become available
+            await asyncio.sleep(0.1)
+            return await self.get_agent(agent_type)
+    
+    def release_agent(self, agent: Agent):
+        self.busy.remove(agent)
+        self.available[agent.name] = agent
+```
+
+## Error Handling
+
+Handle delegation failures gracefully:
+
+```python
+class ResilientCoordinator:
+    def __init__(self, agents: List[Agent], fallback_agent: Agent):
+        self.agents = agents
+        self.fallback = fallback_agent
+    
+    async def delegate_with_fallback(self, task: str):
+        for agent in self.agents:
+            try:
+                thread = Thread()
+                thread.add_message(Message(role="user", content=task))
+                result = await agent.go(thread)
+                return result
+            except Exception as e:
+                print(f"Agent {agent.name} failed: {e}")
+                continue
+        
+        # All agents failed, use fallback
+        thread = Thread()
+        thread.add_message(Message(role="user", content=task))
+        return await self.fallback.go(thread)
+```
+
+## Testing Multi-Agent Systems
+
+```python
+from tyler.eval import AgentEval, Conversation, Turn, Expectation
+
+# Test agent delegation
+eval = AgentEval(
+    name="delegation_test",
+    conversations=[
+        Conversation(
+            id="multi_step_task",
+            turns=[
+                Turn(
+                    role="user",
+                    content="Research Python async patterns and write example code",
+                    expect=Expectation(
+                        uses_delegation=["Researcher", "Coder"],
+                        completes_task=True
+                    )
+                )
+            ]
+        )
+    ]
+)
+
+# Run evaluation
+results = await eval.run(coordinator)
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Tool Integration"
+    icon="wrench"
+    href="/guides/adding-tools"
+  >
+    Add tools to your specialized agents
+  </Card>
+  <Card
+    title="Testing Agents"
+    icon="vial"
+    href="/guides/testing-agents"
+  >
+    Test your multi-agent systems
+  </Card>
+  <Card
+    title="Performance"
+    icon="gauge"
+    href="/guides/performance"
+  >
+    Optimize agent coordination
+  </Card>
+  <Card
+    title="Examples"
+    icon="code"
+    href="/examples"
+  >
+    See agent delegation examples
+  </Card>
+</CardGroup> 

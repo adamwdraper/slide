@@ -33,7 +33,7 @@ class SlackApp:
     """
     Main SlackApp class that encapsulates all Slack integration logic.
     
-    This class provides a clean interface for running Tyler agents as Slack bots
+    This class provides a clean interface for running Tyler agents as Slack agents
     with intelligent message routing, thread management, and health monitoring.
     """
     
@@ -765,7 +765,7 @@ class SlackApp:
         return footer if (weave_url or model) else ""
     
     async def start(self, host: str = "0.0.0.0", port: int = 8000):
-        """Start the Slack bot server."""
+        """Start the Slack agent server."""
         config = uvicorn.Config(
             app=self.fastapi_app,
             host=host,

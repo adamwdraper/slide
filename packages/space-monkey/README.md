@@ -1,10 +1,10 @@
-# Space Monkey - Tyler Slack Bot
+# Space Monkey - Tyler Slack Agent
 
-A simple, powerful way to deploy Tyler AI agents as Slack bots with just a few lines of code.
+A simple, powerful way to deploy Tyler AI agents as Slack agents with just a few lines of code.
 
 ## Overview
 
-Space Monkey provides a clean, class-based API for creating and deploying Tyler agents as Slack bots. It handles all the complexity of Slack integration, message routing, thread management, and storage while exposing a simple interface for agent configuration.
+Space Monkey provides a clean, class-based API for creating and deploying Tyler agents as Slack agents. It handles all the complexity of Slack integration, message routing, thread management, and storage while exposing a simple interface for agent configuration.
 
 ## Features
 
@@ -69,7 +69,7 @@ NARRATOR_DB_NAME=tyler
 NARRATOR_FILE_STORAGE_PATH=/data/files
 ```
 
-### 3. Create Your Bot
+### 3. Create Your Agent
 
 ```python
 import asyncio
@@ -102,7 +102,7 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-That's it! Your Tyler agent is now running as a Slack bot.
+That's it! Your Tyler agent is now running as a Slack agent.
 
 ## Advanced Configuration
 
@@ -162,7 +162,7 @@ app = SlackApp(
     thread_store=thread_store,
     file_store=file_store,
     health_check_url="http://healthcheck:8000/ping-receiver",
-    weave_project="my-slack-bot"
+    weave_project="my-slack-agent"
 )
 
 # Start with custom host/port
@@ -171,7 +171,7 @@ await app.start(host="0.0.0.0", port=8080)
 
 ### Message Classification Configuration
 
-Space Monkey includes intelligent message routing that determines when your bot should respond. You can customize what topics your bot should respond to:
+Space Monkey includes intelligent message routing that determines when your agent should respond. You can customize what topics your agent should respond to:
 
 ```python
 # Default configuration (responds to general questions and requests)
@@ -221,15 +221,15 @@ You can configure agents for any use case by adjusting the purpose and tools:
 
 ## Message Routing
 
-Tyler Slack Bot automatically handles intelligent message routing:
+Tyler Slack Agent automatically handles intelligent message routing:
 
 1. **Direct Messages**: All DM messages are processed by your agent
-2. **@Mentions**: Messages that mention the bot are always processed
+2. **@Mentions**: Messages that mention the agent are always processed
 3. **Channel Messages**: Automatically classified to determine if they need a response
 4. **Thread Replies**: Continues conversations in threads appropriately
 5. **Reactions**: Simple acknowledgments get emoji reactions instead of text responses
 
-This happens automatically - you just define your agent's behavior and the bot handles the rest.
+This happens automatically - you just define your agent's behavior and Space Monkey handles the rest.
 
 ## Storage Backends
 
@@ -249,16 +249,49 @@ This happens automatically - you just define your agent's behavior and the bot h
 
 ### Docker
 
-```dockerfile
-FROM python:3.11-slim
+Space Monkey includes Docker support for easy deployment. A production-ready Dockerfile and docker-compose.yml are included in the package.
 
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install -r requirements.txt
+#### Quick Start with Docker
 
-COPY . .
-CMD ["python", "bot.py"]
+```bash
+# Build the image
+docker build -t my-slack-agent .
+
+# Run with environment variables
+docker run -d \
+  --name slack-agent \
+  -p 8000:8000 \
+  -e SLACK_BOT_TOKEN=$SLACK_BOT_TOKEN \
+  -e SLACK_APP_TOKEN=$SLACK_APP_TOKEN \
+  -e OPENAI_API_KEY=$OPENAI_API_KEY \
+  my-slack-agent
 ```
+
+#### Using Docker Compose
+
+```bash
+# Copy environment template
+cp env.example .env
+# Edit .env with your credentials
+
+# Start the agent
+docker-compose up -d
+
+# View logs
+docker-compose logs -f slack-agent
+
+# Stop
+docker-compose down
+```
+
+#### Production Deployment
+
+The included Dockerfile follows best practices:
+- Non-root user for security
+- Health checks for monitoring
+- Proper signal handling for graceful shutdown
+- Multi-stage build for smaller images
+- Layer caching for faster builds
 
 ### Environment Configuration
 
@@ -286,7 +319,7 @@ NARRATOR_FILE_STORAGE_PATH=/data/files
 
 # Monitoring
 WANDB_API_KEY=prod-wandb-key
-WANDB_PROJECT=slack-bot-prod
+WANDB_PROJECT=slack-agent-prod
 HEALTH_CHECK_URL=http://healthcheck:8000/ping-receiver
 HEALTH_PING_INTERVAL_SECONDS=120
 
@@ -297,7 +330,7 @@ LOG_LEVEL=INFO
 
 ### Health Monitoring
 
-The bot includes built-in health check endpoints and optional external health monitoring:
+The agent includes built-in health check endpoints and optional external health monitoring:
 
 ```python
 app = SlackApp(
@@ -332,7 +365,7 @@ class SlackApp:
             file_store: FileStore instance for file handling
             health_check_url: Optional URL for health check pings
             weave_project: Optional Weave project name for tracing
-            response_topics: Simple sentence describing what topics the bot should respond to
+            response_topics: Simple sentence describing what topics the agent should respond to
         """
         
     async def start(
@@ -340,7 +373,7 @@ class SlackApp:
         host: str = "0.0.0.0",
         port: int = 8000
     ) -> None:
-        """Start the Slack bot app."""
+        """Start the Slack agent app."""
 ```
 
 ### Classifier Configuration
@@ -390,7 +423,7 @@ file_store = await FileStore.create(
 
 ## Examples
 
-### Simple HR Bot
+### Simple HR Agent
 
 ```python
 import asyncio
@@ -421,14 +454,14 @@ async def main():
 asyncio.run(main())
 ```
 
-### Technical Support Bot
+### Technical Support Agent
 
 ```python
 import asyncio
 from space_monkey import SlackApp, Agent, ThreadStore, FileStore
 
 async def main():
-    # Technical support bot with custom topic classification
+    # Technical support agent with custom topic classification
     thread_store = await ThreadStore.create()
     file_store = await FileStore.create()
     
@@ -478,7 +511,7 @@ async def main():
         agent=agent,
         thread_store=thread_store,
         file_store=file_store,
-        weave_project="support-bot"
+        weave_project="support-agent"
     )
     
     await app.start(port=8080)
@@ -488,7 +521,7 @@ asyncio.run(main())
 
 ## Contributing
 
-Tyler Slack Bot is part of the Tyler ecosystem. See the main Tyler documentation for information about contributing to the project.
+Tyler Slack Agent is part of the Tyler ecosystem. See the main Tyler documentation for information about contributing to the project.
 
 ## License
 

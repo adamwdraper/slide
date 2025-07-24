@@ -1,0 +1,644 @@
+---
+title: 'Testing Agents'
+description: 'Build reliable agents with comprehensive testing'
+---
+
+Testing is crucial for building reliable AI agents. Slide's evaluation framework lets you test agent behavior, verify tool usage, and ensure consistent responses across different scenarios.
+
+## Why Test Agents?
+
+AI agents are non-deterministic, making testing challenging but essential:
+- Verify agents use tools correctly
+- Ensure consistent behavior patterns
+- Catch regressions early
+- Build confidence before deployment
+
+## Quick Start with Testing
+
+```python
+import asyncio
+from tyler import Agent
+from tyler.eval import AgentEval, Conversation, Expectation
+from lye import WEB_TOOLS
+
+# Create your agent
+agent = Agent(
+    name="research-assistant",
+    model_name="gpt-4",
+    purpose="To help with research tasks",
+    tools=WEB_TOOLS
+)
+
+# Define test scenarios
+eval = AgentEval(
+    name="research_agent_test",
+    conversations=[
+        Conversation(
+            user="What's the weather in San Francisco?",
+            expect=Expectation(
+                uses_tools=["web-search"],
+                mentions_any=["weather", "temperature", "San Francisco"],
+                tone="helpful"
+            )
+        ),
+        Conversation(
+            user="Tell me a joke",
+            expect=Expectation(
+                does_not_use_tools=["web-search"],
+                tone="friendly"
+            )
+        )
+    ]
+)
+
+# Run tests
+async def run_tests():
+    results = await eval.run(agent, trials=3)
+    print(f"✅ Pass rate: {results.pass_rate:.0%}")
+    
+    # Detailed results
+    for conv_result in results.conversation_results:
+        print(f"\nTest: {conv_result.conversation.user}")
+        print(f"Passed: {conv_result.passed}")
+        if not conv_result.passed:
+            print(f"Failures: {conv_result.failures}")
+
+asyncio.run(run_tests())
+```
+
+## Mock Tools for Testing
+
+Use mock tools to test without making real API calls:
+
+```python
+from tyler.eval import mock_tools
+
+# Define mock responses
+mock_responses = {
+    "web-search": {
+        "weather San Francisco": "Current weather: 68°F, partly cloudy",
+        "latest AI news": "OpenAI announces GPT-5..."
+    },
+    "files-write": {
+        "report.md": "File saved successfully"
+    }
+}
+
+# Run tests with mocks
+eval = AgentEval(
+    name="mock_test",
+    conversations=[...],
+    mock_responses=mock_responses
+)
+
+# Tests run without real API calls
+results = await eval.run(agent)
+```
+
+## Testing Patterns
+
+### Pattern 1: Tool Usage Verification
+
+```python
+eval = AgentEval(
+    name="tool_usage_test",
+    conversations=[
+        # Should use search
+        Conversation(
+            user="Find information about quantum computing breakthroughs",
+            expect=Expectation(
+                uses_tools=["web-search"],
+                mentions_any=["quantum", "computing", "breakthrough"]
+            )
+        ),
+        
+        # Should use multiple tools
+        Conversation(
+            user="Research climate change and save a report",
+            expect=Expectation(
+                uses_tools=["web-search", "files-write"],
+                mentions_all=["climate", "report", "saved"]
+            )
+        ),
+        
+        # Should NOT use tools
+        Conversation(
+            user="What's 2 + 2?",
+            expect=Expectation(
+                does_not_use_tools=["web-search", "files-write"],
+                mentions="4"
+            )
+        )
+    ]
+)
+```
+
+### Pattern 2: Response Quality Testing
+
+```python
+eval = AgentEval(
+    name="quality_test",
+    conversations=[
+        Conversation(
+            user="Explain quantum computing to a 5-year-old",
+            expect=Expectation(
+                mentions_any=["simple", "easy", "like", "imagine"],
+                does_not_mention_any=["superposition", "entanglement", "qubit"],
+                tone="simple"
+            )
+        ),
+        
+        Conversation(
+            user="Write a professional email declining a meeting",
+            expect=Expectation(
+                mentions_all=["thank you", "unfortunately", "unable"],
+                tone="professional",
+                min_length=50
+            )
+        )
+    ]
+)
+```
+
+### Pattern 3: Multi-Turn Conversations
+
+```python
+eval = AgentEval(
+    name="multi_turn_test",
+    conversations=[
+        Conversation(
+            messages=[
+                {"role": "user", "content": "My name is Alice"},
+                {"role": "assistant", "content": "Nice to meet you, Alice!"},
+                {"role": "user", "content": "What's my name?"}
+            ],
+            expect=Expectation(
+                mentions="Alice",
+                tone="friendly"
+            )
+        )
+    ]
+)
+```
+
+## Advanced Testing Features
+
+### Custom Expectations
+
+Create custom expectation functions:
+
+```python
+def has_valid_json(response: str) -> bool:
+    """Check if response contains valid JSON"""
+    import json
+    try:
+        # Find JSON in response
+        start = response.find('{')
+        end = response.rfind('}') + 1
+        if start != -1 and end != 0:
+            json.loads(response[start:end])
+            return True
+    except:
+        pass
+    return False
+
+eval = AgentEval(
+    name="json_test",
+    conversations=[
+        Conversation(
+            user="Return user data as JSON",
+            expect=Expectation(
+                custom_checks=[has_valid_json],
+                mentions="json"
+            )
+        )
+    ]
+)
+```
+
+### Testing with Different Models
+
+Test consistency across models:
+
+```python
+models = ["gpt-4", "gpt-3.5-turbo", "claude-3-opus-20240229"]
+
+for model in models:
+    agent = Agent(
+        name="test-agent",
+        model_name=model,
+        purpose="To be helpful",
+        tools=WEB_TOOLS
+    )
+    
+    results = await eval.run(agent)
+    print(f"{model}: {results.pass_rate:.0%}")
+```
+
+### Performance Testing
+
+Measure response times:
+
+```python
+import time
+
+class PerformanceEval(AgentEval):
+    async def run(self, agent, trials=1):
+        start_time = time.time()
+        results = await super().run(agent, trials)
+        duration = time.time() - start_time
+        
+        print(f"Total time: {duration:.2f}s")
+        print(f"Avg per conversation: {duration/len(self.conversations):.2f}s")
+        
+        return results
+```
+
+## Integration Testing
+
+Test complete workflows:
+
+```python
+import asyncio
+from tyler import Agent, Thread, Message, ThreadStore
+from lye import WEB_TOOLS, FILES_TOOLS
+
+async def test_research_workflow():
+    # Setup
+    thread_store = await ThreadStore.create()
+    agent = Agent(
+        name="researcher",
+        model_name="gpt-4",
+        purpose="To research and create reports",
+        tools=[*WEB_TOOLS, *FILES_TOOLS],
+        thread_store=thread_store
+    )
+    
+    # Test workflow
+    thread = Thread(id="test-research")
+    
+    # Step 1: Research
+    thread.add_message(Message(
+        role="user",
+        content="Research the latest in renewable energy"
+    ))
+    thread, _ = await agent.go(thread)
+    
+    # Verify research was done
+    assert any(msg.role == "tool" and "web-search" in msg.name 
+              for msg in thread.messages)
+    
+    # Step 2: Create report
+    thread.add_message(Message(
+        role="user",
+        content="Now create a summary report and save it"
+    ))
+    thread, _ = await agent.go(thread)
+    
+    # Verify file was created
+    assert any(msg.role == "tool" and "files-write" in msg.name 
+              for msg in thread.messages)
+    
+    print("✅ Workflow test passed!")
+
+asyncio.run(test_research_workflow())
+```
+
+## Testing Best Practices
+
+### 1. Test Different Scenarios
+
+```python
+eval = AgentEval(
+    name="comprehensive_test",
+    conversations=[
+        # Happy path
+        Conversation(
+            user="Normal request for information",
+            expect=Expectation(tone="helpful")
+        ),
+        
+        # Edge cases
+        Conversation(
+            user="",  # Empty input
+            expect=Expectation(
+                mentions_any=["provide", "help", "question"],
+                tone="helpful"
+            )
+        ),
+        
+        # Error scenarios
+        Conversation(
+            user="Search for information on nonexistent-topic-12345",
+            expect=Expectation(
+                handles_gracefully=True,
+                mentions_any=["couldn't find", "no results", "try"]
+            )
+        )
+    ]
+)
+```
+
+### 2. Test Tool Error Handling
+
+```python
+# Mock tool failures
+mock_responses = {
+    "web-search": {
+        "error_test": Exception("Network error")
+    }
+}
+
+eval = AgentEval(
+    name="error_handling_test",
+    mock_responses=mock_responses,
+    conversations=[
+        Conversation(
+            user="Search for error_test",
+            expect=Expectation(
+                handles_gracefully=True,
+                mentions_any=["error", "problem", "try again"],
+                does_not_crash=True
+            )
+        )
+    ]
+)
+```
+
+### 3. Regression Testing
+
+```python
+class RegressionTest:
+    def __init__(self):
+        self.baseline_results = None
+    
+    async def establish_baseline(self, agent, eval):
+        """Run tests and save baseline"""
+        self.baseline_results = await eval.run(agent)
+        return self.baseline_results
+    
+    async def test_regression(self, agent, eval):
+        """Compare against baseline"""
+        current_results = await eval.run(agent)
+        
+        # Compare pass rates
+        baseline_rate = self.baseline_results.pass_rate
+        current_rate = current_results.pass_rate
+        
+        if current_rate < baseline_rate - 0.1:  # 10% tolerance
+            print(f"⚠️ Regression detected!")
+            print(f"Baseline: {baseline_rate:.0%}")
+            print(f"Current: {current_rate:.0%}")
+            return False
+        
+        print(f"✅ No regression (Current: {current_rate:.0%})")
+        return True
+```
+
+## CI/CD Integration
+
+### GitHub Actions Example
+
+```yaml
+# .github/workflows/test-agents.yml
+name: Test Agents
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v2
+    
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.12.9'
+    
+    - name: Install dependencies
+      run: |
+        pip install uv
+        uv pip install --system slide-tyler slide-lye
+        uv pip install --system pytest pytest-asyncio
+    
+    - name: Run agent tests
+      env:
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      run: |
+        python -m pytest tests/test_agents.py -v
+```
+
+### Test File Structure
+
+```python
+# tests/test_agents.py
+import pytest
+import asyncio
+from tyler import Agent
+from tyler.eval import AgentEval, Conversation, Expectation
+
+class TestResearchAgent:
+    @pytest.fixture
+    async def agent(self):
+        return Agent(
+            name="test-researcher",
+            model_name="gpt-3.5-turbo",  # Cheaper for tests
+            purpose="To help with research"
+        )
+    
+    @pytest.mark.asyncio
+    async def test_basic_research(self, agent):
+        eval = AgentEval(
+            name="basic_research",
+            conversations=[
+                Conversation(
+                    user="What is Python?",
+                    expect=Expectation(
+                        mentions_any=["programming", "language"],
+                        min_length=50
+                    )
+                )
+            ]
+        )
+        
+        results = await eval.run(agent)
+        assert results.pass_rate >= 0.8
+    
+    @pytest.mark.asyncio
+    async def test_tool_usage(self, agent):
+        # Test with mocked tools
+        pass
+```
+
+## Debugging Failed Tests
+
+Enable detailed logging:
+
+```python
+import logging
+
+# Set up logging
+logging.basicConfig(level=logging.DEBUG)
+
+# Run tests with debugging
+eval = AgentEval(
+    name="debug_test",
+    conversations=[...],
+    debug=True  # Show detailed output
+)
+
+results = await eval.run(agent)
+
+# Inspect failures
+for conv_result in results.conversation_results:
+    if not conv_result.passed:
+        print(f"\n❌ Failed: {conv_result.conversation.user}")
+        print(f"Response: {conv_result.response}")
+        print(f"Failures: {conv_result.failures}")
+        print(f"Tool calls: {conv_result.tool_calls}")
+```
+
+## Real-World Example: Customer Support Agent Testing
+
+```python
+from tyler import Agent
+from tyler.eval import AgentEval, Conversation, Expectation
+from lye import WEB_TOOLS
+
+class CustomerSupportTests:
+    def __init__(self):
+        self.agent = Agent(
+            name="support-agent",
+            model_name="gpt-4",
+            purpose="To help customers with product issues",
+            tools=WEB_TOOLS
+        )
+    
+    def get_test_suite(self):
+        return AgentEval(
+            name="customer_support_suite",
+            conversations=[
+                # Greeting test
+                Conversation(
+                    user="Hi",
+                    expect=Expectation(
+                        mentions_any=["hello", "hi", "help"],
+                        tone="friendly",
+                        max_length=200
+                    )
+                ),
+                
+                # Product inquiry
+                Conversation(
+                    user="How do I reset my password?",
+                    expect=Expectation(
+                        mentions_all=["password", "reset"],
+                        mentions_any=["click", "button", "email", "link"],
+                        tone="helpful",
+                        min_length=50
+                    )
+                ),
+                
+                # Complaint handling
+                Conversation(
+                    user="Your product is terrible and doesn't work!",
+                    expect=Expectation(
+                        mentions_any=["sorry", "apologize", "understand"],
+                        mentions_any=["help", "assist", "resolve"],
+                        tone="empathetic",
+                        does_not_mention_any=["terrible", "doesn't work"]
+                    )
+                ),
+                
+                # Information lookup
+                Conversation(
+                    user="What are your business hours?",
+                    expect=Expectation(
+                        uses_tools=["web-search"],
+                        mentions_any=["hours", "open", "available"],
+                        provides_specific_info=True
+                    )
+                ),
+                
+                # Escalation
+                Conversation(
+                    user="I want to speak to a human!",
+                    expect=Expectation(
+                        mentions_any=["representative", "agent", "transfer"],
+                        tone="understanding",
+                        provides_next_steps=True
+                    )
+                )
+            ]
+        )
+    
+    async def run_all_tests(self):
+        eval = self.get_test_suite()
+        
+        # Run multiple trials for consistency
+        results = await eval.run(self.agent, trials=5)
+        
+        print(f"\n📊 Customer Support Agent Test Results")
+        print(f"{'='*50}")
+        print(f"Overall pass rate: {results.pass_rate:.0%}")
+        print(f"Total tests: {len(eval.conversations) * 5}")
+        print(f"Passed: {results.passed_count}")
+        print(f"Failed: {results.failed_count}")
+        
+        # Detailed analysis
+        if results.pass_rate < 1.0:
+            print(f"\n❌ Failed Tests:")
+            for conv_result in results.conversation_results:
+                if not conv_result.passed:
+                    print(f"- {conv_result.conversation.user[:50]}...")
+                    print(f"  Failures: {', '.join(conv_result.failures)}")
+        
+        return results.pass_rate >= 0.9  # 90% threshold
+
+# Run tests
+async def main():
+    tester = CustomerSupportTests()
+    success = await tester.run_all_tests()
+    
+    if success:
+        print("\n✅ All tests passed! Agent is ready for deployment.")
+    else:
+        print("\n❌ Tests failed. Please review and fix issues.")
+
+asyncio.run(main())
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Evaluation Framework"
+    icon="clipboard-check"
+    href="/packages/tyler/evaluations"
+  >
+    Deep dive into evaluation features
+  </Card>
+  <Card
+    title="CI/CD for Agents"
+    icon="code-branch"
+    href="/guides/cicd"
+  >
+    Automate agent testing
+  </Card>
+  <Card
+    title="Mock Tools"
+    icon="masks-theater"
+    href="/guides/mock-tools"
+  >
+    Advanced mocking strategies
+  </Card>
+  <Card
+    title="Performance Testing"
+    icon="gauge"
+    href="/guides/performance"
+  >
+    Test agent performance
+  </Card>
+</CardGroup> 

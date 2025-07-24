@@ -1,120 +1,126 @@
 ---
-title: 'Welcome to Slide'
-description: 'A powerful AI agent framework for building intelligent applications'
+title: 'Overview'
+description: 'A development kit for manifesting AI agents with a complete lack of conventional limitations.'
 ---
 
-<img
-  className="block dark:hidden"
-  src="/images/hero-light.svg"
-  alt="Slide Framework Hero Light"
-/>
-<img
-  className="hidden dark:block"
-  src="/images/hero-dark.svg"
-  alt="Slide Framework Hero Dark"
-/>
+<div align="center">
+  <img src="/logo/slide_logo.svg" alt="Slide Logo" width="45%" />
+</div>
 
-## What is Slide?
 
-Slide is a comprehensive AI agent framework that provides everything you need to build intelligent, autonomous applications. It consists of four powerful packages that work seamlessly together:
-
-<CardGroup cols={2}>
-  <Card
-    title="Tyler"
-    icon="robot"
-    href="/packages/tyler/introduction"
-  >
-    Core agent framework with MCP (Model Context Protocol) support for building autonomous AI agents
-  </Card>
-  <Card
-    title="Lye"
-    icon="toolbox"
-    href="/packages/lye/introduction"
-  >
-    Rich utility library providing tools for audio, browser automation, image processing, and more
-  </Card>
-  <Card
-    title="Narrator"
-    icon="database"
-    href="/packages/narrator/introduction"
-  >
-    Thread and storage management system for maintaining conversation history and agent state
-  </Card>
-  <Card
-    title="Space Monkey"
-    icon="slack"
-    href="/packages/space-monkey/introduction"
-  >
-    Slack integration framework for deploying AI agents as Slack bots
-  </Card>
-</CardGroup>
-
-## Why Slide?
-
-### 🚀 Production-Ready
-Built with real-world applications in mind, Slide provides robust error handling, logging, and monitoring capabilities out of the box.
-
-### 🧩 Modular Architecture
-Use only what you need. Each package is designed to work independently or as part of the complete framework.
-
-### 🤖 MCP Support
-Native support for the Model Context Protocol enables seamless integration with AI tools and services.
-
-### 🛠️ Rich Tool Ecosystem
-From audio transcription to web scraping, Slide's Lye package provides a comprehensive set of tools for your agents.
-
-## Quick Example
+**Build an agent with just a few lines of code.**
 
 ```python
-from tyler import Agent
-from lye import audio, browser
+import asyncio
+from tyler import Agent, Thread, Message
+from lye import WEB_TOOLS
 
-# Create an agent with audio and browser capabilities
+# Create an AI agent that can browse the web
 agent = Agent(
-    name="research-assistant",
-    tools=[audio.transcribe, browser.screenshot, browser.extract_text]
+    name="web_summarizer",
+    model_name="gpt-4o",
+    purpose="To summarize web content clearly and concisely",
+    tools=WEB_TOOLS
 )
 
-# Run the agent
-result = await agent.run(
-    "Transcribe this podcast and create a summary with screenshots"
+# Ask your agent to visit and summarize a webpage
+thread = Thread()
+message = Message(
+    role="user", 
+    content="Why should I use https://slide.mintlify.app/introduction?"
 )
+thread.add_message(message)
+
+# The agent will visit the page and provide a summary
+processed_thread, new_messages = asyncio.run(agent.go(thread))
+
+# Print all messages in the conversation
+for msg in processed_thread.messages:
+    print(f"{msg.role.upper()}: {msg.content}")
+    print("-" * 80)
 ```
 
-## Get Started
+That's it! Your agent can now search the web, analyze images, and complete complex tasks autonomously.
+
+## Why use Slide?
+
+Slide gives you everything you need to build, test, and deploy intelligent AI agents. It is:
+
+- **Extensible and open source**: Built on a foundation you can inspect, customize, and contribute to
+- **Flexible with model support**: Compatible with any LLM provider supported by LiteLLM (100+ providers including OpenAI, Anthropic, etc.)
+- **MCP compatible**: Seamlessly integrated with Model Context Protocol (MCP) compatible servers and tools
+- **Agent delegation built-in**: Create multi-agent systems where specialized agents collaborate to solve complex tasks
+- **Multimodal by design**: Capable of processing and understanding images, audio, PDFs, and more out of the box
+- **Persistent with conversations**: Equipped with built-in support for threads, messages, and attachments with flexible storage options (in-memory, SQLite, or PostgreSQL)
+- **Ready-to-use with tools**: Packed with built-in tools for web interaction, file handling, and browser automation with support for custom tools
+- **Real-time streaming enabled**: Designed to build interactive applications with streaming responses from both agents and tools
+- **Evaluation-ready**: Equipped with a framework to test agents safely with mock tools, prebuilt LLM judges, and multi-turn conversation scenarios
+- **Debuggable**: Integrated with W&B Weave for powerful tracing and debugging capabilities
+
+## Ready to Build?
 
 <CardGroup cols={2}>
   <Card
-    title="Quickstart"
+    title="Quickstart Tutorial"
     icon="rocket"
     href="/quickstart"
   >
-    Get up and running with Slide in 5 minutes
+    Build your first agent in 5 minutes
   </Card>
   <Card
-    title="Core Concepts"
-    icon="book"
-    href="/concepts/agents"
+    title="Your First Agent"
+    icon="sparkles"
+    href="/guides/your-first-agent"
   >
-    Learn the fundamental concepts behind Slide
+    Step-by-step guide to building agents
   </Card>
 </CardGroup>
 
-## Join the Community
+## What Can You Build?
 
 <CardGroup cols={2}>
   <Card
-    title="GitHub"
-    icon="github"
-    href="https://github.com/yourusername/slide"
+    title="AI Agents"
+    icon="robot"
+    href="/quickstart"
   >
-    Star us on GitHub and contribute to the project
+    Autonomous agents that can use tools, make decisions, and complete complex tasks
   </Card>
   <Card
-    title="Slack Community"
-    icon="slack"
-    href="https://slide-community.slack.com"
+    title="Multi-Agent Systems"
+    icon="users"
+    href="/guides/agent-delegation"
   >
-    Join our Slack to get help and share your projects
+    Coordinate specialized agents that work together on complex problems
   </Card>
-</CardGroup> 
+  <Card
+    title="Slack Agents"
+    icon="slack"
+    href="/apps/slack-agent"
+  >
+    Deploy your agents as Slack agents with built-in message handling
+  </Card>
+  <Card
+    title="Research Assistants"
+    icon="magnifying-glass"
+    href="/examples/research-assistant"
+  >
+    Agents that can search, analyze, and synthesize information
+  </Card>
+</CardGroup>
+
+
+---
+
+<details>
+<summary>🧩 Advanced: Using Slide's Modular Architecture</summary>
+
+While most users will want the full agent experience, Slide is built as modular packages that can be used independently:
+
+- **Tyler**: Core agent framework
+- **Lye**: Tool library 
+- **Narrator**: Conversation persistence
+- **Space Monkey**: Slack integration
+
+[Learn more about the architecture →](/concepts/architecture)
+</details>

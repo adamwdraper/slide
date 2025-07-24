@@ -1,0 +1,404 @@
+---
+title: 'Your First Agent'
+description: 'Step-by-step guide to building your first AI agent'
+---
+
+In this guide, we'll build a research assistant agent that can search the web, analyze information, and create reports. By the end, you'll understand the core concepts of building agents with Slide.
+
+## What We're Building
+
+We'll create an agent that can:
+- Search for information on any topic
+- Analyze and summarize findings
+- Save research reports to files
+- Remember previous conversations
+
+<Steps>
+  <Step title="Set Up Your Project">
+    First, create a new project directory:
+
+    ```bash
+    mkdir research-agent
+    cd research-agent
+    ```
+
+    Install the required packages:
+
+    <Tabs>
+      <Tab title="uv (Recommended)">
+        ```bash
+        # Initialize project with uv
+        uv init .
+        
+        # Add Slide packages
+        uv add slide-tyler slide-lye slide-narrator
+        ```
+      </Tab>
+      <Tab title="pip">
+        ```bash
+        # Create virtual environment
+        python -m venv venv
+        source venv/bin/activate  # On Windows: venv\Scripts\activate
+        
+        # Install packages
+        pip install slide-tyler slide-lye slide-narrator
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+
+  <Step title="Create Your First Agent">
+    Create a file called `agent.py`:
+
+    ```python
+    import asyncio
+    from tyler import Agent, Thread, Message
+    from lye import WEB_TOOLS, FILES_TOOLS
+
+    # Create your agent
+    agent = Agent(
+        name="research-assistant",
+        model_name="gpt-4o",
+        purpose="To help with research by finding, analyzing, and summarizing information",
+        tools=[
+            *WEB_TOOLS,     # Can search and fetch web content
+            *FILES_TOOLS    # Can read and write files
+        ]
+    )
+
+    async def main():
+        # Create a conversation thread
+        thread = Thread()
+        
+        # Add a user message
+        message = Message(
+            role="user",
+            content="Research the latest developments in renewable energy and create a summary report"
+        )
+        thread.add_message(message)
+        
+        # Let the agent work
+        print("🔍 Researching renewable energy...")
+        processed_thread, new_messages = await agent.go(thread)
+        
+        # Print the results
+        for msg in new_messages:
+            if msg.role == "assistant":
+                print(f"\n💬 Assistant: {msg.content}")
+            elif msg.role == "tool":
+                print(f"\n🔧 Used {msg.name}")
+
+    if __name__ == "__main__":
+        asyncio.run(main())
+    ```
+  </Step>
+
+  <Step title="Run Your Agent">
+    <Tabs>
+      <Tab title="uv">
+        ```bash
+        uv run agent.py
+        ```
+      </Tab>
+      <Tab title="python">
+        ```bash
+        python agent.py
+        ```
+      </Tab>
+    </Tabs>
+
+    When you run the agent, here's what happens:
+
+    1. **Thread Creation**: A conversation thread is created to hold messages
+    2. **Message Processing**: The agent receives your message and plans its approach
+    3. **Tool Usage**: The agent uses web search tools to find information
+    4. **Response Generation**: The agent synthesizes findings into a response
+  </Step>
+</Steps>
+
+## Understanding What Happened
+
+Let's add some visibility into the agent's process:
+
+```python
+# Enhanced version with detailed output
+async def main():
+    thread = Thread()
+    message = Message(
+        role="user",
+        content="What are the top 3 renewable energy breakthroughs in 2024?"
+    )
+    thread.add_message(message)
+    
+    print("🤖 Agent is thinking...")
+    processed_thread, new_messages = await agent.go(thread)
+    
+    # Show the complete conversation
+    print("\n=== Complete Conversation ===")
+    for msg in processed_thread.messages:
+        if msg.role == "user":
+            print(f"\n👤 User: {msg.content}")
+        elif msg.role == "assistant":
+            print(f"\n🤖 Assistant: {msg.content}")
+        elif msg.role == "tool":
+            print(f"\n🔧 Tool [{msg.name}]: {msg.content[:100]}...")
+```
+
+## Add Persistence to Your Agent
+
+Let's upgrade the agent to maintain conversation history:
+
+```python
+import asyncio
+from tyler import Agent, Thread, Message, ThreadStore, FileStore
+from lye import WEB_TOOLS, FILES_TOOLS
+
+async def create_agent_with_persistence():
+    # Set up persistent storage
+    thread_store = await ThreadStore.create("sqlite+aiosqlite:///research.db")
+    file_store = await FileStore.create(base_path="./research_files")
+    
+    # Create agent with persistence
+    agent = Agent(
+        name="research-assistant",
+        model_name="gpt-4",
+        purpose="To help with research and maintain our conversation history",
+        tools=[*WEB_TOOLS, *FILES_TOOLS],
+        thread_store=thread_store,
+        file_store=file_store
+    )
+    
+    return agent, thread_store
+
+async def main():
+    agent, thread_store = await create_agent_with_persistence()
+    
+    # Try to resume previous conversation
+    thread_id = "main-research"
+    try:
+        thread = await thread_store.get_thread(thread_id)
+        print("📚 Resuming previous research session...")
+        print(f"   Found {len(thread.messages)} previous messages")
+    except:
+        thread = Thread(id=thread_id)
+        print("🆕 Starting new research session...")
+    
+    # Add new message
+    message = Message(
+        role="user",
+        content="What did we discuss last time? If this is our first conversation, tell me about yourself."
+    )
+    thread.add_message(message)
+    
+    # Process
+    processed_thread, new_messages = await agent.go(thread)
+    
+    # Save the conversation
+    await thread_store.save_thread(processed_thread)
+    
+    # Print response
+    for msg in new_messages:
+        if msg.role == "assistant":
+            print(f"\n🤖 {msg.content}")
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+## Interactive Research Session
+
+Let's create an interactive version where you can have a conversation:
+
+```python
+async def interactive_session():
+    agent, thread_store = await create_agent_with_persistence()
+    
+    # Load or create thread
+    thread_id = "interactive-research"
+    try:
+        thread = await thread_store.get_thread(thread_id)
+        print("📚 Resuming previous session...")
+    except:
+        thread = Thread(id=thread_id)
+        print("🆕 Starting new session...")
+        print("💡 Try asking me to research any topic!")
+    
+    print("\nType 'exit' to end the session\n")
+    
+    while True:
+        # Get user input
+        user_input = input("You: ")
+        if user_input.lower() in ['exit', 'quit']:
+            break
+        
+        # Add message to thread
+        message = Message(role="user", content=user_input)
+        thread.add_message(message)
+        
+        # Process with agent
+        print("\n🤖 Thinking...", end="", flush=True)
+        processed_thread, new_messages = await agent.go(thread)
+        
+        # Clear thinking message
+        print("\r" + " " * 20 + "\r", end="")
+        
+        # Display response
+        for msg in new_messages:
+            if msg.role == "assistant":
+                print(f"🤖 Assistant: {msg.content}\n")
+            elif msg.role == "tool":
+                print(f"   [Used {msg.name}]")
+        
+        # Save conversation
+        await thread_store.save_thread(processed_thread)
+        thread = processed_thread
+    
+    print("\n👋 Session saved. See you next time!")
+
+if __name__ == "__main__":
+    asyncio.run(interactive_session())
+```
+
+## Understanding Tools
+
+Let's explore what tools your agent can use:
+
+```python
+# See available tools
+from lye import WEB_TOOLS, FILES_TOOLS, IMAGE_TOOLS
+
+print("🔧 Web Tools:")
+for tool in WEB_TOOLS:
+    print(f"   - {tool['definition']['name']}: {tool['definition']['description']}")
+
+print("\n📁 File Tools:")
+for tool in FILES_TOOLS:
+    print(f"   - {tool['definition']['name']}: {tool['definition']['description']}")
+```
+
+You can also give your agent specific tools:
+
+```python
+from lye.web import search, fetch
+from lye.files import write_file
+
+agent = Agent(
+    name="focused-researcher",
+    model_name="gpt-4",
+    purpose="To search and save information",
+    tools=[search, fetch, write_file]  # Only these specific tools
+)
+```
+
+
+## Debugging Your Agent
+
+### Basic Logging
+
+Enable detailed logging to see what your agent is doing:
+
+```python
+import logging
+
+# Enable debug logging
+logging.basicConfig(level=logging.INFO)
+```
+
+### Advanced Tracing with Weave
+
+For comprehensive debugging and observability, Slide integrates with [Weights & Biases Weave](https://weave-docs.wandb.ai/). Weave provides:
+
+- **Visual traces** of every agent action and decision
+- **LLM call tracking** with inputs, outputs, and token usage
+- **Tool execution monitoring** to see which tools were called and their results
+- **Performance insights** to identify bottlenecks
+- **Error tracking** with full context
+
+```python
+import weave
+
+# Initialize Weave tracing
+weave.init("my-research-agent")
+
+# Now all agent operations will be traced automatically
+# View traces at https://wandb.ai/your-username/my-research-agent
+```
+
+<Tip>
+  Weave traces are invaluable for debugging complex agent behaviors. You can see exactly what prompts were sent to the LLM, what tools were called, and how the agent made its decisions.
+</Tip>
+
+## Next Steps
+
+You've built your first agent! Here's what to explore next:
+
+<CardGroup cols={2}>
+  <Card
+    title="Adding More Tools"
+    icon="toolbox"
+    href="/guides/adding-tools"
+  >
+    Give your agent more capabilities
+  </Card>
+  <Card
+    title="Streaming Responses"
+    icon="stream"
+    href="/guides/streaming-responses"
+  >
+    Build real-time interactive agents
+  </Card>
+  <Card
+    title="Testing Your Agent"
+    icon="vial"
+    href="/guides/testing-agents"
+  >
+    Ensure your agent behaves correctly
+  </Card>
+  <Card
+    title="Deploy to Slack"
+    icon="slack"
+    href="/apps/slack-agent"
+  >
+    Turn your agent into a Slack agent
+  </Card>
+</CardGroup>
+
+## Tips for Success
+
+<AccordionGroup>
+  <Accordion title="Clear Purpose Statements">
+    The `purpose` parameter significantly affects agent behavior. Be specific:
+    ```python
+    # Good
+    purpose="To research technology topics and create detailed, well-sourced reports"
+    
+    # Too vague
+    purpose="To help with stuff"
+    ```
+  </Accordion>
+  
+  <Accordion title="Tool Selection">
+    Only give your agent the tools it needs:
+    ```python
+    # For a research agent
+    tools=[*WEB_TOOLS, *FILES_TOOLS]
+    
+    # For an image analysis agent
+    tools=[*IMAGE_TOOLS, *FILES_TOOLS]
+    
+    # For a data processing agent
+    tools=[*FILES_TOOLS]
+    ```
+  </Accordion>
+  
+  <Accordion title="Error Handling">
+    Always handle potential errors:
+    ```python
+    try:
+        processed_thread, new_messages = await agent.go(thread)
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        # Handle gracefully
+    ```
+  </Accordion>
+</AccordionGroup> 

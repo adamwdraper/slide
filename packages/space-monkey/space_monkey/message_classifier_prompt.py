@@ -10,7 +10,7 @@ def format_classifier_prompt(
     
     Args:
         agent_name: Name of the agent for the prompt
-        bot_user_id: Slack bot user ID for @mention detection
+        bot_user_id: Slack agent user ID for @mention detection
         response_topics: Simple sentence describing what topics the bot should respond to
     
     Returns:

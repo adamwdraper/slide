@@ -5,7 +5,6 @@ This file tests the delegation of tasks from one agent to another,
 focusing on the new direct delegation approach without registries.
 """
 import os
-os.environ["OPENAI_API_KEY"] = "dummy"
 import pytest
 from unittest.mock import patch, MagicMock, AsyncMock, call
 import json

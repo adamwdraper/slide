@@ -1,7 +1,7 @@
 """
-Space Monkey - Tyler Slack Bot
+Space Monkey - Tyler Slack Agent
 
-A simple, powerful way to deploy Tyler AI agents as Slack bots.
+A simple, powerful way to deploy Tyler AI agents as Slack agents.
 """
 
 # Re-export core components from other packages

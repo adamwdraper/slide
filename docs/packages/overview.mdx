@@ -33,7 +33,7 @@ graph TB
     - Streaming responses
     
     ```bash
-    uv add tyler
+    uv add slide-tyler
     ```
   </Card>
   
@@ -46,7 +46,7 @@ graph TB
     - Web scraping
     
     ```bash
-    uv add lye
+    uv add slide-lye
     ```
   </Card>
   
@@ -58,19 +58,19 @@ graph TB
     - State persistence
     
     ```bash
-    uv add narrator
+    uv add slide-narrator
     ```
   </Card>
   
   <Card title="Space Monkey" icon="slack">
-    **Slack Bot Framework**
+    **Slack Agent Framework**
     - Deploy agents to Slack
     - Event handling
     - Message classification
     - Interactive components
     
     ```bash
-    uv add space-monkey
+    uv add slide-space-monkey
     ```
   </Card>
 </CardGroup>
@@ -81,69 +81,111 @@ graph TB
 Tyler agents use Lye tools to interact with the world:
 
 ```python
-from tyler import Agent
-from lye import audio, browser, files
+from tyler import Agent, Thread, Message
+from lye import AUDIO_TOOLS, BROWSER_TOOLS, FILES_TOOLS
 
 agent = Agent(
     name="assistant",
-    tools=[
-        audio.transcribe,
-        browser.screenshot,
-        files.write
-    ]
+    model_name="gpt-4",
+    purpose="To help with various tasks",
+    tools=[*AUDIO_TOOLS, *BROWSER_TOOLS, *FILES_TOOLS]
 )
+
+# Use the agent
+thread = Thread()
+message = Message(role="user", content="Transcribe this audio and save the result")
+thread.add_message(message)
+processed_thread, new_messages = await agent.go(thread)
 ```
 
 ### Tyler + Narrator
-Narrator provides memory and context to Tyler agents:
+Narrator provides persistent storage to Tyler agents:
 
 ```python
-from tyler import Agent
-from narrator import Thread, FileStore
+from tyler import Agent, Thread, Message, ThreadStore, FileStore
 
-store = FileStore("./conversations")
-thread = Thread(store=store)
+# Set up persistent storage
+thread_store = await ThreadStore.create("sqlite+aiosqlite:///conversations.db")
+file_store = await FileStore.create(base_path="./files")
 
 agent = Agent(
     name="assistant",
-    thread=thread  # Agent now has memory
+    model_name="gpt-4",
+    purpose="To be a helpful assistant with conversation persistence",
+    thread_store=thread_store,
+    file_store=file_store
 )
+
+# Agent now has conversation persistence
+thread = Thread(id="main-conversation")
+message = Message(role="user", content="Remember my favorite color is blue")
+thread.add_message(message)
+processed_thread, _ = await agent.go(thread)
+await thread_store.save_thread(processed_thread)
 ```
 
 ### Tyler + Space Monkey
-Space Monkey deploys Tyler agents as Slack bots:
+Space Monkey deploys Tyler agents as Slack agents:
 
 ```python
-from tyler import Agent
+from tyler import Agent, ThreadStore, FileStore
 from space_monkey import SlackApp
 
-agent = Agent(name="slack-bot")
-app = SlackApp(agent=agent)
+# Create agent with persistent storage
+thread_store = await ThreadStore.create()
+file_store = await FileStore.create()
+
+agent = Agent(
+    name="slack-bot",
+    model_name="gpt-4",
+    purpose="To help team members in Slack",
+    thread_store=thread_store,
+    file_store=file_store
+)
+
+# Deploy as Slack agent
+app = SlackApp(
+    agent=agent,
+    slack_token="xoxb-your-token",
+    signing_secret="your-secret"
+)
+app.start()
 ```
 
 ### Complete Integration
 All packages working together:
 
 ```python
-from tyler import Agent
-from lye import web, files
-from narrator import Thread, FileStore
+import asyncio
+from tyler import Agent, Thread, Message, ThreadStore, FileStore
+from lye import WEB_TOOLS, FILES_TOOLS
 from space_monkey import SlackApp
 
-# Storage for conversation history
-store = FileStore("./slack-conversations")
-thread = Thread(store=store)
+async def main():
+    # Storage for conversation history
+    thread_store = await ThreadStore.create("sqlite+aiosqlite:///slack_conversations.db")
+    file_store = await FileStore.create(base_path="./slack_files")
+    
+    # Agent with tools and persistence
+    agent = Agent(
+        name="company-assistant",
+        model_name="gpt-4",
+        purpose="To be a helpful company assistant",
+        tools=[*WEB_TOOLS, *FILES_TOOLS],
+        thread_store=thread_store,
+        file_store=file_store
+    )
+    
+    # Deploy as Slack agent
+    app = SlackApp(
+        agent=agent,
+        slack_token="xoxb-your-token",
+        signing_secret="your-secret"
+    )
+    app.start()
 
-# Agent with tools and memory
-agent = Agent(
-    name="company-assistant",
-    tools=[web.search, files.read],
-    thread=thread
-)
-
-# Deploy as Slack bot
-app = SlackApp(agent=agent)
-app.start()
+if __name__ == "__main__":
+    asyncio.run(main())
 ```
 
 ## Installation Options
@@ -151,25 +193,25 @@ app.start()
 ### Install Everything
 ```bash
 # Using uv (recommended)
-uv add tyler lye narrator space-monkey
+uv add slide-tyler slide-lye slide-narrator slide-space-monkey
 
 # Using pip
-pip install tyler lye narrator space-monkey
+pip install slide-tyler slide-lye slide-narrator slide-space-monkey
 ```
 
 ### Install What You Need
 ```bash
 # Just the agent framework
-uv add tyler
+uv add slide-tyler
 
 # Agent + tools
-uv add tyler lye
+uv add slide-tyler slide-lye
 
-# Agent + memory
-uv add tyler narrator
+# Agent + persistence
+uv add slide-tyler slide-narrator
 
-# Full Slack bot
-uv add tyler lye narrator space-monkey
+# Full Slack agent
+uv add slide-tyler slide-lye slide-narrator slide-space-monkey
 ```
 
 ## Version Compatibility
@@ -178,10 +220,10 @@ All Slide packages follow semantic versioning and maintain compatibility within 
 
 | Package | Current Version | Python Required |
 |---------|----------------|-----------------|
-| tyler | 1.0.0 | >= 3.8 |
-| lye | 1.0.0 | >= 3.8 |
-| narrator | 1.0.0 | >= 3.8 |
-| space-monkey | 1.0.0 | >= 3.8 |
+| slide-tyler | 1.1.1 | >= 3.12 |
+| slide-lye | 0.1.0 | >= 3.12 |
+| slide-narrator | 0.2.2 | >= 3.12 |
+| slide-space-monkey | 0.1.1 | >= 3.12 |
 
 <Note>
   Always use matching major versions across Slide packages for best compatibility.
@@ -192,56 +234,112 @@ All Slide packages follow semantic versioning and maintain compatibility within 
 ### 1. Research Assistant
 ```python
 # Uses: tyler + lye
-from tyler import Agent
-from lye import web, files
+import asyncio
+from tyler import Agent, Thread, Message
+from lye import WEB_TOOLS, FILES_TOOLS
 
-agent = Agent(
-    name="researcher",
-    tools=[web.search, web.fetch, files.write]
-)
+async def main():
+    agent = Agent(
+        name="researcher",
+        model_name="gpt-4",
+        purpose="To conduct research and save findings",
+        tools=[*WEB_TOOLS, *FILES_TOOLS]
+    )
+    
+    thread = Thread()
+    message = Message(
+        role="user",
+        content="Research quantum computing breakthroughs and save a report"
+    )
+    thread.add_message(message)
+    processed_thread, new_messages = await agent.go(thread)
+
+if __name__ == "__main__":
+    asyncio.run(main())
 ```
 
 ### 2. Customer Support Bot
 ```python
 # Uses: tyler + narrator + space-monkey
-from tyler import Agent
-from narrator import Thread
+import asyncio
+from tyler import Agent, ThreadStore, FileStore
 from space_monkey import SlackApp
 
-agent = Agent(
-    name="support-bot",
-    thread=Thread()  # Remember conversations
-)
-app = SlackApp(agent=agent)
+async def main():
+    # Persistent storage for conversation history
+    thread_store = await ThreadStore.create("sqlite+aiosqlite:///support.db")
+    file_store = await FileStore.create(base_path="./support_files")
+    
+    agent = Agent(
+        name="support-bot",
+        model_name="gpt-4",
+        purpose="To provide customer support",
+        thread_store=thread_store,
+        file_store=file_store
+    )
+    
+    app = SlackApp(agent=agent)
+    app.start()
+
+if __name__ == "__main__":
+    asyncio.run(main())
 ```
 
 ### 3. Data Processing Pipeline
 ```python
 # Uses: tyler + lye + narrator
-from tyler import Agent
-from lye import files, image
-from narrator import Thread
+import asyncio
+from tyler import Agent, Thread, Message, ThreadStore
+from lye import FILES_TOOLS, IMAGE_TOOLS
 
-agent = Agent(
-    name="data-processor",
-    tools=[files.read_csv, image.analyze],
-    thread=Thread()  # Track processing history
-)
+async def main():
+    thread_store = await ThreadStore.create()
+    
+    agent = Agent(
+        name="data-processor",
+        model_name="gpt-4",
+        purpose="To process and analyze data",
+        tools=[*FILES_TOOLS, *IMAGE_TOOLS],
+        thread_store=thread_store  # Track processing history
+    )
+    
+    thread = Thread()
+    message = Message(
+        role="user",
+        content="Analyze all images in the dataset folder and create a summary report"
+    )
+    thread.add_message(message)
+    processed_thread, new_messages = await agent.go(thread)
+
+if __name__ == "__main__":
+    asyncio.run(main())
 ```
 
 ### 4. MCP Integration Hub
 ```python
 # Uses: tyler + external MCP servers
-from tyler import Agent
+import asyncio
+from tyler import Agent, Thread, Message
 from tyler.mcp import MCPAdapter
 
-adapter = MCPAdapter()
-await adapter.connect("stdio://./custom-tools")
+async def main():
+    adapter = MCPAdapter()
+    await adapter.connect("stdio://./custom-tools")
+    
+    agent = Agent(
+        name="mcp-hub",
+        model_name="gpt-4",
+        purpose="To coordinate MCP tools",
+        mcp_adapter=adapter
+    )
+    
+    thread = Thread()
+    message = Message(role="user", content="Use the custom MCP tools to process this data")
+    thread.add_message(message)
+    processed_thread, new_messages = await agent.go(thread)
 
-agent = Agent(
-    name="mcp-hub",
-    mcp_adapter=adapter
-)
+if __name__ == "__main__":
+    asyncio.run(main())
 ```
 
 ## Architecture Decisions

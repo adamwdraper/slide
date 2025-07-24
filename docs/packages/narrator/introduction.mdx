@@ -1,0 +1,152 @@
+---
+title: 'Narrator'
+description: 'Conversation persistence for AI agents'
+---
+
+Narrator provides robust storage solutions for AI agent conversations, enabling conversation persistence across sessions. It handles thread management, message storage, and file attachments with both local and cloud storage options.
+
+## Overview
+
+Narrator is built for:
+- **Conversation Persistence**: Store and retrieve conversation history
+- **File Management**: Handle attachments and generated files
+- **Scalability**: From SQLite for development to PostgreSQL for production
+- **Flexibility**: Multiple storage backends and easy migration
+
+## Installation
+
+```bash
+uv add slide-narrator
+```
+
+## Quick Start
+
+```python
+from narrator import ThreadStore, FileStore
+from tyler import Agent
+
+# Set up storage
+thread_store = await ThreadStore.create("sqlite:///conversations.db")
+file_store = await FileStore.create(base_path="./agent_files")
+
+# Create agent with persistence
+agent = Agent(
+    name="assistant",
+    thread_store=thread_store,
+    file_store=file_store
+)
+
+# Conversations are now automatically persisted
+```
+
+## Core Components
+
+### ThreadStore
+
+Manages conversation threads and messages:
+
+```python
+# Create a thread store
+thread_store = await ThreadStore.create("sqlite:///my_app.db")
+
+# Save a thread
+thread = Thread(id="user-123-chat")
+thread.add_message(Message(role="user", content="Hello!"))
+await thread_store.save_thread(thread)
+
+# Retrieve later
+retrieved = await thread_store.get_thread("user-123-chat")
+```
+
+### FileStore
+
+Handles file attachments and agent-generated files:
+
+```python
+# Create a file store
+file_store = await FileStore.create(base_path="./files")
+
+# Store a file
+file_id = await file_store.store_file(
+    content=b"Report content...",
+    filename="report.pdf",
+    thread_id="user-123-chat"
+)
+
+# Retrieve later
+content = await file_store.get_file(file_id)
+```
+
+## Storage Backends
+
+### SQLite (Development)
+```python
+thread_store = await ThreadStore.create("sqlite:///dev.db")
+```
+
+### PostgreSQL (Production)
+```python
+thread_store = await ThreadStore.create(
+    "postgresql://user:pass@localhost/dbname"
+)
+```
+
+### Custom Backends
+```python
+from narrator import StorageBackend
+
+class MyCustomBackend(StorageBackend):
+    async def save_thread(self, thread: Thread) -> None:
+        # Custom implementation
+        pass
+```
+
+## Common Patterns
+
+### User-Specific Conversations
+```python
+async def get_user_conversation(user_id: str):
+    thread_id = f"user-{user_id}-main"
+    try:
+        thread = await thread_store.get_thread(thread_id)
+    except ThreadNotFoundError:
+        thread = Thread(id=thread_id)
+    return thread
+```
+
+### Conversation Search
+```python
+# Find threads by metadata
+threads = await thread_store.search_threads(
+    metadata={"user_id": "123", "topic": "support"}
+)
+```
+
+### Cleanup Old Conversations
+```python
+from datetime import datetime, timedelta
+
+cutoff = datetime.now() - timedelta(days=30)
+old_threads = await thread_store.get_threads_before(cutoff)
+for thread in old_threads:
+    await thread_store.delete_thread(thread.id)
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="API Reference"
+    icon="book"
+    href="/api-reference/narrator"
+  >
+    Detailed API documentation
+  </Card>
+  <Card
+    title="Using Narrator Guide"
+    icon="compass"
+    href="/guides/using-narrator"
+  >
+    In-depth guide and examples
+  </Card>
+</CardGroup> 

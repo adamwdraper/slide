@@ -35,12 +35,12 @@ Tyler is the heart of the Slide framework - a powerful, async-first agent framew
 <Tabs>
   <Tab title="uv (Recommended)">
     ```bash
-    uv add tyler
+    uv add slide-tyler
     ```
   </Tab>
   <Tab title="pip">
     ```bash
-    pip install tyler
+    pip install slide-tyler
     ```
   </Tab>
 </Tabs>
@@ -50,56 +50,123 @@ Tyler is the heart of the Slide framework - a powerful, async-first agent framew
 ### Basic Agent
 
 ```python
-from tyler import Agent
+import asyncio
+from tyler import Agent, Thread, Message
 
 # Create a simple agent
-agent = Agent(name="assistant")
+agent = Agent(
+    name="assistant",
+    model_name="gpt-4",
+    purpose="To be a helpful assistant"
+)
 
-# Run a task
-result = await agent.run("What is the capital of France?")
-print(result)
-# Output: "The capital of France is Paris."
+async def main():
+    # Create a thread
+    thread = Thread()
+    
+    # Add a message
+    message = Message(role="user", content="What is the capital of France?")
+    thread.add_message(message)
+    
+    # Run the agent
+    processed_thread, new_messages = await agent.go(thread)
+    
+    # Print the response
+    for msg in new_messages:
+        if msg.role == "assistant":
+            print(msg.content)
+            # Output: "The capital of France is Paris."
+
+if __name__ == "__main__":
+    asyncio.run(main())
 ```
 
 ### Agent with Tools
 
 ```python
-from tyler import Agent
-from lye import web, files
+import asyncio
+from tyler import Agent, Thread, Message
+from lye import WEB_TOOLS, FILES_TOOLS
 
 # Create an agent with tools
 agent = Agent(
     name="researcher",
-    tools=[web.search, web.fetch, files.write],
-    model="gpt-4"
+    model_name="gpt-4",
+    purpose="To help with research tasks",
+    tools=[*WEB_TOOLS, *FILES_TOOLS]
 )
 
-# Agent can now search the web and save results
-result = await agent.run(
-    "Research the latest AI developments and save a summary"
-)
+async def main():
+    # Create thread and message
+    thread = Thread()
+    message = Message(
+        role="user",
+        content="Research the latest AI developments and save a summary"
+    )
+    thread.add_message(message)
+    
+    # Agent can now search the web and save results
+    processed_thread, new_messages = await agent.go(thread)
+    
+    # View what the agent did
+    for msg in new_messages:
+        if msg.role == "assistant":
+            print(f"Assistant: {msg.content}")
+        elif msg.role == "tool":
+            print(f"Tool ({msg.name}): {msg.content[:100]}...")
+
+if __name__ == "__main__":
+    asyncio.run(main())
 ```
 
-### Agent with Memory
+### Agent with Persistence
 
 ```python
-from tyler import Agent
-from narrator import Thread
+import asyncio
+from tyler import Agent, Thread, Message, ThreadStore
 
-# Create agent with conversation memory
-thread = Thread(thread_id="chat-001")
-agent = Agent(
-    name="chatbot",
-    thread=thread
-)
+async def main():
+    # Create persistent storage
+    thread_store = await ThreadStore.create("sqlite+aiosqlite:///conversations.db")
+    
+    # Create agent with conversation persistence
+    agent = Agent(
+        name="chatbot",
+        model_name="gpt-4",
+        purpose="To be a helpful chatbot with conversation history",
+        thread_store=thread_store
+    )
+    
+    # Create or load thread
+    thread_id = "chat-001"
+    try:
+        thread = await thread_store.get_thread(thread_id)
+    except:
+        thread = Thread(id=thread_id)
+    
+    # First message
+    message1 = Message(role="user", content="My name is Alice")
+    thread.add_message(message1)
+    processed_thread, _ = await agent.go(thread)
+    
+    # Save the conversation
+    await thread_store.save_thread(processed_thread)
+    
+    # Agent remembers context
+    message2 = Message(role="user", content="What's my name?")
+    processed_thread.add_message(message2)
+    final_thread, new_messages = await agent.go(processed_thread)
+    
+    for msg in new_messages:
+        if msg.role == "assistant":
+            print(msg.content)
+            # Output: "Your name is Alice."
+    
+    # Save the updated conversation
+    await thread_store.save_thread(final_thread)
 
-# First message
-await agent.run("My name is Alice")
-
-# Agent remembers context
-response = await agent.run("What's my name?")
-print(response)
-# Output: "Your name is Alice."
+if __name__ == "__main__":
+    asyncio.run(main())
 ```
 
 ## Core Concepts
@@ -164,7 +231,8 @@ tyler/
 ```python
 agent = Agent(
     name="expert",
-    system_prompt="""You are an expert Python developer.
+    model_name="gpt-4",
+    purpose="""You are an expert Python developer.
     Always write clean, well-documented code.
     Follow PEP 8 style guidelines."""
 )
@@ -173,9 +241,14 @@ agent = Agent(
 ### Tool Configuration
 
 ```python
+from lye import WEB_TOOLS
+from lye.files import read_file
+
 agent = Agent(
     name="controlled-agent",
-    tools=[web.search, files.read],
+    model_name="gpt-4",
+    purpose="To search and read information",
+    tools=[*WEB_TOOLS, read_file],
     tool_choice="auto",           # or "none", "required"
     parallel_tool_calls=True,      # Enable parallel execution
     max_tool_calls=5              # Limit tool usage
@@ -188,7 +261,11 @@ agent = Agent(
 from tyler.exceptions import AgentError, ToolError
 
 try:
-    result = await agent.run("Complex task")
+    thread = Thread()
+    message = Message(role="user", content="Complex task")
+    thread.add_message(message)
+    
+    processed_thread, new_messages = await agent.go(thread)
 except ToolError as e:
     print(f"Tool failed: {e.tool_name} - {e.message}")
 except AgentError as e:
@@ -198,9 +275,20 @@ except AgentError as e:
 ### Streaming Responses
 
 ```python
+from tyler import StreamUpdate
+
+# Create thread and message
+thread = Thread()
+message = Message(role="user", content="Write a story about AI")
+thread.add_message(message)
+
 # Stream responses for real-time output
-async for chunk in agent.stream("Write a story about AI"):
-    print(chunk, end="", flush=True)
+async for update in agent.stream(thread):
+    if isinstance(update, StreamUpdate):
+        if update.type == "content":
+            print(update.content, end="", flush=True)
+        elif update.type == "tool_call":
+            print(f"\n[Using tool: {update.tool_name}]")
 ```
 
 ## Integration Examples
@@ -208,54 +296,92 @@ async for chunk in agent.stream("Write a story about AI"):
 ### With Lye Tools
 
 ```python
-from tyler import Agent
-from lye import audio, image, browser
+import asyncio
+from tyler import Agent, Thread, Message
+from lye import AUDIO_TOOLS, IMAGE_TOOLS, BROWSER_TOOLS
 
 agent = Agent(
     name="multimedia-processor",
-    tools=[
-        audio.transcribe,
-        image.analyze,
-        browser.screenshot
-    ]
+    model_name="gpt-4",
+    purpose="To process multimedia content",
+    tools=[*AUDIO_TOOLS, *IMAGE_TOOLS, *BROWSER_TOOLS]
 )
 
-# Process multimedia content
-result = await agent.run(
-    "Transcribe the audio from this video and analyze any images shown"
-)
+async def main():
+    thread = Thread()
+    message = Message(
+        role="user",
+        content="Transcribe the audio from this video and analyze any images shown"
+    )
+    thread.add_message(message)
+    
+    # Process multimedia content
+    processed_thread, new_messages = await agent.go(thread)
+
+if __name__ == "__main__":
+    asyncio.run(main())
 ```
 
 ### With MCP Servers
 
 ```python
+import asyncio
+from tyler import Agent, Thread, Message
 from tyler.mcp import MCPAdapter
 
-# Connect to MCP server
-adapter = MCPAdapter()
-await adapter.connect("stdio://./custom-tools-server")
+async def main():
+    # Connect to MCP server
+    adapter = MCPAdapter()
+    await adapter.connect("stdio://./custom-tools-server")
+    
+    # Create agent with MCP tools
+    agent = Agent(
+        name="mcp-agent",
+        model_name="gpt-4",
+        purpose="To use MCP tools",
+        mcp_adapter=adapter
+    )
+    
+    # Use MCP tools
+    thread = Thread()
+    message = Message(role="user", content="Use the custom MCP tools to complete this task")
+    thread.add_message(message)
+    
+    processed_thread, new_messages = await agent.go(thread)
 
-# Create agent with MCP tools
-agent = Agent(
-    name="mcp-agent",
-    mcp_adapter=adapter
-)
+if __name__ == "__main__":
+    asyncio.run(main())
 ```
 
 ### With Narrator
 
 ```python
-from narrator import Thread, PostgresStore
+import asyncio
+from tyler import Agent, Thread, Message, ThreadStore, FileStore
 
-# Use PostgreSQL for production
-store = PostgresStore("postgresql://...")
-thread = Thread(store=store)
+async def main():
+    # Use PostgreSQL for production
+    thread_store = await ThreadStore.create("postgresql://user:pass@localhost/db")
+    file_store = await FileStore.create(base_path="./production_files")
+    
+    agent = Agent(
+        name="production-bot",
+        model_name="gpt-4",
+        purpose="To be a production-ready assistant",
+        thread_store=thread_store,
+        file_store=file_store
+    )
+    
+    # Agent now has persistent storage for conversations and files
+    thread = Thread(id="production-thread-001")
+    message = Message(role="user", content="Remember this for next time: my favorite color is blue")
+    thread.add_message(message)
+    
+    processed_thread, _ = await agent.go(thread)
+    await thread_store.save_thread(processed_thread)
 
-agent = Agent(
-    name="production-bot",
-    thread=thread,
-    model="gpt-4"
-)
+if __name__ == "__main__":
+    asyncio.run(main())
 ```
 
 ## CLI Usage
@@ -276,6 +402,47 @@ tyler chat --tools web.search,files.read
 tyler chat --mcp stdio://./my-server
 ```
 
+## Testing & Evaluation
+
+Tyler includes a comprehensive evaluation framework for testing your agents:
+
+```python
+from tyler import Agent
+from tyler.eval import AgentEval, Conversation, Expectation, ToolUsageScorer
+from lye import WEB_TOOLS
+
+# Create agent to test
+agent = Agent(
+    name="test-agent",
+    model_name="gpt-4",
+    purpose="To help with various tasks",
+    tools=WEB_TOOLS
+)
+
+# Define test scenarios
+eval = AgentEval(
+    name="agent_test",
+    conversations=[
+        Conversation(
+            user="What's the weather?",
+            expect=Expectation(
+                uses_tools=["web-search"],
+                tone="helpful"
+            )
+        )
+    ],
+    scorers=[ToolUsageScorer()]
+)
+
+# Run evaluation (uses mock tools by default)
+results = await eval.run(agent)
+print(f"Pass rate: {results.pass_rate:.2%}")
+```
+
+<Note>
+  Evaluations use mock tools by default to prevent real API calls during testing.
+</Note>
+
 ## Performance Tips
 
 1. **Enable Parallel Tool Calls**: Set `parallel_tool_calls=True` for concurrent execution
@@ -287,6 +454,13 @@ tyler chat --mcp stdio://./my-server
 ## Next Steps
 
 <CardGroup cols={2}>
+  <Card
+    title="Agent Evaluations"
+    icon="flask"
+    href="/packages/tyler/evaluations"
+  >
+    Test and evaluate your agents
+  </Card>
   <Card
     title="Agent Configuration"
     icon="cog"
@@ -307,12 +481,5 @@ tyler chat --mcp stdio://./my-server
     href="/packages/tyler/examples"
   >
     See practical examples
-  </Card>
-  <Card
-    title="API Reference"
-    icon="book"
-    href="/api-reference/tyler"
-  >
-    Complete API documentation
   </Card>
 </CardGroup> 

@@ -9,6 +9,10 @@ import pytest
 import importlib.util
 import asyncio
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Load environment variables from .env file for tests
+load_dotenv()
 
 # Get the examples directory path
 EXAMPLES_DIR = Path(__file__).parent.parent / "examples"
