@@ -13,6 +13,26 @@ import requests
 from pathlib import Path
 
 
+def is_docker_compose_available():
+    """Check if docker-compose is available on the system."""
+    try:
+        result = subprocess.run(["docker-compose", "version"], capture_output=True)
+        return result.returncode == 0
+    except FileNotFoundError:
+        # docker-compose command not found
+        return False
+
+
+def is_docker_available():
+    """Check if docker is available on the system."""
+    try:
+        result = subprocess.run(["docker", "version"], capture_output=True)
+        return result.returncode == 0
+    except FileNotFoundError:
+        # docker command not found
+        return False
+
+
 class TestDockerBuild:
     """Test Docker image building."""
     
@@ -36,7 +56,7 @@ class TestDockerBuild:
     
     @pytest.mark.integration
     @pytest.mark.skipif(
-        subprocess.run(["docker", "version"], capture_output=True).returncode != 0,
+        not is_docker_available(),
         reason="Docker not available"
     )
     def test_docker_build(self):
@@ -58,7 +78,7 @@ class TestDockerBuild:
     
     @pytest.mark.integration
     @pytest.mark.skipif(
-        subprocess.run(["docker", "version"], capture_output=True).returncode != 0,
+        not is_docker_available(),
         reason="Docker not available"
     )
     def test_docker_image_metadata(self):
@@ -101,7 +121,7 @@ class TestDockerRuntime:
     
     @pytest.mark.integration
     @pytest.mark.skipif(
-        subprocess.run(["docker", "version"], capture_output=True).returncode != 0,
+        not is_docker_available(),
         reason="Docker not available"
     )
     def test_container_starts_with_env_vars(self):
@@ -174,7 +194,7 @@ sys.exit(0)
     
     @pytest.mark.integration
     @pytest.mark.skipif(
-        subprocess.run(["docker-compose", "version"], capture_output=True).returncode != 0,
+        not is_docker_compose_available(),
         reason="Docker Compose not available"
     )
     def test_docker_compose_config(self):
