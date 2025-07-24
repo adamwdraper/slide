@@ -63,7 +63,7 @@ graph TB
   </Card>
   
   <Card title="Space Monkey" icon="slack">
-    **Slack Bot Framework**
+    **Slack Agent Framework**
     - Deploy agents to Slack
     - Event handling
     - Message classification
@@ -125,7 +125,7 @@ await thread_store.save_thread(processed_thread)
 ```
 
 ### Tyler + Space Monkey
-Space Monkey deploys Tyler agents as Slack bots:
+Space Monkey deploys Tyler agents as Slack agents:
 
 ```python
 from tyler import Agent, ThreadStore, FileStore
@@ -143,7 +143,7 @@ agent = Agent(
     file_store=file_store
 )
 
-# Deploy as Slack bot
+# Deploy as Slack agent
 app = SlackApp(
     agent=agent,
     slack_token="xoxb-your-token",
@@ -176,7 +176,7 @@ async def main():
         file_store=file_store
     )
     
-    # Deploy as Slack bot
+    # Deploy as Slack agent
     app = SlackApp(
         agent=agent,
         slack_token="xoxb-your-token",
@@ -210,7 +210,7 @@ uv add slide-tyler slide-lye
 # Agent + persistence
 uv add slide-tyler slide-narrator
 
-# Full Slack bot
+# Full Slack agent
 uv add slide-tyler slide-lye slide-narrator slide-space-monkey
 ```
 
@@ -222,8 +222,8 @@ All Slide packages follow semantic versioning and maintain compatibility within 
 |---------|----------------|-----------------|
 | slide-tyler | 1.1.1 | >= 3.12 |
 | slide-lye | 0.1.0 | >= 3.12 |
-| slide-narrator | 0.2.2 | >= 3.11 |
-| slide-space-monkey | 0.1.1 | >= 3.11 |
+| slide-narrator | 0.2.2 | >= 3.12 |
+| slide-space-monkey | 0.1.1 | >= 3.12 |
 
 <Note>
   Always use matching major versions across Slide packages for best compatibility.

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Space Monkey Example - Simple HR Bot
+Space Monkey Example - Simple HR Agent
 
-This example demonstrates how to create and run a Slack bot using Space Monkey
+This example demonstrates how to create and run a Slack agent using Space Monkey
 with the clean API described in the README.
 """
 import asyncio
@@ -109,10 +109,10 @@ def example_with_database():
     return database_example
 
 if __name__ == "__main__":
-    print("🚀 Space Monkey - Tyler Slack Bot Example")
+    print("🚀 Space Monkey - Tyler Slack Agent Example")
     print("==========================================")
     print()
-    print("This example shows how to create a Slack bot with just a few lines of code.")
+    print("This example shows how to create a Slack agent with just a few lines of code.")
     print("Make sure you have set up your .env file with the required variables:")
     print("  - SLACK_BOT_TOKEN")
     print("  - SLACK_APP_TOKEN")

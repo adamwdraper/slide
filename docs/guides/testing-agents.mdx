@@ -415,12 +415,13 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v2
       with:
-        python-version: '3.11'
+        python-version: '3.12.9'
     
     - name: Install dependencies
       run: |
-        pip install slide-tyler slide-lye
-        pip install pytest pytest-asyncio
+        pip install uv
+        uv pip install --system slide-tyler slide-lye
+        uv pip install --system pytest pytest-asyncio
     
     - name: Run agent tests
       env:
@@ -499,7 +500,7 @@ for conv_result in results.conversation_results:
         print(f"Tool calls: {conv_result.tool_calls}")
 ```
 
-## Real-World Example: Customer Support Bot Testing
+## Real-World Example: Customer Support Agent Testing
 
 ```python
 from tyler import Agent
@@ -509,7 +510,7 @@ from lye import WEB_TOOLS
 class CustomerSupportTests:
     def __init__(self):
         self.agent = Agent(
-            name="support-bot",
+            name="support-agent",
             model_name="gpt-4",
             purpose="To help customers with product issues",
             tools=WEB_TOOLS
@@ -579,7 +580,7 @@ class CustomerSupportTests:
         # Run multiple trials for consistency
         results = await eval.run(self.agent, trials=5)
         
-        print(f"\n📊 Customer Support Bot Test Results")
+        print(f"\n📊 Customer Support Agent Test Results")
         print(f"{'='*50}")
         print(f"Overall pass rate: {results.pass_rate:.0%}")
         print(f"Total tests: {len(eval.conversations) * 5}")
@@ -602,7 +603,7 @@ async def main():
     success = await tester.run_all_tests()
     
     if success:
-        print("\n✅ All tests passed! Bot is ready for deployment.")
+        print("\n✅ All tests passed! Agent is ready for deployment.")
     else:
         print("\n❌ Tests failed. Please review and fix issues.")
 

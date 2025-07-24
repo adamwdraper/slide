@@ -28,11 +28,9 @@
         ]
       },
       {
-        "group": "Building Slack Bots",
+        "group": "Apps",
         "pages": [
-          "guides/slack-bot",
-          "guides/slack-events",
-          "guides/slack-deployment"
+          "apps/slack-agent"
         ]
       },
       {

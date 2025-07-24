@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Simple Space Monkey example - minimal Slack bot setup
+Simple Space Monkey example - minimal Slack agent setup
 """
 # Load environment variables first
 from dotenv import load_dotenv

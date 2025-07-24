@@ -1,14 +1,14 @@
 ---
 title: 'Space Monkey'
-description: 'Slack bot framework for AI agents'
+description: 'Slack agent framework for AI agents'
 ---
 
-Space Monkey makes it easy to deploy AI agents as Slack bots. It handles all the complexity of Slack's APIs, event handling, and message formatting, so you can focus on building great agent experiences.
+Space Monkey makes it easy to deploy AI agents as Slack agents. It handles all the complexity of Slack's APIs, event handling, and message formatting, so you can focus on building great agent experiences.
 
 ## Overview
 
 Space Monkey provides:
-- **Easy Setup**: Get a Slack bot running in minutes
+- **Easy Setup**: Get a Slack agent running in minutes
 - **Event Handling**: Respond to messages, mentions, and commands
 - **Rich Messaging**: Support for blocks, attachments, and interactive elements
 - **Thread Management**: Automatic conversation threading
@@ -26,23 +26,37 @@ uv add slide-space-monkey
 from space_monkey import SlackApp
 from tyler import Agent
 
-# Create your agent
-agent = Agent(
-    name="slack-assistant",
-    model_name="gpt-4",
-    purpose="To help the team with questions and tasks"
-)
+# Set environment variables:
+# export SLACK_BOT_TOKEN=xoxb-your-bot-token
+# export SLACK_APP_TOKEN=xapp-your-app-token
 
-# Create Slack app
-app = SlackApp(
-    agent=agent,
-    slack_bot_token="xoxb-your-bot-token",
-    slack_app_token="xapp-your-app-token"
-)
+import asyncio
+from narrator import ThreadStore, FileStore
 
-# Run the bot
+async def main():
+    # Initialize storage
+    thread_store = await ThreadStore.create()
+    file_store = await FileStore.create()
+    
+    # Create your agent
+    agent = Agent(
+        name="slack-assistant",
+        model_name="gpt-4",
+        purpose="To help the team with questions and tasks"
+    )
+    
+    # Create Slack app
+    app = SlackApp(
+        agent=agent,
+        thread_store=thread_store,
+        file_store=file_store
+    )
+    
+    # Run the agent
+    await app.start()
+
 if __name__ == "__main__":
-    app.start()
+    asyncio.run(main())
 ```
 
 ## Slack App Setup
@@ -61,7 +75,7 @@ features:
     display_name: AI Assistant
 oauth_config:
   scopes:
-    bot:
+    agent:
       - channels:history
       - channels:read
       - chat:write
@@ -92,46 +106,36 @@ settings:
 3. Go to "Basic Information" → "App-Level Tokens"
 4. Create a token with `connections:write` scope
 
-### 3. Configure Your Bot
+### 3. Configure Your Agent
 
 ```python
+# Set environment variables
+os.environ["SLACK_BOT_TOKEN"] = "xoxb-..."  # Bot User OAuth Token
+os.environ["SLACK_APP_TOKEN"] = "xapp-..."  # App-Level Token
+
+# Create app - tokens are loaded from environment
 app = SlackApp(
     agent=agent,
-    slack_bot_token="xoxb-...",  # Bot User OAuth Token
-    slack_app_token="xapp-...",   # App-Level Token
+    thread_store=thread_store,
+    file_store=file_store
 )
 ```
 
-## Handling Events
+## How It Works
 
-### Message Events
+Space Monkey automatically handles all Slack events internally:
 
-```python
-@app.event("message")
-async def handle_message(event, say):
-    # Your agent automatically handles the message
-    # You can add custom logic here if needed
-    if "urgent" in event.get("text", "").lower():
-        await say("🚨 I'll prioritize this!")
-```
+- **Message Events**: Processes direct messages and channel messages
+- **App Mentions**: Responds when the agent is @mentioned
+- **Thread Management**: Maintains conversation context automatically
+- **File Handling**: Downloads and processes shared files
+- **Intelligent Routing**: Uses AI to determine when to respond
 
-### App Mentions
-
-```python
-@app.event("app_mention")
-async def handle_mention(event, say):
-    # Agent responds when mentioned
-    pass
-```
-
-### Commands
-
-```python
-@app.command("/assistant")
-async def handle_command(ack, body, say):
-    await ack()
-    # Process command
-```
+The agent will respond to:
+1. All direct messages
+2. Messages where the agent is @mentioned
+3. Replies in threads where the agent has participated
+4. Messages matching the configured `response_topics`
 
 ## Advanced Features
 
@@ -183,36 +187,49 @@ python your_bot.py
 
 ```python
 # Procfile
-web: python bot.py
+web: python agent.py
 
-# bot.py
+# agent.py
 import os
-app = SlackApp(
-    agent=agent,
-    slack_bot_token=os.environ["SLACK_BOT_TOKEN"],
-    slack_app_token=os.environ["SLACK_APP_TOKEN"]
-)
+import asyncio
+from space_monkey import SlackApp
+from tyler import Agent
+from narrator import ThreadStore, FileStore
+
+async def main():
+    thread_store = await ThreadStore.create()
+    file_store = await FileStore.create()
+    
+    agent = Agent(
+        name="slack-assistant",
+        model_name="gpt-4",
+        purpose="To help the team"
+    )
+    
+    app = SlackApp(
+        agent=agent,
+        thread_store=thread_store,
+        file_store=file_store
+    )
+    
+    await app.start()
+
+if __name__ == "__main__":
+    asyncio.run(main())
 ```
 
 ### Production (AWS Lambda)
 
-See our [deployment guide](/guides/slack-deployment) for detailed instructions.
+Deploy your Slack agent to AWS Lambda or other cloud platforms for production use.
 
 ## Next Steps
 
 <CardGroup cols={2}>
   <Card
-    title="Slack Bot Guide"
+    title="Slack Agent Guide"
     icon="slack"
-    href="/guides/slack-bot"
+    href="/apps/slack-agent"
   >
-    Complete guide to building Slack bots
-  </Card>
-  <Card
-    title="Event Handling"
-    icon="bolt"
-    href="/guides/slack-events"
-  >
-    Handle complex Slack events
+    Complete guide to building Slack agents
   </Card>
 </CardGroup> 

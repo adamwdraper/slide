@@ -323,7 +323,7 @@ async def cleanup_old_threads(thread_store: ThreadStore, days: int = 30):
             await thread_store.delete_thread(thread.id)
 ```
 
-## Real-World Example: Customer Support Bot
+## Real-World Example: Customer Support Agent
 
 ```python
 import asyncio
@@ -331,7 +331,7 @@ from datetime import datetime
 from tyler import Agent, Thread, Message, ThreadStore, FileStore
 from lye import WEB_TOOLS
 
-class SupportBot:
+class SupportAgent:
     def __init__(self):
         self.agent = None
         self.thread_store = None
@@ -344,7 +344,7 @@ class SupportBot:
         self.file_store = await FileStore.create("./support_files")
         
         self.agent = Agent(
-            name="support-bot",
+            name="support-agent",
             model_name="gpt-4",
             purpose="To help customers with product issues",
             tools=[*WEB_TOOLS],
@@ -384,10 +384,10 @@ class SupportBot:
         return thread.messages
 
 # Usage
-bot = SupportBot()
-await bot.initialize()
-
-response = await bot.handle_ticket(
+    agent = SupportAgent()
+    await agent.initialize()
+    
+    response = await agent.handle_ticket(
     ticket_id="12345",
     customer_id="cust-789",
     issue="Cannot login to my account"
@@ -444,9 +444,9 @@ async def get_cached_thread(thread_id: str):
   <Card
     title="Slack Integration"
     icon="slack"
-    href="/guides/slack-bot"
+    href="/apps/slack-agent"
   >
-    Build Slack bots with persistence
+    Build Slack agents with persistence
   </Card>
   <Card
     title="Advanced Patterns"

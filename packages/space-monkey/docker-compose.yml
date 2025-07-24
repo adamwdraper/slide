@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  slack-agent:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      # Slack credentials (required)
+      - SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN}
+      - SLACK_APP_TOKEN=${SLACK_APP_TOKEN}
+      
+      # OpenAI/LLM credentials (required)
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      
+      # Optional: Database for persistence
+      - DATABASE_URL=${DATABASE_URL:-sqlite+aiosqlite:///data/slack_agent.db}
+      
+      # Optional: Monitoring
+      - WANDB_API_KEY=${WANDB_API_KEY}
+      - WANDB_PROJECT=${WANDB_PROJECT:-slack-agent-dev}
+      
+      # Optional: Health monitoring
+      - HEALTH_CHECK_URL=${HEALTH_CHECK_URL}
+      - HEALTH_PING_INTERVAL_SECONDS=${HEALTH_PING_INTERVAL_SECONDS:-120}
+      
+      # Development/debugging
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - ENV=${ENV:-development}
+    volumes:
+      # Mount local code for development
+      - ./agent.py:/app/agent.py:ro
+      - ./data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Optional: PostgreSQL for production-like persistence
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=agent
+      - POSTGRES_PASSWORD=agentpass
+      - POSTGRES_DB=slack_agent
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    profiles:
+      - with-postgres
+
+volumes:
+  postgres_data: 

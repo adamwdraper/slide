@@ -1,0 +1,84 @@
+name: Docker Tests
+
+on:
+  push:
+    paths:
+      - 'packages/space-monkey/Dockerfile'
+      - 'packages/space-monkey/docker-compose.yml'
+      - 'packages/space-monkey/.dockerignore'
+      - '.github/workflows/docker-test.yml'
+  pull_request:
+    paths:
+      - 'packages/space-monkey/Dockerfile'
+      - 'packages/space-monkey/docker-compose.yml'
+      - 'packages/space-monkey/.dockerignore'
+      - '.github/workflows/docker-test.yml'
+
+jobs:
+  docker-build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+    
+    - name: Build Docker image
+      run: |
+        cd packages/space-monkey
+        docker build -t space-monkey-test:${{ github.sha }} .
+    
+    - name: Test Docker image metadata
+      run: |
+        # Check that the image was built with correct user
+        docker inspect space-monkey-test:${{ github.sha }} | grep '"User": "agent"'
+        
+        # Check exposed port
+        docker inspect space-monkey-test:${{ github.sha }} | grep '"ExposedPorts"' | grep '8000/tcp'
+        
+        # Check health check exists
+        docker inspect space-monkey-test:${{ github.sha }} | grep '"Healthcheck"'
+    
+    - name: Test Docker Compose config
+      run: |
+        cd packages/space-monkey
+        # Set dummy env vars for validation
+        export SLACK_BOT_TOKEN=xoxb-test
+        export SLACK_APP_TOKEN=xapp-test
+        export OPENAI_API_KEY=sk-test
+        
+        # Validate compose file
+        docker-compose config
+    
+    - name: Run container with test script
+      run: |
+        cd packages/space-monkey
+        
+        # Create test script that validates environment
+        cat > test_agent.py << 'EOF'
+        import os
+        import sys
+        import time
+        
+        print("Testing Space Monkey Docker container...")
+        
+        # Check required env vars
+        required = ['SLACK_BOT_TOKEN', 'SLACK_APP_TOKEN', 'OPENAI_API_KEY']
+        for var in required:
+            if var not in os.environ:
+                print(f"ERROR: Missing {var}")
+                sys.exit(1)
+            print(f"✓ {var} present")
+        
+        print("All environment variables configured correctly!")
+        sys.exit(0)
+        EOF
+        
+        # Run container with test script
+        docker run --rm \
+          -e SLACK_BOT_TOKEN=xoxb-test \
+          -e SLACK_APP_TOKEN=xapp-test \
+          -e OPENAI_API_KEY=sk-test \
+          -v $PWD/test_agent.py:/app/agent.py:ro \
+          space-monkey-test:${{ github.sha }} 
