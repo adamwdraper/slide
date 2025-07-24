@@ -7,54 +7,6 @@ This guide covers advanced patterns for building production-ready AI application
 
 ## Agent Patterns
 
-### Delegation Pattern
-
-Create specialized agents that work together:
-
-```python
-from tyler import Agent
-from lye import WEB_TOOLS, FILES_TOOLS, IMAGE_TOOLS
-
-# Specialized agents
-research_agent = Agent(
-    name="Research",
-    model_name="gpt-4",
-    purpose="To conduct in-depth research on topics",
-    tools=WEB_TOOLS
-)
-
-writer_agent = Agent(
-    name="Writer",
-    model_name="gpt-4",
-    purpose="To write clear, engaging content",
-    tools=FILES_TOOLS
-)
-
-analyst_agent = Agent(
-    name="Analyst",
-    model_name="gpt-4",
-    purpose="To analyze data and images",
-    tools=IMAGE_TOOLS
-)
-
-# Coordinator agent that delegates
-coordinator = Agent(
-    name="Coordinator",
-    model_name="gpt-4",
-    purpose="To coordinate tasks by delegating to specialists",
-    agents=[research_agent, writer_agent, analyst_agent]
-)
-
-# The coordinator can now delegate tasks to specialized agents
-thread = Thread()
-thread.add_message(Message(
-    role="user",
-    content="Research AI trends, analyze the data, and write a report"
-))
-
-result = await coordinator.go(thread)
-```
-
 ### Tool Selection Pattern
 
 Dynamically select tools based on the task:

@@ -241,68 +241,6 @@ scraper_agent = Agent(
 )
 ```
 
-## Tool Usage Examples
-
-### Example 1: Research and Report
-```python
-import asyncio
-from tyler import Agent, Thread, Message
-from lye import WEB_TOOLS, FILES_TOOLS
-
-agent = Agent(
-    name="researcher",
-    model_name="gpt-4",
-    purpose="To research topics and create detailed reports",
-    tools=[*WEB_TOOLS, *FILES_TOOLS]
-)
-
-async def research_topic(topic: str):
-    thread = Thread()
-    message = Message(
-        role="user",
-        content=f"""
-        Research '{topic}' and create a comprehensive report.
-        Include recent developments, key facts, and save it as a markdown file.
-        """
-    )
-    thread.add_message(message)
-    
-    processed_thread, new_messages = await agent.go(thread)
-    
-    for msg in new_messages:
-        if msg.role == "assistant":
-            print(f"✅ {msg.content}")
-
-asyncio.run(research_topic("quantum computing"))
-```
-
-### Example 2: Image Analysis Pipeline
-```python
-from lye import IMAGE_TOOLS, FILES_TOOLS
-
-agent = Agent(
-    name="image-processor",
-    model_name="gpt-4",
-    purpose="To analyze images and extract information",
-    tools=[*IMAGE_TOOLS, *FILES_TOOLS]
-)
-
-async def process_images(image_folder: str):
-    thread = Thread()
-    message = Message(
-        role="user",
-        content=f"""
-        1. List all images in '{image_folder}'
-        2. Analyze each image
-        3. Extract any text found
-        4. Create a summary report with findings
-        """
-    )
-    thread.add_message(message)
-    
-    await agent.go(thread)
-```
-
 ## Best Practices
 
 ### 1. Tool Selection
@@ -352,28 +290,9 @@ agent = Agent(
 )
 ```
 
-## Debugging Tool Usage
-
-Enable logging to see tool calls:
-```python
-import logging
-logging.basicConfig(level=logging.INFO)
-
-# Now you'll see:
-# INFO: Calling tool: web-search
-# INFO: Tool result: [search results...]
-```
-
 ## Next Steps
 
 <CardGroup cols={2}>
-  <Card
-    title="Custom Tools"
-    icon="wrench"
-    href="/guides/custom-tools"
-  >
-    Deep dive into creating custom tools
-  </Card>
   <Card
     title="Tool Patterns"
     icon="diagram-project"
@@ -394,5 +313,12 @@ logging.basicConfig(level=logging.INFO)
     href="/guides/mcp-integration"
   >
     Use MCP tools with your agents
+  </Card>
+  <Card
+    title="Using Lye"
+    icon="toolbox"
+    href="/guides/using-lye"
+  >
+    Explore all built-in tools
   </Card>
 </CardGroup> 

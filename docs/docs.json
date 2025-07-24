@@ -22,7 +22,7 @@
         "pages": [
           "guides/your-first-agent",
           "guides/adding-tools",
-          "guides/conversation-memory",
+          "guides/conversation-persistence",
           "guides/streaming-responses",
           "guides/testing-agents"
         ]
@@ -41,6 +41,7 @@
           "guides/using-narrator",
           "guides/using-lye",
           "guides/mcp-integration",
+          "guides/agent-delegation",
           "guides/patterns"
         ]
       },
