@@ -24,6 +24,9 @@
           "guides/adding-tools",
           "guides/conversation-persistence",
           "guides/streaming-responses",
+          "guides/agent-delegation",
+          "guides/mcp-integration",
+          "guides/patterns",
           "guides/testing-agents"
         ]
       },
@@ -34,21 +37,18 @@
         ]
       },
       {
-        "group": "Guides & Recipes",
-        "pages": [
-          "guides/using-narrator",
-          "guides/using-lye",
-          "guides/mcp-integration",
-          "guides/agent-delegation",
-          "guides/patterns"
-        ]
-      },
-      {
         "group": "Concepts",
         "pages": [
           "concepts/how-agents-work",
           "concepts/architecture",
           "packages/overview"
+        ]
+      },
+      {
+        "group": "Standalone Packages",
+        "pages": [
+          "standalone-packages/using-narrator",
+          "standalone-packages/using-lye"
         ]
       },
       {
