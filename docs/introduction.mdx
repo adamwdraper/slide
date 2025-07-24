@@ -1,44 +1,60 @@
 ---
-title: 'Welcome to Slide'
+title: 'Overview'
 description: 'A development kit for manifesting AI agents with a complete lack of conventional limitations.'
 ---
+
+<div align="center">
+  <img src="/logo/slide_logo.svg" alt="Slide Logo" width="45%" />
+</div>
 
 
 **Build an agent with just a few lines of code.**
 
 ```python
+import asyncio
 from tyler import Agent, Thread, Message
-from lye import WEB_TOOLS, IMAGE_TOOLS
+from lye import WEB_TOOLS
 
-# Create a powerful AI agent
+# Create an AI agent that can browse the web
 agent = Agent(
-    name="assistant",
+    name="web_summarizer",
     model_name="gpt-4o",
-    purpose="To help with research and analysis",
-    tools=[*WEB_TOOLS, *IMAGE_TOOLS]
+    purpose="To summarize web content clearly and concisely",
+    tools=WEB_TOOLS
 )
 
-# Use your agent
+# Ask your agent to visit and summarize a webpage
 thread = Thread()
-message = Message(role="user", content="Research the latest AI breakthroughs")
+message = Message(
+    role="user", 
+    content="Why should I use https://slide.mintlify.app/introduction?"
+)
 thread.add_message(message)
 
-processed_thread, new_messages = await agent.go(thread)
+# The agent will visit the page and provide a summary
+processed_thread, new_messages = asyncio.run(agent.go(thread))
+
+# Print all messages in the conversation
+for msg in processed_thread.messages:
+    print(f"{msg.role.upper()}: {msg.content}")
+    print("-" * 80)
 ```
 
 That's it! Your agent can now search the web, analyze images, and complete complex tasks autonomously.
 
 ## Why use Slide?
 
-- **Extensible and open source**: Build on a foundation you can inspect, customize, and contribute to
-- **Flexible model support**: Use any LLM provider supported by LiteLLM (100+ providers including OpenAI, Anthropic, etc.)
-- **MCP compatibility**: Seamless integration with Model Context Protocol (MCP) compatible servers and tools
-- **Multimodal support**: Process and understand images, audio, PDFs, and more out of the box
-- **Persistent conversations**: Built-in support for threads, messages, and attachments with flexible storage options (in-memory, SQLite, or PostgreSQL)
-- **Ready-to-use tools**: Basic set of built-in tools for web interaction, file handling, and browser automation with support for custom tools
-- **Real-time streaming**: Build interactive applications with streaming responses from both agents and tools
-- **Evaluation framework**: Test agents safely with mock tools, prebuilt LLM judges, and multi-turn conversation scenarios
-- **Advanced debugging**: Integration with W&B Weave for powerful tracing and debugging capabilities
+Slide gives you everything you need to build, test, and deploy intelligent AI agents. It is:
+
+- **Extensible and open source**: Built on a foundation you can inspect, customize, and contribute to
+- **Flexible with model support**: Compatible with any LLM provider supported by LiteLLM (100+ providers including OpenAI, Anthropic, etc.)
+- **MCP compatible**: Seamlessly integrated with Model Context Protocol (MCP) compatible servers and tools
+- **Multimodal by design**: Capable of processing and understanding images, audio, PDFs, and more out of the box
+- **Persistent with conversations**: Equipped with built-in support for threads, messages, and attachments with flexible storage options (in-memory, SQLite, or PostgreSQL)
+- **Ready-to-use with tools**: Packed with built-in tools for web interaction, file handling, and browser automation with support for custom tools
+- **Real-time streaming enabled**: Designed to build interactive applications with streaming responses from both agents and tools
+- **Evaluation-ready**: Equipped with a framework to test agents safely with mock tools, prebuilt LLM judges, and multi-turn conversation scenarios
+- **Debuggable**: Integrated with W&B Weave for powerful tracing and debugging capabilities
 
 ## Ready to Build?
 
