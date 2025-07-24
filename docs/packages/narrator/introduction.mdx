@@ -3,12 +3,12 @@ title: 'Narrator'
 description: 'Conversation persistence for AI agents'
 ---
 
-Narrator provides robust storage solutions for AI agent conversations, enabling memory persistence across sessions. It handles thread management, message storage, and file attachments with both local and cloud storage options.
+Narrator provides robust storage solutions for AI agent conversations, enabling conversation persistence across sessions. It handles thread management, message storage, and file attachments with both local and cloud storage options.
 
 ## Overview
 
 Narrator is built for:
-- **Persistent Memory**: Store and retrieve conversation history
+- **Conversation Persistence**: Store and retrieve conversation history
 - **File Management**: Handle attachments and generated files
 - **Scalability**: From SQLite for development to PostgreSQL for production
 - **Flexibility**: Multiple storage backends and easy migration
@@ -29,7 +29,7 @@ from tyler import Agent
 thread_store = await ThreadStore.create("sqlite:///conversations.db")
 file_store = await FileStore.create(base_path="./agent_files")
 
-# Create agent with memory
+# Create agent with persistence
 agent = Agent(
     name="assistant",
     thread_store=thread_store,

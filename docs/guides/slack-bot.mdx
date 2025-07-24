@@ -111,23 +111,23 @@ if __name__ == "__main__":
 
 ## Advanced Bot Features
 
-### Conversation Memory
+### Conversation Persistence
 
-Give your bot memory across conversations:
+Give your bot persistence across conversations:
 
 ```python
 from tyler import ThreadStore, FileStore
 
-async def create_bot_with_memory():
+async def create_bot_with_persistence():
     # Set up persistent storage
     thread_store = await ThreadStore.create("postgresql://localhost/slackbot")
     file_store = await FileStore.create("./slack_files")
     
-    # Create agent with memory
+    # Create agent with persistence
     agent = Agent(
-        name="memory-bot",
+        name="persistent-bot",
         model_name="gpt-4",
-        purpose="To be a helpful Slack assistant with memory",
+        purpose="To be a helpful Slack assistant with conversation history",
         thread_store=thread_store,
         file_store=file_store,
         tools=WEB_TOOLS
@@ -139,10 +139,10 @@ async def create_bot_with_memory():
         signing_secret=os.getenv("SLACK_SIGNING_SECRET")
     )
 
-app = await create_bot_with_memory()
+app = await create_bot_with_persistence()
 
 @app.event("app_mention")
-async def handle_mention_with_memory(event, say):
+async def handle_mention_with_persistence(event, say):
     # Use channel ID as thread ID for conversation continuity
     thread_id = f"slack-{event['channel']}"
     

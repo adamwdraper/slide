@@ -111,12 +111,12 @@ file_store = await FileStore.create(base_path="./files")
 agent = Agent(
     name="assistant",
     model_name="gpt-4",
-    purpose="To be a helpful assistant with memory",
+    purpose="To be a helpful assistant with conversation persistence",
     thread_store=thread_store,
     file_store=file_store
 )
 
-# Agent now has persistent memory
+# Agent now has conversation persistence
 thread = Thread(id="main-conversation")
 message = Message(role="user", content="Remember my favorite color is blue")
 thread.add_message(message)
@@ -166,7 +166,7 @@ async def main():
     thread_store = await ThreadStore.create("sqlite+aiosqlite:///slack_conversations.db")
     file_store = await FileStore.create(base_path="./slack_files")
     
-    # Agent with tools and memory
+    # Agent with tools and persistence
     agent = Agent(
         name="company-assistant",
         model_name="gpt-4",
@@ -207,7 +207,7 @@ uv add slide-tyler
 # Agent + tools
 uv add slide-tyler slide-lye
 
-# Agent + memory
+# Agent + persistence
 uv add slide-tyler slide-narrator
 
 # Full Slack bot

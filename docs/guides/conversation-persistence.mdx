@@ -1,40 +1,40 @@
 ---
-title: 'Conversation Memory'
-description: 'Build agents that remember conversations and maintain context'
+title: 'Conversation Persistence'
+description: 'Build agents that store conversations and maintain context across sessions'
 ---
 
-Conversation memory is crucial for building agents that feel intelligent and contextual. With Slide's Narrator integration, your agents can remember past interactions, maintain conversation history, and provide personalized experiences.
+Conversation persistence is crucial for building agents that maintain context across sessions. With Slide's Narrator integration, your agents can store and retrieve past interactions, maintain conversation history, and provide contextual experiences.
 
-## Why Conversation Memory Matters
+## Why Conversation Persistence Matters
 
-Without memory, every interaction starts from scratch:
+Without persistence, every interaction starts from scratch:
 - No context from previous messages
 - Can't remember user preferences
 - Can't track ongoing tasks
 - Poor user experience
 
-With memory, your agent becomes truly useful:
-- Remembers what was discussed
+With persistence, your agent becomes truly useful:
+- Stores conversation history
 - Maintains context across sessions
 - Can resume interrupted tasks
-- Provides personalized responses
+- Provides contextual responses
 
-## Quick Start with Memory
+## Quick Start with Persistence
 
 ```python
 import asyncio
 from tyler import Agent, Thread, Message, ThreadStore, FileStore
 
-async def create_agent_with_memory():
+async def create_agent_with_persistence():
     # Set up persistent storage
     thread_store = await ThreadStore.create("sqlite+aiosqlite:///conversations.db")
     file_store = await FileStore.create(base_path="./conversation_files")
     
-    # Create agent with memory
+    # Create agent with persistence
     agent = Agent(
         name="assistant",
         model_name="gpt-4",
-        purpose="To be a helpful assistant that remembers our conversations",
+        purpose="To be a helpful assistant that maintains conversation history",
         thread_store=thread_store,
         file_store=file_store
     )
@@ -43,7 +43,7 @@ async def create_agent_with_memory():
 
 # Use the agent
 async def main():
-    agent, thread_store, _ = await create_agent_with_memory()
+    agent, thread_store, _ = await create_agent_with_persistence()
     
     # Create or resume a thread
     thread_id = "user-123-main"
@@ -231,7 +231,7 @@ thread.add_message(message)
 processed_thread, _ = await agent.go(thread)
 ```
 
-## Advanced Memory Patterns
+## Advanced Persistence Patterns
 
 ### Conversation Summarization
 ```python
@@ -285,7 +285,7 @@ async def inject_user_context(thread: Thread, user_id: str):
     return thread
 ```
 
-## Memory Management Tips
+## Persistence Management Tips
 
 ### 1. Thread Naming Conventions
 ```python
@@ -439,20 +439,20 @@ async def get_cached_thread(thread_id: str):
     icon="vial"
     href="/guides/testing-agents"
   >
-    Test agents with persistent memory
+    Test agents with conversation persistence
   </Card>
   <Card
     title="Slack Integration"
     icon="slack"
     href="/guides/slack-bot"
   >
-    Build Slack bots with memory
+    Build Slack bots with persistence
   </Card>
   <Card
     title="Advanced Patterns"
     icon="diagram-project"
     href="/guides/patterns"
   >
-    Complex memory patterns
+    Complex persistence patterns
   </Card>
 </CardGroup> 

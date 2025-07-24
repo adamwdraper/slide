@@ -1,9 +1,9 @@
 ---
 title: 'Using Narrator'
-description: 'Add persistent memory to any AI application with Narrator'
+description: 'Add conversation persistence to any AI application with Narrator'
 ---
 
-Narrator is Slide's conversation memory and storage system. While it integrates seamlessly with Tyler agents, you can also use Narrator independently for any application that needs to manage conversations and files.
+Narrator is Slide's conversation persistence and storage system. While it integrates seamlessly with Tyler agents, you can also use Narrator independently for any application that needs to manage conversations and files.
 
 ## Why Use Narrator Standalone?
 
@@ -229,7 +229,7 @@ for att in attachments:
 import openai
 from narrator import Thread, Message, ThreadStore
 
-async def chat_with_memory():
+async def chat_with_persistence():
     store = await ThreadStore.create("sqlite+aiosqlite:///chat.db")
     thread_id = "user-session-123"
     
@@ -533,11 +533,11 @@ async def migrate_from_files(file_dir: str, store: ThreadStore):
 
 <CardGroup cols={2}>
   <Card
-    title="Conversation Memory"
-    icon="brain"
-    href="/guides/conversation-memory"
+    title="Conversation Persistence"
+    icon="database"
+    href="/guides/conversation-persistence"
   >
-    Advanced memory patterns
+    Advanced persistence patterns
   </Card>
   <Card
     title="API Reference"

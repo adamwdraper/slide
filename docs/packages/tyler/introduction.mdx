@@ -119,7 +119,7 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-### Agent with Memory
+### Agent with Persistence
 
 ```python
 import asyncio
@@ -129,11 +129,11 @@ async def main():
     # Create persistent storage
     thread_store = await ThreadStore.create("sqlite+aiosqlite:///conversations.db")
     
-    # Create agent with conversation memory
+    # Create agent with conversation persistence
     agent = Agent(
         name="chatbot",
         model_name="gpt-4",
-        purpose="To be a helpful chatbot with memory",
+        purpose="To be a helpful chatbot with conversation history",
         thread_store=thread_store
     )
     

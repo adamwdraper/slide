@@ -144,25 +144,25 @@ async def main():
             print(f"\n🔧 Tool [{msg.name}]: {msg.content[:100]}...")
 ```
 
-## Add Memory to Your Agent
+## Add Persistence to Your Agent
 
-Let's upgrade the agent to remember conversations:
+Let's upgrade the agent to maintain conversation history:
 
 ```python
 import asyncio
 from tyler import Agent, Thread, Message, ThreadStore, FileStore
 from lye import WEB_TOOLS, FILES_TOOLS
 
-async def create_agent_with_memory():
+async def create_agent_with_persistence():
     # Set up persistent storage
     thread_store = await ThreadStore.create("sqlite+aiosqlite:///research.db")
     file_store = await FileStore.create(base_path="./research_files")
     
-    # Create agent with memory
+    # Create agent with persistence
     agent = Agent(
         name="research-assistant",
         model_name="gpt-4",
-        purpose="To help with research and remember our conversations",
+        purpose="To help with research and maintain our conversation history",
         tools=[*WEB_TOOLS, *FILES_TOOLS],
         thread_store=thread_store,
         file_store=file_store
@@ -171,7 +171,7 @@ async def create_agent_with_memory():
     return agent, thread_store
 
 async def main():
-    agent, thread_store = await create_agent_with_memory()
+    agent, thread_store = await create_agent_with_persistence()
     
     # Try to resume previous conversation
     thread_id = "main-research"
@@ -211,7 +211,7 @@ Let's create an interactive version where you can have a conversation:
 
 ```python
 async def interactive_session():
-    agent, thread_store = await create_agent_with_memory()
+    agent, thread_store = await create_agent_with_persistence()
     
     # Load or create thread
     thread_id = "interactive-research"
