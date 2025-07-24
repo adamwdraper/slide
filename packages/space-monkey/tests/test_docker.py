@@ -146,6 +146,9 @@ sys.exit(0)
 """)
             test_script = f.name
         
+        # Set file permissions so the 'agent' user in container can read it
+        os.chmod(test_script, 0o644)
+        
         try:
             # Build test image
             subprocess.run(
