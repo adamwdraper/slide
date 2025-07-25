@@ -59,8 +59,11 @@ git checkout -b "$BRANCH_NAME"
 # Now actually bump the version
 python ../../scripts/bump_version.py "$PACKAGE" "$VERSION_TYPE"
 
+# Convert package name to module name (replace hyphens with underscores)
+MODULE_NAME=${PACKAGE//-/_}
+
 # Create git commit
-git add pyproject.toml ${PACKAGE}/__init__.py
+git add pyproject.toml ${MODULE_NAME}/__init__.py
 git commit -m "Bump $PACKAGE version to $NEW_VERSION"
 
 # Push the release branch
