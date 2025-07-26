@@ -5298,7 +5298,7 @@ requires-dist = [
     { name = "python-dotenv", specifier = ">=1.0.1" },
     { name = "python-magic", specifier = ">=0.4.0" },
     { name = "requests", specifier = ">=2.32.3" },
-    { name = "slack-sdk", specifier = ">=3.34.0" },
+    { name = "slack-sdk", specifier = ">=3.36.0" },
     { name = "weave", specifier = ">=0.51.32" },
 ]
 provides-extras = ["dev"]
@@ -5349,7 +5349,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "slide-space-monkey"
-version = "0.1.1"
+version = "0.2.0"
 source = { editable = "packages/space-monkey" }
 dependencies = [
     { name = "fastapi" },
@@ -5385,7 +5385,7 @@ requires-dist = [
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=6.0.0" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
     { name = "requests", specifier = ">=2.32.0" },
-    { name = "slack-bolt", specifier = ">=1.18.0" },
+    { name = "slack-bolt", specifier = ">=1.23.0" },
     { name = "slide-narrator", editable = "packages/narrator" },
     { name = "slide-tyler", editable = "packages/tyler" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.24.0" },
