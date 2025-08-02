@@ -52,7 +52,7 @@ echo -e "${BLUE}--------------------------------${NC}"
 # Display current and new versions for each package
 for PACKAGE in "${PACKAGES[@]}"; do
     cd "packages/$PACKAGE"
-    CURRENT_VERSION=$(grep -Po '(?<=version = ")[^"]*' pyproject.toml)
+    CURRENT_VERSION=$(grep 'version = "' pyproject.toml | sed 's/.*version = "\([^"]*\)".*/\1/')
     NEW_VERSION=$(python ../../scripts/bump_version.py "$PACKAGE" "$VERSION_TYPE" --dry-run --quiet)
     echo -e "${GREEN}$PACKAGE:${NC} $CURRENT_VERSION → $NEW_VERSION"
     cd ../..
