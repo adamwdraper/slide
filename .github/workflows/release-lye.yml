@@ -8,6 +8,10 @@ on:
     paths:
       - 'packages/lye/**'
 
+permissions:
+  contents: write
+  pull-requests: write
+
 jobs:
   publish-lye:
     # Only run if PR was merged and branch matches release/lye-v*
@@ -19,6 +23,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0  # Full history for tags
+          token: ${{ secrets.GITHUB_TOKEN }}
       
       - name: Validate this is a lye release
         run: |
