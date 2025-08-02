@@ -4,7 +4,7 @@ set -e
 # Check if package name is provided
 if [ $# -eq 0 ]; then
     echo "Usage: $0 <package> [version_type]"
-    echo "Available packages: tyler, narrator, space-monkey"
+    echo "Available packages: tyler, narrator, space-monkey, lye"
     echo "Version types: major, minor, patch (default: patch)"
     exit 1
 fi
@@ -13,8 +13,8 @@ PACKAGE=$1
 VERSION_TYPE=${2:-patch}
 
 # Validate package name
-if [[ ! "$PACKAGE" =~ ^(tyler|narrator|space-monkey)$ ]]; then
-    echo "Package must be one of: tyler, narrator, space-monkey"
+if [[ ! "$PACKAGE" =~ ^(tyler|narrator|space-monkey|lye)$ ]]; then
+    echo "Package must be one of: tyler, narrator, space-monkey, lye"
     exit 1
 fi
 

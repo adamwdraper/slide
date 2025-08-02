@@ -25,7 +25,7 @@ def update_version_in_file(file_path, current_version, new_version, pattern=None
 
 def bump_version(package_name, version_type='patch', dry_run=False, quiet=False):
     # Validate package name
-    valid_packages = ['tyler', 'narrator', 'space-monkey']
+    valid_packages = ['tyler', 'narrator', 'space-monkey', 'lye']
     if package_name not in valid_packages:
         if not quiet:
             print(f"Package must be one of: {', '.join(valid_packages)}")
@@ -89,7 +89,7 @@ def bump_version(package_name, version_type='patch', dry_run=False, quiet=False)
 if __name__ == '__main__':
     if len(sys.argv) < 2:
         print("Usage: python bump_version.py <package> [version_type] [--dry-run] [--quiet]")
-        print("Available packages: tyler, narrator, space-monkey")
+        print("Available packages: tyler, narrator, space-monkey, lye")
         print("Version types: major, minor, patch (default: patch)")
         sys.exit(1)
     

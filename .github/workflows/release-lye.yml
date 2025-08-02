@@ -1,0 +1,99 @@
+name: Release Lye
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - main
+    paths:
+      - 'packages/lye/**'
+
+jobs:
+  publish-lye:
+    # Only run if PR was merged and branch matches release/lye-v*
+    if: github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'release/lye-v')
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for tags
+      
+      - name: Validate this is a lye release
+        run: |
+          if [[ ! "${{ github.event.pull_request.head.ref }}" =~ ^release/lye-v.*$ ]]; then
+            echo "ERROR: This workflow should only run for lye releases"
+            exit 1
+          fi
+          
+          echo "✓ Confirmed this is a lye release"
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+      
+      - name: Install build dependencies
+        run: |
+          uv tool install hatch
+      
+      - name: Extract version from branch name
+        run: |
+          BRANCH_NAME="${{ github.event.pull_request.head.ref }}"
+          VERSION=${BRANCH_NAME#release/lye-v}
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "Extracted version: $VERSION"
+      
+      - name: Verify version matches pyproject.toml
+        run: |
+          cd packages/lye
+          PYPROJECT_VERSION=$(grep -Po '(?<=version = ")[^"]*' pyproject.toml)
+          echo "pyproject.toml version: $PYPROJECT_VERSION"
+          echo "Branch version: $VERSION"
+          if [ "$PYPROJECT_VERSION" != "$VERSION" ]; then
+            echo "Version mismatch! pyproject.toml has $PYPROJECT_VERSION but branch has $VERSION"
+            exit 1
+          fi
+      
+      - name: Create and push tag
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git tag -a "lye-v$VERSION" -m "Release Lye version $VERSION"
+          git push origin "lye-v$VERSION"
+      
+      - name: Build Lye package
+        run: |
+          cd packages/lye
+          uv tool run hatch build
+      
+      - name: Publish Lye to PyPI
+        env:
+          HATCH_INDEX_USER: __token__
+          HATCH_INDEX_AUTH: ${{ secrets.PYPI_API_TOKEN }}
+        run: |
+          cd packages/lye
+          uv tool run hatch publish
+      
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: lye-v${{ env.VERSION }}
+          release_name: Lye v${{ env.VERSION }}
+          body: |
+            Release Lye v${{ env.VERSION }}
+            
+            Package: slide-lye
+            Version: ${{ env.VERSION }}
+            
+            See the [changelog](packages/lye/CHANGELOG.md) for details.
+          draft: false
+          prerelease: false 
