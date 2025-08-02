@@ -1,6 +1,6 @@
 # Unified Release Scripts
 
-This directory contains unified release scripts for all slide packages (tyler, narrator, space-monkey).
+This directory contains unified release scripts for all slide packages (tyler, narrator, space-monkey, lye).
 
 ## Usage
 
@@ -22,7 +22,32 @@ To create a release branch for any package:
 
 # Major release for space-monkey (1.0.0 -> 2.0.0)
 ./scripts/release.sh space-monkey major
+
+# Release lye package
+./scripts/release.sh lye patch
 ```
+
+### Releasing All Packages at Once
+
+To release all packages with the same version bump type:
+
+```bash
+# From the slide root directory
+./scripts/release-all.sh [version_type]
+
+# Examples:
+# Patch release for all packages
+./scripts/release-all.sh patch
+
+# Minor release for all packages
+./scripts/release-all.sh minor
+```
+
+The `release-all.sh` script will:
+1. Show you the current and new versions for all packages
+2. Ask for confirmation before proceeding
+3. Create individual release PRs for each package
+4. Provide a summary of all created PRs
 
 ## What the script does
 
@@ -44,6 +69,7 @@ To create a release branch for any package:
 - `tyler` - The main tyler package
 - `narrator` - The narrator storage system
 - `space-monkey` - The Slack agent framework
+- `lye` - The tools package for Tyler
 
 ## Version types
 
