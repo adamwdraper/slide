@@ -1,13 +1,13 @@
 # The Narrator
 
-Thread and file storage components for conversational AI - the companion to Tyler AI framework.
+Thread and file storage components for conversational AI - the storage foundation for the Slide ecosystem.
 
 ## Overview
 
-The Narrator provides robust, production-ready storage solutions for conversational AI applications. It includes:
+The Narrator provides robust, production-ready storage solutions for conversational AI applications, serving as the storage layer for Tyler and other Slide components. It includes:
 
 - **ThreadStore**: Persistent storage for conversation threads with support for both in-memory and SQL backends
-- **FileStore**: Secure file storage with automatic processing for various file types
+- **FileStore**: Secure file storage with automatic processing for various file types  
 - **Models**: Pydantic models for threads, messages, and attachments
 - **CLI Tools**: Command-line interface for database management and setup
 
@@ -17,10 +17,10 @@ The Narrator provides robust, production-ready storage solutions for conversatio
 - **Multiple Backends**: In-memory (development), SQLite (local), PostgreSQL (production)
 - **Async/Await Support**: Built for modern Python async applications
 - **Message Filtering**: Automatic handling of system vs. user messages
-- **Platform Integration**: Support for external platform references (Slack, etc.)
+- **Platform Integration**: Support for external platform references (Slack, Discord, etc.)
 - **Connection Pooling**: Production-ready database connection management
 
-### FileStore
+### FileStore  
 - **Secure Storage**: Automatic file validation and type checking
 - **Multiple Formats**: Support for documents, images, audio, and more
 - **Content Processing**: Automatic text extraction from PDFs, image analysis
@@ -30,7 +30,11 @@ The Narrator provides robust, production-ready storage solutions for conversatio
 ## Installation
 
 ```bash
-pip install the-narrator
+# Install with pip
+pip install slide-narrator
+
+# Install with uv
+uv add slide-narrator
 ```
 
 ## Setup
@@ -360,43 +364,13 @@ Available commands:
 - `narrator-db init` - Initialize database tables
 - `narrator-db status` - Check database connection and basic statistics
 
-## Migration from Tyler
+## Key Design Principles
 
-If you're migrating from the original Tyler package:
-
-1. **Update imports**:
-   ```python
-   # Before
-   from tyler import ThreadStore, FileStore, Thread, Message
-
-   # After
-   from narrator import ThreadStore, FileStore, Thread, Message
-   ```
-
-2. **Update environment variables**:
-   ```bash
-   # Before
-   TYLER_DB_POOL_SIZE=5
-   TYLER_FILE_STORAGE_PATH=/path/to/files
-
-   # After
-   NARRATOR_DB_POOL_SIZE=5
-   NARRATOR_FILE_STORAGE_PATH=/path/to/files
-   ```
-
-3. **Remove registry usage**:
-   ```python
-   # Before (with registry)
-   from tyler.utils.registry import register_thread_store, get_thread_store
-   register_thread_store("default", store)
-   store = get_thread_store("default")
-
-   # After (direct usage)
-   store = await ThreadStore.create("your-database-url")
-   # Use store directly
-   ```
-
-4. **Database compatibility**: The database schema is fully compatible, so existing data will work without changes.
+1. **Factory Pattern**: Use `await ThreadStore.create()` and `await FileStore.create()` for proper initialization and connection validation
+2. **Backend Agnostic**: Same API whether using in-memory, SQLite, or PostgreSQL storage
+3. **Production Ready**: Built-in connection pooling, error handling, and health checks
+4. **Tyler Integration**: Seamlessly integrates with Tyler agents for conversation persistence
+5. **Platform Support**: Native support for external platforms like Slack, Discord, and custom integrations
 
 ## API Reference
 

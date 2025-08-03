@@ -6,16 +6,16 @@
 
 ### A development kit for manifesting AI agents with a complete lack of conventional limitations
 
-Tyler makes it easy to start building effective AI agents in just a few lines of code. Tyler provides all the essential components needed to build production-ready AI agents that can understand context, manage conversations, and effectively use tools.
+Tyler is the core agent framework in the Slide ecosystem. It makes it easy to build effective AI agents in just a few lines of code, providing all the essential components needed for production-ready AI agents that can understand context, manage conversations, and effectively use tools.
 
 ### Key Features
 
 - **Multimodal support**: Process and understand images, audio, PDFs, and more out of the box
-- **Ready-to-use tools**: Comprehensive set of built-in tools with easy integration of custom built tools
+- **Ready-to-use tools**: Comprehensive set of built-in tools via the Lye package, with easy integration of custom tools
 - **MCP compatibility**: Seamless integration with [Model Context Protocol (MCP)](https://modelcontextprotocol.io/introduction) compatible servers and tools
 - **Real-time streaming**: Build interactive applications with streaming responses from both the assistant and tools
 - **Structured data model**: Built-in support for threads, messages, and attachments to maintain conversation context
-- **Persistent storage**: Choose between in-memory, SQLite, or PostgreSQL to store conversation history and files
+- **Persistent storage**: Powered by Narrator - choose between in-memory, SQLite, or PostgreSQL storage
 - **Advanced debugging**: Integration with [W&B Weave](https://weave-docs.wandb.ai/) for powerful tracing and debugging capabilities
 - **Flexible model support**: Use any LLM provider supported by LiteLLM (100+ providers including OpenAI, Anthropic, etc.)
 
@@ -99,6 +99,7 @@ Tyler's tools are provided by the `slide-lye` package. Extend agent capabilities
 - Audio processing (AUDIO_TOOLS)
 - File operations (FILES_TOOLS)
 - Shell commands (COMMAND_LINE_TOOLS)
+- Browser automation (BROWSER_TOOLS)
 
 ### MCP
 
@@ -112,21 +113,22 @@ Integrates with the Model Context Protocol for:
 
 ### Storage
 
-Multiple storage backends for:
+Storage is handled by the Narrator package, providing:
 - Thread Storage:
   - Memory Store: Fast, in-memory storage for development
   - Database Store: PostgreSQL/SQLite for production
 - File Storage:
-  - Local filesystem
-  - Cloud storage (S3, GCS)
-  - Configurable via environment variables
+  - Local filesystem with sharded organization
+  - Automatic content processing and extraction
+  - Configurable size limits and validation
 
 ## User Guide
 
 ### Prerequisites
 
-- Python 3.12.8
-- uv (modern Python package manager)
+- Python 3.12+
+- uv (modern Python package manager) - recommended
+- System dependencies for PDF and image processing
 
 ### Installation
 
@@ -135,42 +137,47 @@ Multiple storage backends for:
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Install required libraries for PDF and image processing
+# macOS:
 brew install libmagic poppler
 
+# Ubuntu/Debian:
+sudo apt-get install libmagic1 poppler-utils
+
 # Install Tyler (includes all core dependencies)
-uv add tyler-agent
+uv add slide-tyler
+
+# Or with pip:
+pip install slide-tyler
 ```
 
 # For development installation:
 ```bash
-uv add tyler-agent --dev
+uv add slide-tyler --dev
 ```
 
-When you install Tyler using uv, all required runtime dependencies will be installed automatically, including:
+When you install Tyler, all required runtime dependencies will be installed automatically, including:
 - LLM support (LiteLLM, OpenAI)
-- Database support (PostgreSQL, SQLite)
+- Storage components (Narrator)
+- Tools package (Lye)
 - Monitoring and metrics (Weave, Wandb)
 - File processing (PDF, images)
-- All core utilities and tools
+- All core utilities
 
 ### Basic Setup
 
 Create a `.env` file in your project directory with the following configuration:
 ```bash
-# Database Configuration
-TYLER_DB_TYPE=postgresql
-TYLER_DB_HOST=localhost
-TYLER_DB_PORT=5432
-TYLER_DB_NAME=tyler
-TYLER_DB_USER=tyler
-TYLER_DB_PASSWORD=tyler_dev
+# Database Configuration (used by Narrator)
+NARRATOR_DATABASE_URL=postgresql+asyncpg://user:password@localhost/dbname
+# Or for SQLite:
+# NARRATOR_DATABASE_URL=sqlite+aiosqlite:///path/to/database.db
 
 # Optional Database Settings
-TYLER_DB_ECHO=false
-TYLER_DB_POOL_SIZE=5
-TYLER_DB_MAX_OVERFLOW=10
-TYLER_DB_POOL_TIMEOUT=30
-TYLER_DB_POOL_RECYCLE=1800
+NARRATOR_DB_ECHO=false
+NARRATOR_DB_POOL_SIZE=5
+NARRATOR_DB_MAX_OVERFLOW=10
+NARRATOR_DB_POOL_TIMEOUT=30
+NARRATOR_DB_POOL_RECYCLE=300
 
 # OpenAI Configuration
 OPENAI_API_KEY=your-openai-api-key
@@ -178,14 +185,15 @@ OPENAI_API_KEY=your-openai-api-key
 # Logging Configuration
 WANDB_API_KEY=your-wandb-api-key
 
-# Optional Integrations
+# Optional Integrations (for Lye tools)
 NOTION_TOKEN=your-notion-token
 SLACK_BOT_TOKEN=your-slack-bot-token
 SLACK_SIGNING_SECRET=your-slack-signing-secret
 
 # File storage configuration
-TYLER_FILE_STORAGE_TYPE=local
-TYLER_FILE_STORAGE_PATH=/path/to/files  # Optional, defaults to ~/.tyler/files
+NARRATOR_FILE_STORAGE_PATH=/path/to/files  # Optional, defaults to ~/.narrator/files
+NARRATOR_MAX_FILE_SIZE=52428800  # 50MB default
+NARRATOR_MAX_STORAGE_SIZE=5368709120  # 5GB default
 
 # Other settings
 LOG_LEVEL=INFO  # DEBUG, INFO, WARNING, ERROR, CRITICAL
@@ -193,12 +201,11 @@ LOG_LEVEL=INFO  # DEBUG, INFO, WARNING, ERROR, CRITICAL
 
 Only the `OPENAI_API_KEY` (or whatever LLM provider you're using) is required for core functionality. Other environment variables are required only when using specific features:
 - For Weave monitoring: `WANDB_API_KEY` is required (You will want to use this for monitoring and debugging) [https://weave-docs.wandb.ai/](Weave Docs)
-- For Slack integration: `SLACK_BOT_TOKEN` is required
+- For Slack integration: `SLACK_BOT_TOKEN` is required  
 - For Notion integration: `NOTION_TOKEN` is required
 - For database storage:
   - By default uses in-memory storage (perfect for scripts and testing)
-  - For PostgreSQL: Database configuration variables are required
-  - For SQLite: Will be used as fallback if PostgreSQL settings are incomplete
+  - For PostgreSQL or SQLite: Set `NARRATOR_DATABASE_URL` with appropriate connection string
 - For file storage: Defaults will be used if not specified
 
 For more details about each setting, see the [Environment Variables](#environment-variables) section.

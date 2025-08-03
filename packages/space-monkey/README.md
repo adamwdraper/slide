@@ -1,10 +1,15 @@
 # Space Monkey - Tyler Slack Agent
 
-A simple, powerful way to deploy Tyler AI agents as Slack agents with just a few lines of code.
+A simple, powerful way to deploy Tyler AI agents as Slack agents. Space Monkey handles all the complexity of Slack integration while you focus on building your agent's capabilities.
 
 ## Overview
 
-Space Monkey provides a clean, class-based API for creating and deploying Tyler agents as Slack agents. It handles all the complexity of Slack integration, message routing, thread management, and storage while exposing a simple interface for agent configuration.
+Space Monkey bridges the gap between Tyler agents and Slack, providing:
+- Seamless integration of Tyler agents into Slack workspaces
+- Intelligent message classification and routing
+- Persistent conversation management using Narrator
+- Built-in file handling and health monitoring
+- Production-ready deployment with Docker support
 
 ## Features
 
@@ -198,26 +203,16 @@ app = SlackApp(
 )
 ```
 
-## Agent Configuration
+## How It Works
 
-Space Monkey uses Tyler Agent directly, giving you full access to all Tyler's capabilities:
+Space Monkey acts as the bridge between Slack and Tyler:
 
-```python
-agent = Agent(
-    name="MyBot",             # Agent name
-    model_name="gpt-4.1",     # Model to use
-    purpose="Your agent's purpose and instructions",
-    tools=["web", "files"],   # Available tools
-    temperature=0.7,          # Model temperature
-    version="1.0.0"           # Agent version
-)
-```
+1. **SlackApp** - Manages the Slack connection and message handling
+2. **Tyler Agent** - Provides the AI capabilities and tool usage
+3. **Narrator Storage** - Persists conversations and files
+4. **Message Classifier** - Intelligently routes messages based on context
 
-You can configure agents for any use case by adjusting the purpose and tools:
-- HR/People assistance with Notion integration
-- Customer support with web search
-- Technical assistance with file processing
-- And any other conversational AI use case
+The integration is designed to be invisible to users - they simply interact with a helpful AI agent in their Slack workspace.
 
 ## Message Routing
 
@@ -519,9 +514,16 @@ async def main():
 asyncio.run(main())
 ```
 
+## Use Cases
+
+- **HR/People Bots**: Answer employee questions using Notion as a knowledge base
+- **Technical Support**: Help users troubleshoot issues with web search and file analysis
+- **Team Assistants**: Automate routine tasks and answer common questions
+- **Custom Workflows**: Build any conversational AI use case with Tyler's full capabilities
+
 ## Contributing
 
-Tyler Slack Agent is part of the Tyler ecosystem. See the main Tyler documentation for information about contributing to the project.
+Space Monkey is part of the Slide ecosystem. See the main repository for contribution guidelines.
 
 ## License
 
