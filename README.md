@@ -127,16 +127,42 @@ async def main():
 asyncio.run(main())
 ```
 
+## Examples
+
+🚀 **[View all examples →](./examples/)**
+
+### Quick Examples
+- **[Getting Started](./examples/getting-started/)** - Simple examples to get you up and running
+- **[Use Cases](./examples/use-cases/)** - Real-world examples like research assistants and Slack bots
+- **[Integrations](./examples/integrations/)** - Cross-package examples showing Tyler + Lye + Narrator
+
+### Running Examples
+```bash
+# Basic agent with tools
+python examples/getting-started/quickstart.py
+
+# Comprehensive research assistant  
+python examples/use-cases/research-assistant/basic.py
+
+# Cross-package integration
+python examples/integrations/cross-package.py
+```
+
 ## Project Structure
 
 ```
 slide/
 ├── packages/
 │   ├── tyler/           # Tyler agent framework
+│   ├── lye/             # Tools and capabilities
 │   ├── narrator/        # Thread and file storage
-│   └── future-tools/    # Additional tools (coming soon)
+│   └── space-monkey/    # Slack integration
 ├── docs/               # Unified documentation
-├── examples/           # Cross-component examples
+├── examples/           # Cross-package examples
+│   ├── getting-started/ # Simple examples
+│   ├── use-cases/      # Real-world scenarios
+│   └── integrations/   # Cross-package examples
+├── tests/              # Project-level tests
 └── scripts/            # Build and development scripts
 ```
 
