@@ -20,8 +20,8 @@ PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 def run_pytest(args):
-    """Run pytest with the given arguments."""
-    cmd = ["python", "-m", "pytest"] + args
+    """Run pytest with the given arguments using uv."""
+    cmd = ["uv", "run", "pytest"] + args
     print(f"Running: {' '.join(cmd)}")
     return subprocess.run(cmd, cwd=PROJECT_ROOT)
 
@@ -103,6 +103,13 @@ def main():
     if args.no_api_key:
         # Skip examples that require API keys
         pytest_args.extend(["-m", "not requires_api_key"])
+    
+    # Check workspace setup
+    if not (PROJECT_ROOT / "uv.lock").exists():
+        print("\n⚠️  Warning: No uv.lock found!")
+        print("This project uses uv workspace. Please run from project root:")
+        print("  uv sync --dev")
+        print("")
     
     # Check for API key and warn if missing
     if not (os.getenv("OPENAI_API_KEY") or os.getenv("ANTHROPIC_API_KEY")):

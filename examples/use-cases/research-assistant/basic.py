@@ -264,6 +264,9 @@ if __name__ == "__main__":
     if not (os.getenv("OPENAI_API_KEY") or os.getenv("ANTHROPIC_API_KEY")):
         print("⚠️  Please set OPENAI_API_KEY or ANTHROPIC_API_KEY environment variable")
         print("Example: export OPENAI_API_KEY='sk-...'")
+        print("\nTo run this example:")
+        print("  From project root: uv run examples/use-cases/research-assistant/basic.py")
+        print("  Or after uv sync: python examples/use-cases/research-assistant/basic.py")
         exit(1)
     
     try:
@@ -272,4 +275,7 @@ if __name__ == "__main__":
         print("\nGoodbye! 👋")
     except Exception as e:
         print(f"❌ Error: {e}")
+        print("\nTroubleshooting:")
+        print("- Make sure you've run 'uv sync --dev' from the project root")
+        print("- Check that your API key is set correctly")
         raise
