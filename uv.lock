@@ -5433,7 +5433,7 @@ wheels = [
 
 [[package]]
 name = "slide-lye"
-version = "0.1.0"
+version = "0.2.2"
 source = { editable = "packages/lye" }
 dependencies = [
     { name = "beautifulsoup4" },
@@ -5449,6 +5449,8 @@ dependencies = [
     { name = "python-magic" },
     { name = "requests" },
     { name = "slack-sdk" },
+    { name = "wandb" },
+    { name = "wandb-workspaces" },
     { name = "weave" },
 ]
 
@@ -5479,13 +5481,15 @@ requires-dist = [
     { name = "python-magic", specifier = ">=0.4.0" },
     { name = "requests", specifier = ">=2.32.3" },
     { name = "slack-sdk", specifier = ">=3.36.0" },
+    { name = "wandb", specifier = ">=0.18.0" },
+    { name = "wandb-workspaces", specifier = ">=0.1.0" },
     { name = "weave", specifier = ">=0.51.32" },
 ]
 provides-extras = ["dev"]
 
 [[package]]
 name = "slide-narrator"
-version = "0.2.2"
+version = "0.3.0"
 source = { editable = "packages/narrator" }
 dependencies = [
     { name = "aiosqlite" },
@@ -5575,7 +5579,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "slide-tyler"
-version = "1.1.1"
+version = "1.2.0"
 source = { editable = "packages/tyler" }
 dependencies = [
     { name = "aiohappyeyeballs" },
@@ -6138,6 +6142,19 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/02/d9/fcd2273d8ec3f79323e40a031aba5d32d6fa9065702010eb428b5ffbab62/wandb-0.21.0-py3-none-musllinux_1_2_x86_64.whl", hash = "sha256:873749966eeac0069e0e742e6210641b6227d454fb1dae2cf5c437c6ed42d3ca", size = 22320652, upload-time = "2025-07-02T00:24:07.175Z" },
     { url = "https://files.pythonhosted.org/packages/80/68/b8308db6b9c3c96dcd03be17c019aee105e1d7dc1e74d70756cdfb9241c6/wandb-0.21.0-py3-none-win32.whl", hash = "sha256:9d3cccfba658fa011d6cab9045fa4f070a444885e8902ae863802549106a5dab", size = 21484296, upload-time = "2025-07-02T00:24:10.147Z" },
     { url = "https://files.pythonhosted.org/packages/cf/96/71cc033e8abd00e54465e68764709ed945e2da2d66d764f72f4660262b22/wandb-0.21.0-py3-none-win_amd64.whl", hash = "sha256:28a0b2dad09d7c7344ac62b0276be18a2492a5578e4d7c84937a3e1991edaac7", size = 21484301, upload-time = "2025-07-02T00:24:12.658Z" },
+]
+
+[[package]]
+name = "wandb-workspaces"
+version = "0.1.16"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pydantic" },
+    { name = "wandb" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/ce/96/30277fc7bb53fe48fb95fe10f3ab9a8009e98fa53c111ceeccf837717dbb/wandb_workspaces-0.1.16.tar.gz", hash = "sha256:baccc857c7b20c325a8d4ead15d8846b55d840fe4de1735fb68bd0326f4caf3a", size = 75812, upload-time = "2025-06-17T15:02:06.962Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5a/25/35a2321f638dad059ec5e5c1d0132d54153fcf8949ff1323f726244c0407/wandb_workspaces-0.1.16-py3-none-any.whl", hash = "sha256:f3ae1030f9157588619064bb9da0f8af0cd85a68fc60bb4679a21191ce9586ff", size = 86291, upload-time = "2025-06-17T15:02:05.449Z" },
 ]
 
 [[package]]
