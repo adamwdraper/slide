@@ -84,6 +84,7 @@ def main():
     if args.smoke:
         pytest_args.extend(["-m", "smoke"])
         print("Running smoke tests...")
+        # Smoke tests don't need API keys, so skip the prompt
         
     elif args.category:
         # Run examples from specific category
@@ -111,13 +112,13 @@ def main():
         print("  uv sync --dev")
         print("")
     
-    # Check for API key and warn if missing
+    # Check for API key and warn if missing (but skip prompt for smoke tests)
     if not (os.getenv("OPENAI_API_KEY") or os.getenv("ANTHROPIC_API_KEY")):
         print("\n⚠️  Warning: No API key found!")
         print("Set OPENAI_API_KEY or ANTHROPIC_API_KEY to run all examples.")
         print("Some examples will be skipped.\n")
         
-        if not args.no_api_key:
+        if not args.no_api_key and not args.smoke:
             response = input("Continue anyway? (y/N): ")
             if response.lower() != 'y':
                 print("Exiting. Set an API key or use --no-api-key flag.")
