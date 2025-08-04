@@ -24,22 +24,49 @@ Examples showing integration patterns:
 
 ## Running Examples
 
-Most examples can be run directly:
+Most examples can be run directly using uv:
 
 ```bash
-# Basic example
+# From the project root using uv
+uv run examples/getting-started/quickstart.py
+
+# Or using python directly (after uv sync)
 python examples/getting-started/quickstart.py
 
 # Use case example
-python examples/use-cases/research-assistant/basic.py
+uv run examples/use-cases/research-assistant/basic.py
 
 # Integration example  
-python examples/integrations/cross-package.py
+uv run examples/integrations/cross-package.py
 ```
 
 ## Prerequisites
 
-Install all Slide packages:
+### Development Setup
+
+Since this is a uv workspace, you should sync the entire project:
+
+```bash
+# From the project root
+uv sync --dev
+
+# This installs all packages in development mode including:
+# - slide-tyler, slide-lye, slide-narrator, slide-space-monkey
+# - All development dependencies and testing tools
+```
+
+### API Keys
+
+Set up your API key:
+```bash
+export OPENAI_API_KEY="sk-..."
+# or
+export ANTHROPIC_API_KEY="sk-ant-..."
+```
+
+### Standalone Installation
+
+If you want to use examples outside the workspace:
 
 ```bash
 # Using uv (recommended)
@@ -47,13 +74,6 @@ uv add slide-tyler slide-lye slide-narrator
 
 # Using pip
 pip install slide-tyler slide-lye slide-narrator
-```
-
-Set up your API key:
-```bash
-export OPENAI_API_KEY="sk-..."
-# or
-export ANTHROPIC_API_KEY="sk-ant-..."
 ```
 
 ## Package-Specific Examples
