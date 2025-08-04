@@ -19,7 +19,7 @@ Comprehensive research agent using all three packages.
 - Report generation and export
 - Research history tracking
 
-**Run:** `python examples/use-cases/research-assistant/basic.py`
+**Run:** `uv run examples/use-cases/research-assistant/basic.py`
 
 ### 💬 [Slack Bot](./slack-bot/)
 AI agent integrated with Slack using Space Monkey.
@@ -48,12 +48,11 @@ Task automation workflows and scheduled agents.
 
 ## Common Prerequisites
 
-```bash
-# Core packages
-pip install slide-tyler slide-lye slide-narrator
+### From Project Root (Recommended)
 
-# For Slack integration
-pip install slide-space-monkey
+```bash
+# Sync workspace to install all packages in dev mode
+uv sync --dev
 
 # Environment variables
 export OPENAI_API_KEY="sk-..."
@@ -62,6 +61,16 @@ export ANTHROPIC_API_KEY="sk-ant-..."  # Alternative
 # For Slack examples
 export SLACK_BOT_TOKEN="xoxb-..."
 export SLACK_APP_TOKEN="xapp-..."
+```
+
+### Standalone Installation
+
+```bash
+# Core packages
+uv add slide-tyler slide-lye slide-narrator
+
+# For Slack integration
+uv add slide-space-monkey
 ```
 
 ## Customization
