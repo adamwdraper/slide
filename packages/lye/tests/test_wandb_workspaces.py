@@ -29,14 +29,14 @@ class TestWandBWorkspaceTools:
             assert "description" in tool["definition"]["function"]
             assert "parameters" in tool["definition"]["function"]
     
-    @patch('lye.wandb_workspaces.ws')
-    def test_create_workspace_success(self, mock_ws):
+    def test_create_workspace_success(self):
         """Test successful workspace creation."""
-        # Mock workspace and save result
-        mock_workspace = Mock()
-        mock_workspace.save.return_value = Mock(id="workspace_123", url="https://wandb.ai/test/workspace")
-        mock_ws.Workspace.return_value = mock_workspace
-        mock_ws.Section = Mock()
+        with patch('wandb_workspaces.workspaces') as mock_ws:
+            # Mock workspace and save result
+            mock_workspace = Mock()
+            mock_workspace.save.return_value = Mock(id="workspace_123", url="https://wandb.ai/test/workspace")
+            mock_ws.Workspace.return_value = mock_workspace
+            mock_ws.Section = Mock()
         
         result = create_workspace(
             name="Test Workspace",
