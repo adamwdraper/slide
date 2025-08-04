@@ -1,18 +1,14 @@
-name: Test Examples
+name: Test Examples (Extended)
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main ]
     paths:
       - 'examples/**'
       - 'tests/**'
       - 'packages/**'
-  pull_request:
-    branches: [ main, develop ]
-    paths:
-      - 'examples/**'
-      - 'tests/**'
-      - 'packages/**'
+  # Note: PR testing is now handled by test.yml for consistency
+  # This workflow focuses on extended testing on main branch
 
 jobs:
   test-examples:
@@ -31,6 +27,11 @@ jobs:
     
     - name: Set up Python ${{ matrix.python-version }}
       run: uv python install ${{ matrix.python-version }}
+    
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libmagic1 poppler-utils
     
     - name: Install dependencies
       run: |
@@ -71,6 +72,11 @@ jobs:
     
     - name: Set up Python
       run: uv python install 3.11
+    
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libmagic1 poppler-utils
     
     - name: Install dependencies
       run: |
