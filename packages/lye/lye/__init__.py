@@ -37,6 +37,7 @@ try:
     from . import audio
     from . import files
     from . import browser
+    from . import wandb_workspaces
     
 except ImportError as e:
     print(f"Warning: Some tool modules could not be imported: {e}")
@@ -98,6 +99,13 @@ try:
 except Exception as e:
     print(f"Warning: Could not load browser tools: {e}")
 
+try:
+    module_tools = getattr(wandb_workspaces, "TOOLS", [])
+    WANDB_TOOLS.extend(module_tools)
+    TOOLS.extend(module_tools)
+except Exception as e:
+    print(f"Warning: Could not load wandb workspace tools: {e}")
+
     __all__ = [
         # Module-level tool lists
         'TOOLS',
@@ -109,6 +117,7 @@ except Exception as e:
         'BROWSER_TOOLS',
         'SLACK_TOOLS',
         'NOTION_TOOLS',
+        'WANDB_TOOLS',
         # Module namespaces for cleaner imports
         'web',
         'files',
@@ -118,6 +127,7 @@ except Exception as e:
         'browser',
         'slack',
         'notion',
+        'wandb_workspaces',
     ]
 
 # Map of module names to their tools for dynamic loading
@@ -129,5 +139,6 @@ TOOL_MODULES: Dict[str, List] = {
     'image': IMAGE_TOOLS,
     'audio': AUDIO_TOOLS,
     'files': FILES_TOOLS,
-    'browser': BROWSER_TOOLS
+    'browser': BROWSER_TOOLS,
+    'wandb_workspaces': WANDB_TOOLS
 }
