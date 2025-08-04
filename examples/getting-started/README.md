@@ -10,7 +10,7 @@ Basic agent using Tyler and Lye tools together.
 - Shows basic agent setup and tool integration
 - Good first example to run
 
-**Run:** `python examples/getting-started/quickstart.py`
+**Run:** `uv run examples/getting-started/quickstart.py`
 
 ### 💾 [basic-persistence.py](./basic-persistence.py)  
 Agent with conversation memory using Narrator storage.
@@ -18,7 +18,7 @@ Agent with conversation memory using Narrator storage.
 - Demonstrates persistent conversation history
 - Multiple agents sharing the same storage
 
-**Run:** `python examples/getting-started/basic-persistence.py`
+**Run:** `uv run examples/getting-started/basic-persistence.py`
 
 ### 🔧 [tool-groups.py](./tool-groups.py)
 Different ways to import and use tools.
@@ -26,18 +26,25 @@ Different ways to import and use tools.
 - Selective tool usage
 - Tool filtering and customization
 
-**Run:** `python examples/getting-started/tool-groups.py`
+**Run:** `uv run examples/getting-started/tool-groups.py`
 
 ## Prerequisites
 
+From the project root:
+
 ```bash
-# Install required packages
-pip install slide-tyler slide-lye slide-narrator
+# Sync the workspace (installs all packages in dev mode)
+uv sync --dev
 
 # Set API key
 export OPENAI_API_KEY="sk-..."
 # or
 export ANTHROPIC_API_KEY="sk-ant-..."
+```
+
+If running outside the workspace:
+```bash
+uv add slide-tyler slide-lye slide-narrator
 ```
 
 ## Next Steps

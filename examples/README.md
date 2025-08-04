@@ -89,6 +89,15 @@ For examples focusing on individual packages, see:
 All examples are tested to ensure they work correctly:
 
 ```bash
-# Run example tests
-pytest tests/test_examples.py
+# Run example tests using uv
+uv run pytest tests/test_examples.py
+
+# Or use the test runner
+uv run python tests/run_examples.py
+
+# Quick smoke tests
+uv run python tests/run_examples.py --smoke
+
+# Test specific category
+uv run python tests/run_examples.py --category getting-started
 ```
