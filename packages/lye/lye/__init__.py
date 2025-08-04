@@ -22,6 +22,7 @@ IMAGE_TOOLS = []
 AUDIO_TOOLS = []
 FILES_TOOLS = []
 BROWSER_TOOLS = []
+WANDB_TOOLS = []
 
 # Combined tools list
 TOOLS = []
