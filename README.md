@@ -307,9 +307,16 @@ uv pip install dist/*.whl --python /tmp/test-env
 
 ## Documentation
 
-- [Tyler Documentation](./packages/tyler/README.md)
-- [The Narrator Documentation](./packages/narrator/README.md)
-- [Full Documentation](./docs/) (coming soon)
+### Package Documentation
+- [Tyler Documentation](./packages/tyler/README.md) - Agent framework
+- [Lye Documentation](./packages/lye/README.md) - Tools and capabilities
+- [Narrator Documentation](./packages/narrator/README.md) - Storage and persistence
+- [Space Monkey Documentation](./packages/space-monkey/README.md) - Slack integration
+
+### Examples & Guides
+- [Project Examples](./examples/) - Cross-package integration examples
+- [Package-Specific Examples](./packages/tyler/examples/) - Individual package examples
+- [Full Documentation](./docs/) - Comprehensive guides and API reference
 
 ## Contributing
 
