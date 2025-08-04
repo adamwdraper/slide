@@ -31,7 +31,9 @@ example_files = get_example_files()
 
 # Skip these examples in automated tests (require user interaction, external services, etc.)
 SKIP_EXAMPLES = [
-    "slack-bot/basic.py",  # Requires Slack tokens and socket mode
+    "slack-bot/basic.py",  # Requires Slack tokens and socket mode  
+    "integrations/storage-patterns.py",  # Requires libmagic system dependency
+    "use-cases/slack-bot/basic.py",  # Requires libmagic system dependency
 ]
 
 # Examples that have import issues in CI/certain environments
