@@ -189,10 +189,20 @@ uv sync --dev
 export OPENAI_API_KEY="sk-..."
 ```
 
-**"libmagic" errors in tests**
+**"libmagic" errors**
 ```bash
-# This is expected in some environments
-# Affected examples are automatically skipped in tests
+# This is a system dependency required by the narrator package
+# for file type detection in attachments
+
+# On Ubuntu/Debian:
+sudo apt-get install libmagic1
+
+# On macOS:
+brew install libmagic
+
+# On other systems, see: https://github.com/ahupp/python-magic#installation
+
+# Affected examples are automatically skipped in automated tests
 uv run python tests/run_examples.py --smoke  # Works around this
 ```
 
