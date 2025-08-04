@@ -138,14 +138,17 @@ asyncio.run(main())
 
 ### Running Examples
 ```bash
-# Basic agent with tools
-python examples/getting-started/quickstart.py
+# Using uv (recommended from project root)
+uv run examples/getting-started/quickstart.py
 
 # Comprehensive research assistant  
-python examples/use-cases/research-assistant/basic.py
+uv run examples/use-cases/research-assistant/basic.py
 
 # Cross-package integration
-python examples/integrations/cross-package.py
+uv run examples/integrations/cross-package.py
+
+# Or after uv sync, use python directly
+python examples/getting-started/quickstart.py
 ```
 
 ## Project Structure
