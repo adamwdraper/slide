@@ -35,7 +35,6 @@ jobs:
     - name: Install dependencies
       run: |
         uv sync --dev
-        uv add --dev pytest pytest-asyncio pytest-timeout python-dotenv pytest-mock
     
     - name: Run smoke tests (no API key required)
       run: |
@@ -76,7 +75,6 @@ jobs:
     - name: Install dependencies
       run: |
         uv sync --dev
-        uv add --dev pytest pytest-asyncio pytest-timeout python-dotenv pytest-mock
     
     - name: Run examples with real API
       env:
