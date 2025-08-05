@@ -205,7 +205,7 @@ if __name__ == "__main__":
     # Show setup instructions if tokens are missing
     if not (os.getenv("SLACK_BOT_TOKEN") and os.getenv("SLACK_APP_TOKEN")):
         setup_example()
-        exit(1)
+        sys.exit(1)
     
     
     print(f"🚀 Starting Slide Slack Bot")
