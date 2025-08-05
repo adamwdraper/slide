@@ -32,11 +32,12 @@ class TestWandBWorkspaceTools:
     def test_create_workspace_import_error(self):
         """Test workspace creation when wandb_workspaces is not installed."""
         # Since the actual import is inside a try/except, we mock the import failing
+        original_import = __builtins__['__import__']
         with patch('builtins.__import__') as mock_import:
             def side_effect(name, *args, **kwargs):
                 if name == 'wandb_workspaces.workspaces':
                     raise ImportError("No module named 'wandb_workspaces'")
-                return __import__(name, *args, **kwargs)
+                return original_import(name, *args, **kwargs)
             
             mock_import.side_effect = side_effect
             
@@ -51,11 +52,12 @@ class TestWandBWorkspaceTools:
     
     def test_get_project_runs_import_error(self):
         """Test project runs retrieval when wandb is not installed."""
+        original_import = __builtins__['__import__']
         with patch('builtins.__import__') as mock_import:
             def side_effect(name, *args, **kwargs):
                 if name == 'wandb':
                     raise ImportError("No module named 'wandb'")
-                return __import__(name, *args, **kwargs)
+                return original_import(name, *args, **kwargs)
             
             mock_import.side_effect = side_effect
             
@@ -75,6 +77,7 @@ class TestWandBWorkspaceTools:
         
         mock_section = Mock()
         
+        original_import = __builtins__['__import__']
         with patch('builtins.__import__') as mock_import:
             mock_ws_module = Mock()
             mock_ws_module.Workspace.return_value = mock_workspace
@@ -83,7 +86,7 @@ class TestWandBWorkspaceTools:
             def side_effect(name, *args, **kwargs):
                 if name == 'wandb_workspaces.workspaces':
                     return mock_ws_module
-                return __import__(name, *args, **kwargs)
+                return original_import(name, *args, **kwargs)
             
             mock_import.side_effect = side_effect
             
@@ -120,11 +123,12 @@ class TestWandBWorkspaceTools:
         mock_wandb_module = Mock()
         mock_wandb_module.Api.return_value = mock_api
         
+        original_import = __builtins__['__import__']
         with patch('builtins.__import__') as mock_import:
             def side_effect(name, *args, **kwargs):
                 if name == 'wandb':
                     return mock_wandb_module
-                return __import__(name, *args, **kwargs)
+                return original_import(name, *args, **kwargs)
             
             mock_import.side_effect = side_effect
             
@@ -145,11 +149,12 @@ class TestWandBWorkspaceTools:
     
     def test_create_line_plot_import_error(self):
         """Test line plot creation when wandb_workspaces.reports is not available."""
+        original_import = __builtins__['__import__']
         with patch('builtins.__import__') as mock_import:
             def side_effect(name, *args, **kwargs):
                 if name == 'wandb_workspaces.reports':
                     raise ImportError("No module named 'wandb_workspaces'")
-                return __import__(name, *args, **kwargs)
+                return original_import(name, *args, **kwargs)
             
             mock_import.side_effect = side_effect
             
@@ -162,16 +167,17 @@ class TestWandBWorkspaceTools:
             assert "wandb_workspaces package not installed" in result["error"]
     
     def test_create_line_plot_with_mock_success(self):
-        """Test successful line plot creation.""" 
+        """Test successful line plot creation."""
         mock_plot = Mock()
         mock_wr_module = Mock()
         mock_wr_module.LinePlot.return_value = mock_plot
         
+        original_import = __builtins__['__import__']
         with patch('builtins.__import__') as mock_import:
             def side_effect(name, *args, **kwargs):
                 if name == 'wandb_workspaces.reports':
                     return mock_wr_module
-                return __import__(name, *args, **kwargs)
+                return original_import(name, *args, **kwargs)
             
             mock_import.side_effect = side_effect
             
@@ -194,11 +200,12 @@ class TestWandBWorkspaceTools:
         mock_wr_module = Mock()
         mock_wr_module.ScalarChart.return_value = mock_chart
         
+        original_import = __builtins__['__import__']
         with patch('builtins.__import__') as mock_import:
             def side_effect(name, *args, **kwargs):
                 if name == 'wandb_workspaces.reports':
                     return mock_wr_module
-                return __import__(name, *args, **kwargs)
+                return original_import(name, *args, **kwargs)
             
             mock_import.side_effect = side_effect
             
@@ -216,11 +223,12 @@ class TestWandBWorkspaceTools:
     def test_error_handling_general(self):
         """Test general error handling in functions."""
         # Test that unexpected exceptions are caught and returned properly
+        original_import = __builtins__['__import__']
         with patch('builtins.__import__') as mock_import:
             def side_effect(name, *args, **kwargs):
                 if name == 'wandb_workspaces.workspaces':
                     raise Exception("Unexpected error")
-                return __import__(name, *args, **kwargs)
+                return original_import(name, *args, **kwargs)
             
             mock_import.side_effect = side_effect
             

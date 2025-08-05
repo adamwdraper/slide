@@ -10,6 +10,7 @@ from lye import (
     BROWSER_TOOLS,
     SLACK_TOOLS,
     NOTION_TOOLS,
+    WANDB_TOOLS,
     TOOLS,
     # Module namespaces
     web,
@@ -90,7 +91,7 @@ class TestLyeImports:
         all_module_tools = (
             WEB_TOOLS + FILES_TOOLS + COMMAND_LINE_TOOLS + 
             AUDIO_TOOLS + IMAGE_TOOLS + BROWSER_TOOLS +
-            SLACK_TOOLS + NOTION_TOOLS
+            SLACK_TOOLS + NOTION_TOOLS + WANDB_TOOLS
         )
         
         # Should have the same number of tools
