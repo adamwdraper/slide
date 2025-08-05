@@ -127,16 +127,45 @@ async def main():
 asyncio.run(main())
 ```
 
+## Examples
+
+🚀 **[View all examples →](./examples/)**
+
+### Quick Examples
+- **[Getting Started](./examples/getting-started/)** - Simple examples to get you up and running
+- **[Use Cases](./examples/use-cases/)** - Real-world examples like research assistants and Slack bots
+- **[Integrations](./examples/integrations/)** - Cross-package examples showing Tyler + Lye + Narrator
+
+### Running Examples
+```bash
+# Using uv (recommended from project root)
+uv run examples/getting-started/quickstart.py
+
+# Comprehensive research assistant  
+uv run examples/use-cases/research-assistant/basic.py
+
+# Cross-package integration
+uv run examples/integrations/cross-package.py
+
+# Or after uv sync, use python directly
+python examples/getting-started/quickstart.py
+```
+
 ## Project Structure
 
 ```
 slide/
 ├── packages/
 │   ├── tyler/           # Tyler agent framework
+│   ├── lye/             # Tools and capabilities
 │   ├── narrator/        # Thread and file storage
-│   └── future-tools/    # Additional tools (coming soon)
+│   └── space-monkey/    # Slack integration
 ├── docs/               # Unified documentation
-├── examples/           # Cross-component examples
+├── examples/           # Cross-package examples
+│   ├── getting-started/ # Simple examples
+│   ├── use-cases/      # Real-world scenarios
+│   └── integrations/   # Cross-package examples
+├── tests/              # Project-level tests
 └── scripts/            # Build and development scripts
 ```
 
@@ -281,9 +310,16 @@ uv pip install dist/*.whl --python /tmp/test-env
 
 ## Documentation
 
-- [Tyler Documentation](./packages/tyler/README.md)
-- [The Narrator Documentation](./packages/narrator/README.md)
-- [Full Documentation](./docs/) (coming soon)
+### Package Documentation
+- [Tyler Documentation](./packages/tyler/README.md) - Agent framework
+- [Lye Documentation](./packages/lye/README.md) - Tools and capabilities
+- [Narrator Documentation](./packages/narrator/README.md) - Storage and persistence
+- [Space Monkey Documentation](./packages/space-monkey/README.md) - Slack integration
+
+### Examples & Guides
+- [Project Examples](./examples/) - Cross-package integration examples
+- [Package-Specific Examples](./packages/tyler/examples/) - Individual package examples
+- [Full Documentation](./docs/) - Comprehensive guides and API reference
 
 ## Contributing
 

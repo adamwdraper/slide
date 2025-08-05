@@ -1,6 +1,6 @@
 # Lye - Tools Package for Tyler
 
-Lye is a collection of tools that extend Tyler's capabilities, providing integrations with various services and utilities.
+Lye is a collection of tools that extend Tyler's capabilities, providing integrations with various services and utilities. It serves as the toolset foundation for Tyler agents, offering a comprehensive suite of tools for web browsing, file operations, Slack integration, Notion access, image generation, audio processing, and command-line operations.
 
 ## Installation
 
@@ -21,6 +21,7 @@ uv add slide-lye
 - `download_file`: Download files from URLs
 - `extract_text_from_html`: Extract text content from HTML
 - `fetch_html`: Fetch raw HTML content
+- `search_web`: Search the web using search engines
 
 ### Slack Tools  
 - `post_message`: Post messages to Slack channels
@@ -63,7 +64,7 @@ uv add slide-lye
 - `write_json`: Write JSON files
 
 ### Browser Tools
-- `browser_automate`: Automate browser interactions
+- `browser_automate`: Automate browser interactions using browser-use
 - `browser_screenshot`: Take screenshots of web pages
 
 ## Usage with Tyler
@@ -82,6 +83,18 @@ from lye import WEB_TOOLS, SLACK_TOOLS
 agent = Agent(tools=WEB_TOOLS + SLACK_TOOLS)
 ```
 
+## Requirements
+
+- Python 3.12+
+- System dependencies for PDF and image processing:
+  ```bash
+  # macOS
+  brew install libmagic poppler
+  
+  # Ubuntu/Debian
+  sudo apt-get install libmagic1 poppler-utils
+  ```
+
 ## Development
 
 ```bash
@@ -94,6 +107,18 @@ uv run pytest
 # Run specific test
 uv run pytest tests/test_web.py
 ```
+
+## Tool Module Organization
+
+Lye organizes tools into separate modules, each with its own tool list:
+- `WEB_TOOLS` - Web browsing and downloading
+- `SLACK_TOOLS` - Slack workspace interaction
+- `COMMAND_LINE_TOOLS` - Safe command execution
+- `NOTION_TOOLS` - Notion workspace integration
+- `IMAGE_TOOLS` - AI image generation and analysis
+- `AUDIO_TOOLS` - Speech synthesis and recognition
+- `FILES_TOOLS` - File reading and manipulation
+- `BROWSER_TOOLS` - Browser automation
 
 ## License
 

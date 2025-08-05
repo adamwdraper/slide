@@ -5,6 +5,8 @@ on:
     branches: [ main ]
     paths:
       - 'packages/**'
+      - 'examples/**'
+      - 'tests/**'
       - '.github/workflows/test.yml'
 
 jobs:
@@ -176,4 +178,41 @@ jobs:
           print('Lye imports successfully')
           print(f'Lye version: {lye.__version__}')
           print(f'Total tools available: {len(TOOLS)}')
-          " 
+          "
+
+  test-examples:
+    runs-on: ubuntu-latest
+    needs: [test-tyler, test-narrator, test-space-monkey, test-lye]
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libmagic1 poppler-utils
+      
+      - name: Install workspace dependencies
+        run: |
+          uv sync --dev
+      
+      - name: Run example smoke tests
+        run: |
+          uv run python tests/run_examples.py --smoke --verbose
+      
+      - name: Test example imports
+        run: |
+          uv run pytest tests/test_examples.py::test_examples_can_be_imported -v
+      
+      - name: Test examples directory structure
+        run: |
+          uv run pytest tests/test_examples.py::test_examples_directory_structure -v 
