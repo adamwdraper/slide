@@ -263,14 +263,6 @@ if __name__ == "__main__":
     print("This example demonstrates integration of Tyler, Lye, and Narrator")
     print("to create a comprehensive research assistant.\n")
     
-    # Check for API key
-    if not (os.getenv("OPENAI_API_KEY") or os.getenv("ANTHROPIC_API_KEY")):
-        print("⚠️  Please set OPENAI_API_KEY or ANTHROPIC_API_KEY environment variable")
-        print("Example: export OPENAI_API_KEY='sk-...'")
-        print("\nTo run this example:")
-        print("  From project root: uv run examples/use-cases/research-assistant/basic.py")
-        print("  Or after uv sync: python examples/use-cases/research-assistant/basic.py")
-        exit(1)
     
     try:
         asyncio.run(main())

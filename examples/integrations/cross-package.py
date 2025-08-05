@@ -5,6 +5,8 @@ Cross-Package Integration Example
 Demonstrates comprehensive integration of Tyler, Lye, and Narrator
 showcasing different storage patterns, tool combinations, and agent capabilities.
 """
+from dotenv import load_dotenv
+load_dotenv()
 
 import asyncio
 import os
@@ -286,11 +288,6 @@ async def main():
 
 
 if __name__ == "__main__":
-    # Check for API key
-    if not (os.getenv("OPENAI_API_KEY") or os.getenv("ANTHROPIC_API_KEY")):
-        print("⚠️  Please set OPENAI_API_KEY or ANTHROPIC_API_KEY environment variable")
-        print("Example: export OPENAI_API_KEY='sk-...'")
-        exit(1)
     
     try:
         asyncio.run(main())
