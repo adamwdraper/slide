@@ -6,6 +6,9 @@ A comprehensive research assistant using Tyler, Lye, and Narrator.
 This demonstrates integration of all three Slide packages.
 """
 
+from dotenv import load_dotenv
+load_dotenv()
+
 import asyncio
 import os
 from datetime import datetime
