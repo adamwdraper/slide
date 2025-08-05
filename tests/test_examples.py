@@ -39,7 +39,13 @@ SKIP_EXAMPLES = [
 # Examples that have import issues in CI/certain environments
 SKIP_IMPORT_TESTS = [
     "integrations/storage-patterns.py",  # Has libmagic dependency issues
+    "integrations/streaming.py",  # Has libmagic dependency issues  
+    "integrations/cross-package.py",  # Has libmagic dependency issues
+    "use-cases/research-assistant/basic.py",  # Has libmagic dependency issues
     "use-cases/slack-bot/basic.py",  # Has libmagic dependency issues
+    "getting-started/tool-groups.py",  # Has libmagic dependency issues
+    "getting-started/quickstart.py",  # Has libmagic dependency issues
+    "getting-started/basic-persistence.py",  # Has libmagic dependency issues
 ]
 
 # Examples that need special environment setup
