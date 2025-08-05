@@ -1,3 +1,6 @@
+from dotenv import load_dotenv
+load_dotenv()
+
 import asyncio
 from tyler import Agent, Thread, Message, ThreadStore, FileStore
 

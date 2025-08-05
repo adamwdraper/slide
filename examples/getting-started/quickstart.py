@@ -2,6 +2,8 @@
 Example from the quickstart page of the documentation.
 This demonstrates building a research assistant agent with multiple tool types.
 """
+from dotenv import load_dotenv
+load_dotenv()
 
 import asyncio
 from tyler import Agent, Thread, Message
