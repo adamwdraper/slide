@@ -59,12 +59,24 @@ git checkout -b "$BRANCH_NAME"
 # Now actually bump the version
 python ../../scripts/bump_version.py "$PACKAGE" "$VERSION_TYPE"
 
+# Update constraints in dependent packages
+echo "Updating constraints in dependent packages..."
+cd ../..  # Go back to project root
+python scripts/update_dependent_constraints.py "$PACKAGE" "$NEW_VERSION"
+
+# Go back to package directory for git operations
+cd "$PACKAGE_DIR"
+
 # Convert package name to module name (replace hyphens with underscores)
 MODULE_NAME=${PACKAGE//-/_}
 
-# Create git commit
+# Add all modified files to git (current package + any dependent packages)
 git add pyproject.toml ${MODULE_NAME}/__init__.py
-git commit -m "Bump $PACKAGE version to $NEW_VERSION"
+# Add any modified pyproject.toml files in dependent packages
+git add ../*/pyproject.toml 2>/dev/null || true
+
+# Create git commit
+git commit -m "Bump $PACKAGE version to $NEW_VERSION and update dependent package constraints"
 
 # Push the release branch
 git push origin "$BRANCH_NAME"
