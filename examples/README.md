@@ -57,12 +57,22 @@ uv sync --dev
 
 ### API Keys
 
-Set up your API key:
+Examples make **real API calls** and will load your API key from:
+
+1. **Environment variables:**
 ```bash
 export OPENAI_API_KEY="sk-..."
 # or
 export ANTHROPIC_API_KEY="sk-ant-..."
 ```
+
+2. **`.env` file** (recommended for development):
+```bash
+# Create .env file in project root
+echo "OPENAI_API_KEY=sk-..." > .env
+```
+
+All examples use `load_dotenv()` to automatically load from `.env` files.
 
 ### Standalone Installation
 

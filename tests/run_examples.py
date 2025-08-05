@@ -112,17 +112,11 @@ def main():
         print("  uv sync --dev")
         print("")
     
-    # Check for API key and warn if missing (but skip prompt for smoke tests)
+    # Check for API key and warn if missing
     if not (os.getenv("OPENAI_API_KEY") or os.getenv("ANTHROPIC_API_KEY")):
         print("\n⚠️  Warning: No API key found!")
-        print("Set OPENAI_API_KEY or ANTHROPIC_API_KEY to run all examples.")
-        print("Some examples will be skipped.\n")
-        
-        if not args.no_api_key and not args.smoke:
-            response = input("Continue anyway? (y/N): ")
-            if response.lower() != 'y':
-                print("Exiting. Set an API key or use --no-api-key flag.")
-                return 1
+        print("Examples will use load_dotenv() to load from .env file.")
+        print("They will handle missing API keys gracefully through the LLM library.\n")
     
     # Run the tests
     result = run_pytest(pytest_args)
