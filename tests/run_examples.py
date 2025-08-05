@@ -48,7 +48,7 @@ def main():
     parser.add_argument(
         "--no-api-key",
         action="store_true", 
-        help="Skip examples that require API keys"
+        help="Deprecated: All examples now use load_dotenv() and handle missing API keys gracefully"
     )
     
     parser.add_argument(
@@ -102,8 +102,8 @@ def main():
         print("Running all example tests...")
     
     if args.no_api_key:
-        # Skip examples that require API keys
-        pytest_args.extend(["-m", "not requires_api_key"])
+        # This flag is now deprecated - all examples handle missing API keys gracefully
+        print("Note: --no-api-key flag is deprecated. Examples now use load_dotenv() and handle missing API keys gracefully.")
     
     # Check workspace setup
     if not (PROJECT_ROOT / "uv.lock").exists():
