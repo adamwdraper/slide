@@ -44,12 +44,8 @@ SKIP_IMPORT_TESTS = [
 
 # Examples that need special environment setup
 REQUIRES_API_KEY = [
-    "getting-started/quickstart.py",
-    "getting-started/basic-persistence.py", 
-    "getting-started/tool-groups.py",
-    "use-cases/research-assistant/basic.py",
-    "integrations/cross-package.py",
-    "integrations/streaming.py",
+    # All examples now use load_dotenv() and make real API calls
+    # They will gracefully handle missing API keys through the LLM library
 ]
 
 
@@ -82,10 +78,8 @@ def should_skip_example(example_path):
     if relative_path in SKIP_EXAMPLES:
         return True, f"Skipping {relative_path} as it's in the skip list"
     
-    # Skip if requires API key and none is available
-    if relative_path in REQUIRES_API_KEY:
-        if not (os.getenv("OPENAI_API_KEY") or os.getenv("ANTHROPIC_API_KEY")):
-            return True, f"Skipping {relative_path} - no API key available"
+    # All examples now use load_dotenv() and handle missing API keys gracefully
+    # No need to skip based on API key availability
     
     return False, None
 
