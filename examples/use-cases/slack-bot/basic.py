@@ -6,10 +6,12 @@ Demonstrates how to create a Slack bot using Space Monkey (which integrates
 Tyler, Lye, and Narrator) for a complete AI agent experience.
 """
 
+from dotenv import load_dotenv
+load_dotenv()
+
 import asyncio
 import logging
 import os
-from dotenv import load_dotenv
 
 # Import Space Monkey (which uses Tyler, Lye, and Narrator internally)
 from space_monkey import SlackApp, Agent, ThreadStore, FileStore
@@ -205,10 +207,6 @@ if __name__ == "__main__":
         setup_example()
         exit(1)
     
-    # Check for LLM API key
-    if not (os.getenv("OPENAI_API_KEY") or os.getenv("ANTHROPIC_API_KEY")):
-        print("⚠️  Please set OPENAI_API_KEY or ANTHROPIC_API_KEY environment variable")
-        exit(1)
     
     print(f"🚀 Starting Slide Slack Bot")
     print(f"Bot type: {os.getenv('BOT_TYPE', 'research')}")
