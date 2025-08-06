@@ -43,7 +43,13 @@ async def main():
     """Run the A2A client example."""
     
     # Create A2A adapter
-    a2a = A2AAdapter()
+    try:
+        a2a = A2AAdapter()
+    except ImportError as e:
+        if "a2a-sdk" in str(e):
+            print("Skipping A2A client example - a2a-sdk not installed")
+            return
+        raise
     
     logger.info("Connecting to A2A agent server...")
     
