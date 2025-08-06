@@ -110,7 +110,13 @@ async def create_analysis_agent_server(port: int) -> A2AServer:
         "specialization": "analysis"
     }
     
-    server = A2AServer(tyler_agent=analysis_agent, agent_card=agent_card)
+    try:
+        server = A2AServer(tyler_agent=analysis_agent, agent_card=agent_card)
+    except ImportError as e:
+        if "a2a-sdk" in str(e):
+            print("Skipping A2A server creation - a2a-sdk not installed")
+            return None
+        raise
     
     # Start server in background task
     asyncio.create_task(server.start_server(host="127.0.0.1", port=port))
@@ -255,11 +261,18 @@ async def main():
         # Start specialist agent servers
         print("   📡 Starting Research Specialist server (port 8001)...")
         research_server = await create_research_agent_server(8001)
-        running_servers.append(research_server)
+        if research_server:
+            running_servers.append(research_server)
         
         print("   📡 Starting Analysis Specialist server (port 8002)...")
         analysis_server = await create_analysis_agent_server(8002)
-        running_servers.append(analysis_server)
+        if analysis_server:
+            running_servers.append(analysis_server)
+        
+        # Check if A2A is available
+        if not research_server or not analysis_server:
+            print("Skipping multi-agent example - a2a-sdk not installed")
+            return
         
         print("   🎯 Creating Project Coordinator...")
         coordinator, adapter = await create_coordinator_agent()
