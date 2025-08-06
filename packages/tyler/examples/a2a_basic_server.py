@@ -83,10 +83,16 @@ async def main():
     }
     
     # Create A2A server
-    a2a_server = A2AServer(
-        tyler_agent=tyler_agent,
-        agent_card=agent_card_data
-    )
+    try:
+        a2a_server = A2AServer(
+            tyler_agent=tyler_agent,
+            agent_card=agent_card_data
+        )
+    except ImportError as e:
+        if "a2a-sdk" in str(e):
+            print("Skipping A2A server example - a2a-sdk not installed")
+            return
+        raise
     
     logger.info("Starting Tyler A2A server...")
     logger.info("The server will expose the Tyler agent via A2A protocol")
