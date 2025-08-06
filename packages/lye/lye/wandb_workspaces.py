@@ -31,13 +31,79 @@ def create_workspace(
     try:
         import wandb_workspaces.workspaces as ws
         
+        # Try to import panel classes
+        panel_classes = {}
+        try:
+            import wandb_workspaces.reports.v2 as v2
+            panel_classes = {
+                "line": getattr(v2, "LinePlot", None),
+                "scalar": getattr(v2, "ScalarChart", None),
+                "bar": getattr(v2, "BarChart", None),
+            }
+        except ImportError:
+            # Try alternative import paths
+            try:
+                # Try importing from main reports module
+                import wandb_workspaces.reports as wr
+                # Check if v2 is available as attribute
+                if hasattr(wr, 'v2'):
+                    v2 = wr.v2
+                    panel_classes = {
+                        "line": getattr(v2, "LinePlot", None),
+                        "scalar": getattr(v2, "ScalarChart", None),
+                        "bar": getattr(v2, "BarChart", None),
+                    }
+            except ImportError:
+                pass
+        
         # Create sections if provided
         workspace_sections = []
         if sections:
             for section_config in sections:
+                # Process panels
+                processed_panels = []
+                raw_panels = section_config.get("panels", [])
+                
+                for panel in raw_panels:
+                    # If panel is already an object, use it directly
+                    if hasattr(panel, "__class__") and hasattr(panel.__class__, "__module__"):
+                        processed_panels.append(panel)
+                    # If panel is a dict with panel_type, try to create it
+                    elif isinstance(panel, dict) and "panel_type" in panel:
+                        panel_type = panel["panel_type"]
+                        panel_class = panel_classes.get(panel_type)
+                        
+                        if panel_class:
+                            # Extract relevant args for panel creation
+                            panel_args = {k: v for k, v in panel.items() if k not in ["panel_type", "plot_type", "chart_type", "success", "error"]}
+                            if "plot_config" in panel:
+                                panel_args.update(panel["plot_config"])
+                            if "chart_config" in panel:
+                                panel_args.update(panel["chart_config"])
+                                
+                            try:
+                                panel_obj = panel_class(**panel_args)
+                                processed_panels.append(panel_obj)
+                            except Exception as e:
+                                logger.warning(f"Could not create {panel_type} panel: {e}")
+                                # Add as raw config if creation fails
+                                processed_panels.append(panel)
+                        else:
+                            # Add as raw config if class not found
+                            processed_panels.append(panel)
+                    # If panel has plot_object, use that
+                    elif isinstance(panel, dict) and "plot_object" in panel:
+                        processed_panels.append(panel["plot_object"])
+                    # If panel has chart_object, use that
+                    elif isinstance(panel, dict) and "chart_object" in panel:
+                        processed_panels.append(panel["chart_object"])
+                    else:
+                        # Add as is
+                        processed_panels.append(panel)
+                
                 section = ws.Section(
                     name=section_config.get("name", "Untitled Section"),
-                    panels=section_config.get("panels", []),
+                    panels=processed_panels,
                     is_open=section_config.get("is_open", True)
                 )
                 workspace_sections.append(section)
@@ -47,8 +113,7 @@ def create_workspace(
             name=name,
             entity=entity,
             project=project,
-            sections=workspace_sections,
-            description=description
+            sections=workspace_sections
         )
         
         # Apply settings if provided
@@ -66,6 +131,7 @@ def create_workspace(
             "project": project,
             "workspace_id": getattr(result, 'id', None),
             "url": getattr(result, 'url', None),
+            "description": description,
             "error": None
         }
         
@@ -143,32 +209,43 @@ def create_line_plot(
         Dict: Line plot configuration
     """
     try:
-        import wandb_workspaces.reports as wr
+        import wandb_workspaces.reports.v2 as v2
         
         # Ensure y is a list
         y_metrics = [y] if isinstance(y, str) else y
         
-        plot = wr.LinePlot(
-            x=x,
-            y=y_metrics,
-            title=title,
-            color_by=color_by,
-            smoothing=smoothing
-        )
-        
-        return {
-            "success": True,
-            "plot_type": "line_plot",
-            "plot_config": {
-                "x": x,
-                "y": y_metrics,
-                "title": title,
-                "color_by": color_by,
-                "smoothing": smoothing
-            },
-            "plot_object": plot,
-            "error": None
+        # Create panel arguments
+        panel_args = {
+            "x": x,
+            "y": y_metrics
         }
+        
+        if title:
+            panel_args["title"] = title
+        if color_by:
+            panel_args["color_by"] = color_by
+        if smoothing is not None:
+            panel_args["smoothing"] = smoothing
+        
+        # Try to create the actual panel object
+        try:
+            plot = v2.LinePlot(**panel_args)
+            return {
+                "success": True,
+                "plot_type": "line_plot",
+                "plot_config": panel_args,
+                "plot_object": plot,
+                "error": None
+            }
+        except AttributeError:
+            # If LinePlot doesn't exist, return config for manual creation
+            return {
+                "success": True,
+                "plot_type": "line_plot",
+                "plot_config": panel_args,
+                "panel_type": "line",
+                "error": None
+            }
         
     except ImportError:
         return {
@@ -201,25 +278,37 @@ def create_scalar_chart(
         Dict: Scalar chart configuration
     """
     try:
-        import wandb_workspaces.reports as wr
+        import wandb_workspaces.reports.v2 as v2
         
-        chart = wr.ScalarChart(
-            metric=metric,
-            title=title,
-            groupby=groupby
-        )
-        
-        return {
-            "success": True,
-            "chart_type": "scalar_chart",
-            "chart_config": {
-                "metric": metric,
-                "title": title,
-                "groupby": groupby
-            },
-            "chart_object": chart,
-            "error": None
+        # Create panel arguments
+        panel_args = {
+            "metric": metric
         }
+        
+        if title:
+            panel_args["title"] = title
+        if groupby:
+            panel_args["groupby"] = groupby
+        
+        # Try to create the actual panel object
+        try:
+            chart = v2.ScalarChart(**panel_args)
+            return {
+                "success": True,
+                "chart_type": "scalar_chart",
+                "chart_config": panel_args,
+                "chart_object": chart,
+                "error": None
+            }
+        except AttributeError:
+            # If ScalarChart doesn't exist, return config for manual creation
+            return {
+                "success": True,
+                "chart_type": "scalar_chart",
+                "chart_config": panel_args,
+                "panel_type": "scalar",
+                "error": None
+            }
         
     except ImportError:
         return {
@@ -374,6 +463,16 @@ def get_project_runs(
             if i >= limit:
                 break
             
+            # Handle created_at which might be a string or datetime
+            created_at = run.created_at
+            if created_at:
+                if hasattr(created_at, 'isoformat'):
+                    created_at = created_at.isoformat()
+                else:
+                    created_at = str(created_at)
+            else:
+                created_at = None
+            
             run_info = {
                 "id": run.id,
                 "name": run.name,
@@ -381,7 +480,7 @@ def get_project_runs(
                 "config": dict(run.config),
                 "summary": dict(run.summary),
                 "url": run.url,
-                "created_at": run.created_at.isoformat() if run.created_at else None,
+                "created_at": created_at,
                 "tags": run.tags,
                 "group": run.group
             }
@@ -438,7 +537,11 @@ TOOLS = [
                                 "type": "object",
                                 "properties": {
                                     "name": {"type": "string"},
-                                    "panels": {"type": "array"},
+                                    "panels": {
+                                        "type": "array",
+                                        "items": {"type": "object"},
+                                        "description": "List of panel objects (created with wandb-create_line_plot, wandb-create_scalar_chart, etc.)"
+                                    },
                                     "is_open": {"type": "boolean"}
                                 }
                             }

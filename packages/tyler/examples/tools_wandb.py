@@ -40,8 +40,8 @@ except Exception as e:
 
 # Initialize the agent with W&B workspace tools
 agent = Agent(
-    name="wandb_workspace_agent",
-    model_name="gpt-4.1", 
+    name="Buzz",
+    model_name="gpt-4o", 
     purpose="To help create and manage Weights & Biases workspaces for ML experiment tracking and visualization",
     tools=WANDB_TOOLS  # All W&B workspace management tools
 )
@@ -69,7 +69,7 @@ async def main():
         {
             "description": "📊 Retrieve and analyze project runs",
             "message": """I want to analyze my ML experiments. Can you:
-            1. Get the runs from my W&B project 'my-entity/my-ml-project' (limit to 10 runs)
+            1. Get the runs from my W&B project 'wandb-designers/simple-mnist-training' (limit to 10 runs)
             2. Look for runs with accuracy > 0.8
             3. Tell me about the top performing runs"""
         },
@@ -82,14 +82,14 @@ async def main():
             3. Make the plots have meaningful titles"""
         },
         
-        {
-            "description": "🏗️ Build a comprehensive workspace",
-            "message": """Create a complete workspace called 'ML Experiment Dashboard' for entity 'my-entity' and project 'my-ml-project' with:
-            1. A 'Training Metrics' section with the line plot for losses
-            2. A 'Model Performance' section with the scalar chart for accuracy
-            3. A 'Validation Metrics' section with validation accuracy over time
-            4. Add appropriate descriptions for each section"""
-        },
+        # {
+        #     "description": "🏗️ Build a comprehensive workspace",
+        #     "message": """Create a complete workspace called 'ML Experiment Dashboard' for entity 'my-entity' and project 'my-ml-project' with:
+        #     1. A 'Training Metrics' section with the line plot for losses
+        #     2. A 'Model Performance' section with the scalar chart for accuracy
+        #     3. A 'Validation Metrics' section with validation accuracy over time
+        #     4. Add appropriate descriptions for each section"""
+        # },
         
         {
             "description": "💾 Save workspace view",
@@ -139,56 +139,10 @@ async def main():
     print("   • Combine multiple visualization types in workspace sections")
     print("   • Save important workspace configurations as views")
 
-async def interactive_demo():
-    """
-    Interactive demo where user can input their own W&B project details.
-    """
-    print("\n🎯 Interactive W&B Workspace Demo")
-    print("=" * 40)
-    
-    try:
-        entity = input("Enter your W&B entity (username/team): ").strip()
-        project = input("Enter your W&B project name: ").strip()
-        
-        if not entity or not project:
-            print("❌ Entity and project are required for interactive demo")
-            return
-        
-        thread = Thread()
-        
-        user_input = f"""Analyze my W&B project '{entity}/{project}':
-        1. Get the latest 5 runs from this project
-        2. Create a line plot showing the main training metric over time
-        3. Build a workspace called 'Project Analysis - {project}' with a summary section
-        4. Tell me about the best performing run"""
-        
-        print(f"\n📝 Running analysis for {entity}/{project}...")
-        
-        message = Message(role="user", content=user_input)
-        thread.add_message(message)
-        
-        processed_thread, new_messages = await agent.go(thread)
-        
-        for message in new_messages:
-            if message.role == "assistant":
-                print(f"\n🤖 Agent: {message.content}")
-            elif message.role == "tool":
-                print(f"🔧 Tool executed: {message.name}")
-        
-    except KeyboardInterrupt:
-        print("\n👋 Interactive demo cancelled")
-    except Exception as e:
-        print(f"❌ Error in interactive demo: {e}")
-
 if __name__ == "__main__":
     try:
         # Run the main demo
         asyncio.run(main())
-        
-        # Optionally run interactive demo
-        if input("\n🎮 Run interactive demo? (y/N): ").lower().startswith('y'):
-            asyncio.run(interactive_demo())
-            
     except KeyboardInterrupt:
         logger.warning("Exiting gracefully...")
         sys.exit(0)
