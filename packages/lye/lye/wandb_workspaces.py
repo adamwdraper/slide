@@ -385,18 +385,33 @@ def save_workspace_view(
     description: Optional[str] = None
 ) -> Dict[str, Any]:
     """
-    Save the current workspace as a new view.
+    Save an existing workspace or view as a new view.
     
     Args:
-        workspace_url (str): URL of the existing workspace
+        workspace_url (str): URL of an existing workspace or saved view
         view_name (str): Name for the new view
         description (str, optional): Description of the view
     
     Returns:
         Dict: View creation status and details
+    
+    Note:
+        The workspace_url must be one of:
+        - A saved view URL: https://wandb.ai/entity/project?nw=viewid
+        - A workspace URL: https://wandb.ai/entity/project/workspace/workspace-name
+        
+        To save visualizations, first create a workspace using wandb-create_workspace,
+        save it, then use the resulting URL with this function.
     """
     try:
         import wandb_workspaces.workspaces as ws
+        
+        # Validate URL format - W&B expects saved view URLs with ?nw= parameter
+        if "?" not in workspace_url and "/workspace/" not in workspace_url:
+            return {
+                "success": False,
+                "error": "Invalid workspace URL. Expected a saved view URL (e.g., https://wandb.ai/entity/project?nw=abc123) or workspace URL. You provided a project URL instead."
+            }
         
         # Load existing workspace
         workspace = ws.Workspace.from_url(workspace_url)
@@ -423,9 +438,12 @@ def save_workspace_view(
         }
     except Exception as e:
         logger.error(f"Error saving workspace view: {e}")
+        error_msg = str(e)
+        if "not found" in error_msg.lower():
+            error_msg += ". Make sure you're providing a valid workspace URL (not a project URL). You may need to create a workspace first using wandb-create_workspace."
         return {
             "success": False,
-            "error": str(e)
+            "error": error_msg
         }
 
 @weave.op(name="wandb-get_project_runs")
@@ -686,13 +704,13 @@ TOOLS = [
             "type": "function",
             "function": {
                 "name": "wandb-save_workspace_view",
-                "description": "Save the current workspace configuration as a new view for future reference.",
+                "description": "Save an existing workspace as a new view. Requires a workspace URL (not a project URL). Create a workspace first using wandb-create_workspace if needed.",
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "workspace_url": {
                             "type": "string",
-                            "description": "URL of the existing workspace"
+                            "description": "URL of existing workspace or saved view (e.g., https://wandb.ai/entity/project?nw=viewid)"
                         },
                         "view_name": {
                             "type": "string",
