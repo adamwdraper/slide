@@ -29,7 +29,7 @@ from typing import List, Dict, Any
 
 from tyler import Agent, Thread, Message
 from tyler.a2a import A2AServer, A2AAdapter
-from lye import WEB_TOOLS, FILES_TOOLS, BASE_TOOLS
+from lye import WEB_TOOLS, FILES_TOOLS, COMMAND_LINE_TOOLS
 
 # Add the parent directory to the path so we can import the example utils
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -100,7 +100,7 @@ async def create_analysis_agent_server(port: int) -> A2AServer:
         - Trend identification
         
         You transform raw information into actionable business intelligence.""",
-        tools=[*FILES_TOOLS, *BASE_TOOLS]
+        tools=[*FILES_TOOLS, *COMMAND_LINE_TOOLS]
     )
     
     agent_card = {
