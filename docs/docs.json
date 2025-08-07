@@ -41,6 +41,8 @@
         "pages": [
           "concepts/how-agents-work",
           "concepts/architecture",
+          "concepts/mcp",
+          "concepts/a2a",
           "packages/overview"
         ]
       },
