@@ -26,6 +26,7 @@
           "guides/streaming-responses",
           "guides/agent-delegation",
           "guides/mcp-integration",
+          "guides/a2a-integration",
           "guides/patterns",
           "guides/testing-agents"
         ]
