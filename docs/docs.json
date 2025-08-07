@@ -26,6 +26,7 @@
           "guides/streaming-responses",
           "guides/agent-delegation",
           "guides/mcp-integration",
+          "guides/a2a-integration",
           "guides/patterns",
           "guides/testing-agents"
         ]
@@ -41,6 +42,8 @@
         "pages": [
           "concepts/how-agents-work",
           "concepts/architecture",
+          "concepts/mcp",
+          "concepts/a2a",
           "packages/overview"
         ]
       },
