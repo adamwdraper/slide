@@ -82,7 +82,7 @@ If you want to use examples outside the workspace:
 # Using uv (recommended)
 uv add slide-tyler slide-lye slide-narrator
 
-# Using pip
+# Using pip (fallback)
 pip install slide-tyler slide-lye slide-narrator
 ```
 

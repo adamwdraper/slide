@@ -8,28 +8,32 @@ Slide is a monorepo containing a collection of AI agent development tools:
 
 - **Tyler** (`slide-tyler`) - A development kit for manifesting AI agents with a complete lack of conventional limitations
 - **The Narrator** (`slide-narrator`) - Thread and file storage components for conversational AI
+- **Lye** (`slide-lye`) - Tools package providing web, files, Slack, Notion, image, audio, CLI, and browser automation capabilities
+- **Space Monkey** (`slide-space-monkey`) - Slack integration for deploying Tyler agents in Slack
 
 ## Installation
 
-### Install Individual Components
+### Install Individual Packages
 
 ```bash
-# Install Tyler only
-pip install slide-tyler
+# Using uv (recommended)
+uv add slide-tyler
+uv add slide-narrator
+uv add slide-lye
+uv add slide-space-monkey
 
-# Install The Narrator only
-pip install slide-narrator
+# Or multiple packages at once
+uv add slide-tyler slide-narrator slide-lye slide-space-monkey
 
-# Install both
-pip install slide-tyler slide-narrator
+# Using pip (fallback)
+pip install slide-tyler slide-narrator slide-lye slide-space-monkey
 ```
 
-### Install Everything
+### Meta-package
 
-```bash
-# Install the complete Slide toolkit
-pip install slide
-```
+No root "slide" meta-package is published; install individual packages as needed.
+
+Note: This repository uses a uv workspace. Prefer uv commands (uv add, uv sync, uv run) for installs and execution.
 
 ## Quick Start
 
@@ -318,7 +322,8 @@ uv pip install dist/*.whl --python /tmp/test-env
 
 ### Examples & Guides
 - [Project Examples](./examples/) - Cross-package integration examples
-- [Package-Specific Examples](./packages/tyler/examples/) - Individual package examples
+- [Tyler Examples](./packages/tyler/examples/) - Tyler-specific examples
+- [Space Monkey Examples](./packages/space-monkey/examples/) - Slack agent examples
 - [Full Documentation](./docs/) - Comprehensive guides and API reference
 
 ## Contributing
@@ -333,7 +338,9 @@ uv pip install dist/*.whl --python /tmp/test-env
 
 - Tyler: CC BY-NC 4.0
 - The Narrator: MIT
-- Slide (meta-package): MIT
+- Lye: MIT
+- Space Monkey: MIT
+- Slide (workspace meta): MIT
 
 ## Support
 
