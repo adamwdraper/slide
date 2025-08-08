@@ -61,7 +61,10 @@ In this quickstart, you'll build an AI agent that can search the web and analyze
     </Tabs>
 
     <Tip>
-      For production, use a `.env` file.
+      For production, use a `.env` file. If you choose this approach:
+      1. Install python-dotenv: `uv add python-dotenv` or `pip install python-dotenv`
+      2. Create a `.env` file with your API keys
+      3. Uncomment the dotenv import lines in the code example below
     </Tip>
   </Step>
   
@@ -69,6 +72,10 @@ In this quickstart, you'll build an AI agent that can search the web and analyze
     Create a file called `agent.py`:
 
     ```python
+    # Optional: If you're using a .env file for API keys, uncomment these lines
+    # from dotenv import load_dotenv
+    # load_dotenv()
+
     import asyncio
     from tyler import Agent, Thread, Message
     from lye import WEB_TOOLS, IMAGE_TOOLS, FILES_TOOLS
