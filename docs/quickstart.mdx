@@ -73,19 +73,19 @@ In this quickstart, you'll build an AI agent that can search the web and analyze
     from tyler import Agent, Thread, Message
     from lye import WEB_TOOLS, IMAGE_TOOLS, FILES_TOOLS
 
-    # Create your agent
-    agent = Agent(
-        name="research-assistant",
-        model_name="gpt-4o",  # Use the model for your API key provider
-        purpose="To help with research and analysis tasks",
-        tools=[
-            *WEB_TOOLS,      # Can search and fetch web content
-            *IMAGE_TOOLS,    # Can analyze and describe images
-            *FILES_TOOLS     # Can read and write files
-        ]
-    )
-
     async def main():
+        # Create your agent
+        agent = Agent(
+            name="research-assistant",
+            model_name="gpt-4o",  # Use the model for your API key provider
+            purpose="To help with research and analysis tasks",
+            tools=[
+                *WEB_TOOLS,      # Can search and fetch web content
+                *IMAGE_TOOLS,    # Can analyze and describe images
+                *FILES_TOOLS     # Can read and write files
+            ]
+        )
+
         # Create a conversation thread
         thread = Thread()
         
