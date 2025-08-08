@@ -143,10 +143,10 @@ brew install libmagic poppler
 # Ubuntu/Debian:
 sudo apt-get install libmagic1 poppler-utils
 
-# Install Tyler (includes all core dependencies)
+# Using uv (recommended)
 uv add slide-tyler
 
-# Or with pip:
+# Using pip (fallback)
 pip install slide-tyler
 ```
 

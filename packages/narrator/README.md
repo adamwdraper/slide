@@ -30,11 +30,11 @@ The Narrator provides robust, production-ready storage solutions for conversatio
 ## Installation
 
 ```bash
-# Install with pip
-pip install slide-narrator
-
-# Install with uv
+# Using uv (recommended)
 uv add slide-narrator
+
+# Using pip (fallback)
+pip install slide-narrator
 ```
 
 ## Setup

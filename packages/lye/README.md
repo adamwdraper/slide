@@ -5,13 +5,11 @@ Lye is a collection of tools that extend Tyler's capabilities, providing integra
 ## Installation
 
 ```bash
-pip install slide-lye
-```
-
-or with uv:
-
-```bash
+# Using uv (recommended)
 uv add slide-lye
+
+# Using pip (fallback)
+pip install slide-lye
 ```
 
 ## Available Tools

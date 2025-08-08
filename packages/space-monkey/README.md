@@ -25,6 +25,10 @@ Space Monkey bridges the gap between Tyler agents and Slack, providing:
 ### 1. Install the Package
 
 ```bash
+# Using uv (recommended)
+uv add slide-space-monkey
+
+# Using pip (fallback)
 pip install slide-space-monkey
 ```
 
