@@ -322,6 +322,7 @@ uv pip install dist/*.whl --python /tmp/test-env
 
 ### Examples & Guides
 - [Project Examples](./examples/) - Cross-package integration examples
+- [Tyler Examples](./packages/tyler/examples/) - Tyler-specific examples
 - [Space Monkey Examples](./packages/space-monkey/examples/) - Slack agent examples
 - [Full Documentation](./docs/) - Comprehensive guides and API reference
 
