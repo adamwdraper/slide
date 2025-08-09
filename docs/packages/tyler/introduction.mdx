@@ -88,15 +88,14 @@ import asyncio
 from tyler import Agent, Thread, Message
 from lye import WEB_TOOLS, FILES_TOOLS
 
-# Create an agent with tools
-agent = Agent(
-    name="researcher",
-    model_name="gpt-4",
-    purpose="To help with research tasks",
-    tools=[*WEB_TOOLS, *FILES_TOOLS]
-)
-
 async def main():
+    # Create an agent with tools
+    agent = Agent(
+        name="researcher",
+        model_name="gpt-4",
+        purpose="To help with research tasks",
+        tools=[*WEB_TOOLS, *FILES_TOOLS]
+    )
     # Create thread and message
     thread = Thread()
     message = Message(
@@ -300,14 +299,13 @@ import asyncio
 from tyler import Agent, Thread, Message
 from lye import AUDIO_TOOLS, IMAGE_TOOLS, BROWSER_TOOLS
 
-agent = Agent(
-    name="multimedia-processor",
-    model_name="gpt-4",
-    purpose="To process multimedia content",
-    tools=[*AUDIO_TOOLS, *IMAGE_TOOLS, *BROWSER_TOOLS]
-)
-
 async def main():
+    agent = Agent(
+        name="multimedia-processor",
+        model_name="gpt-4",
+        purpose="To process multimedia content",
+        tools=[*AUDIO_TOOLS, *IMAGE_TOOLS, *BROWSER_TOOLS]
+    )
     thread = Thread()
     message = Message(
         role="user",
