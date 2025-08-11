@@ -82,12 +82,13 @@ async def main():
     
     # Track generated image from new messages
     new_messages = result.messages
-            if message.tool_calls:
-                tool_calls_info = [{
-                    "name": tc.get('function', {}).get('name'),
-                    "arguments": tc.get('function', {}).get('arguments')
-                } for tc in message.tool_calls]
-                logger.info("Tool Calls: %s", tool_calls_info)
+    for message in new_messages:
+        if message.tool_calls:
+            tool_calls_info = [{
+                "name": tc.get('function', {}).get('name'),
+                "arguments": tc.get('function', {}).get('arguments')
+            } for tc in message.tool_calls]
+            logger.info("Tool Calls: %s", tool_calls_info)
         elif message.role == "tool":
             try:
                 content = json.loads(message.content)
@@ -152,23 +153,23 @@ async def main():
         # Log response
         logger.info("Assistant: %s", result.output)
         logger.info("Execution time: %.2fms", result.execution.duration_ms)
-                if message.tool_calls:
-                    tool_calls_info = [{
-                        "name": tc.get('function', {}).get('name'),
-                        "arguments": tc.get('function', {}).get('arguments')
-                    } for tc in message.tool_calls]
-                    logger.info("Tool Calls: %s", tool_calls_info)
-            elif message.role == "tool":
-                try:
-                    content = json.loads(message.content)
-                    if content.get("success"):
-                        logger.info("Tool (%s): Operation successful", message.name)
-                        if message.name == "analyze-image":
-                            logger.info("Analysis: %s", content.get("analysis"))
-                    else:
-                        logger.error("Tool (%s): Error - %s", message.name, content.get("error", "Unknown error"))
-                except json.JSONDecodeError:
-                    logger.debug("Tool (%s): %s", message.name, message.content)
+        if message.tool_calls:
+                tool_calls_info = [{
+                    "name": tc.get('function', {}).get('name'),
+                    "arguments": tc.get('function', {}).get('arguments')
+                } for tc in message.tool_calls]
+                logger.info("Tool Calls: %s", tool_calls_info)
+        elif message.role == "tool":
+            try:
+                content = json.loads(message.content)
+                if content.get("success"):
+                    logger.info("Tool (%s): Operation successful", message.name)
+                    if message.name == "analyze-image":
+                        logger.info("Analysis: %s", content.get("analysis"))
+                else:
+                    logger.error("Tool (%s): Error - %s", message.name, content.get("error", "Unknown error"))
+            except json.JSONDecodeError:
+                logger.debug("Tool (%s): %s", message.name, message.content)
         
         logger.info("-" * 50)
 

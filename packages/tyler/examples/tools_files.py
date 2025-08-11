@@ -138,8 +138,15 @@ async def main():
             logger.info("Tools used:")
             for tc in result.execution.tool_calls:
                 logger.info("  - %s: %.2fms", tc.tool_name, tc.duration_ms)
-                    } for tc in message.tool_calls]
-                    logger.info("Tool Calls: %s", tool_calls_info)
+        
+        # Show detailed message info
+        for message in result.messages:
+            if message.tool_calls:
+                tool_calls_info = [{
+                    "name": tc.get('function', {}).get('name'),
+                    "arguments": tc.get('function', {}).get('arguments')
+                } for tc in message.tool_calls]
+                logger.info("Tool Calls: %s", tool_calls_info)
             elif message.role == "tool":
                 try:
                     # Parse the content as JSON since it's now serialized

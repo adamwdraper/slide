@@ -131,12 +131,15 @@ async def speech_to_text_example(audio_attachment):
     # Log response
     logger.info("Assistant: %s", result.output)
     logger.info("Execution time: %.2fms", result.execution.duration_ms)
-            if message.tool_calls:
-                tool_calls_info = [{
-                    "name": tc.get('function', {}).get('name'),
-                    "arguments": tc.get('function', {}).get('arguments')
-                } for tc in message.tool_calls]
-                logger.info("Tool Calls: %s", tool_calls_info)
+    
+    # Log message details
+    for message in result.messages:
+        if message.tool_calls:
+            tool_calls_info = [{
+                "name": tc.get('function', {}).get('name'),
+                "arguments": tc.get('function', {}).get('arguments')
+            } for tc in message.tool_calls]
+            logger.info("Tool Calls: %s", tool_calls_info)
         elif message.role == "tool":
             try:
                 content = json.loads(message.content)

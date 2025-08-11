@@ -108,10 +108,10 @@ class AgentEval:
                 ))
         
         # Run agent on the thread
-        processed_thread, new_messages = await safe_agent.go(thread)
+        result = await safe_agent.go(thread)
         
         # Extract agent response
-        agent_messages = [m for m in new_messages if m.role == "assistant"]
+        agent_messages = [m for m in result.messages if m.role == "assistant"]
         if not agent_messages:
             return {
                 "content": "",
@@ -126,8 +126,8 @@ class AgentEval:
         response = {
             "content": last_message.content or "",
             "tool_calls": last_message.tool_calls or [],
-            "all_messages": [{"role": m.role, "content": m.content} for m in new_messages],
-            "thread_id": processed_thread.id,
+            "all_messages": [{"role": m.role, "content": m.content} for m in result.messages],
+            "thread_id": result.thread.id,
             "mock_tools_used": self.use_mock_tools
         }
         

@@ -201,11 +201,11 @@ async def test_agent_delegation_tool_call(mock_litellm, mock_thread_store):
             ))
             
             # Execute parent agent
-            result_thread, messages = await parent_agent.go(thread)
+            result = await parent_agent.go(thread)
             
             # Check that the thread contains the delegation and response
-            assert any("I'll delegate this to the specialist" in m.content for m in result_thread.messages if m.role == "assistant")
-            assert any("Specialized task completed successfully" in m.content for m in result_thread.messages if m.role == "tool")
+            assert any("I'll delegate this to the specialist" in m.content for m in result.thread.messages if m.role == "assistant")
+            assert any("Specialized task completed successfully" in m.content for m in result.thread.messages if m.role == "tool")
             
             # Verify the mock was called the expected number of times
             assert mock_get_completion.call.call_count >= 1
@@ -305,11 +305,11 @@ async def test_delegation_with_context(mock_litellm, mock_thread_store):
             ))
             
             # Execute parent agent
-            result_thread, messages = await parent_agent.go(thread)
+            result = await parent_agent.go(thread)
             
             # Verify delegation occurred
-            assert any("Delegating with context" in m.content for m in result_thread.messages if m.role == "assistant")
-            assert any("Data processed with context successfully" in m.content for m in result_thread.messages if m.role == "tool")
+            assert any("Delegating with context" in m.content for m in result.thread.messages if m.role == "assistant")
+            assert any("Data processed with context successfully" in m.content for m in result.thread.messages if m.role == "tool")
             
             # Verify the mock was called the expected number of times
             assert mock_get_completion.call.call_count >= 1
@@ -422,12 +422,12 @@ async def test_nested_agent_delegation(mock_litellm, mock_thread_store):
             ))
             
             # Execute parent agent
-            result_thread, messages = await parent_agent.go(thread)
+            result = await parent_agent.go(thread)
             
             # Verify delegation chain occurred
-            assert any("I'll delegate to the child agent" in m.content for m in result_thread.messages if m.role == "assistant")
-            assert any("delegate_to_ChildAgent" in m.name for m in result_thread.messages if m.role == "tool")
-            assert any("Task completed successfully" in m.content for m in result_thread.messages if m.role == "tool")
+            assert any("I'll delegate to the child agent" in m.content for m in result.thread.messages if m.role == "assistant")
+            assert any("delegate_to_ChildAgent" in m.name for m in result.thread.messages if m.role == "tool")
+            assert any("Task completed successfully" in m.content for m in result.thread.messages if m.role == "tool")
             
             # Verify the mock was called the expected number of times
             assert mock_get_completion.call.call_count >= 1 

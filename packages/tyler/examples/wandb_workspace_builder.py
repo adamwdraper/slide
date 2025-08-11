@@ -231,7 +231,9 @@ async def run_conversation_step(agent, thread, user_message):
         result = await agent.go(thread)
         
         # Display the agent's response
-        content = result.output
+        for msg in result.messages:
+            if msg.role == "assistant":
+                content = msg.content or ""
                 if len(content) > 500:
                     content = content[:500] + "... [truncated]"
                 print(f"🤖 {content}")

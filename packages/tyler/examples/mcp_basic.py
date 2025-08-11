@@ -87,12 +87,14 @@ async def main():
         
         # Process the thread with streaming
         logger.info("Processing thread with streaming...")
-        async for update in agent.go_stream(thread):
-            if update.type.name == "CONTENT_CHUNK":
-                print(update.data, end="", flush=True)
-            elif update.type.name == "TOOL_MESSAGE":
-                print(f"\n[Tool execution: {update.data.name}]\n")
-            elif update.type.name == "COMPLETE":
+        async for event in agent.go(thread, stream=True):
+            if event.type.name == "LLM_STREAM_CHUNK":
+                print(event.data.get("content_chunk", ""), end="", flush=True)
+            elif event.type.name == "MESSAGE_CREATED":
+                message = event.data.get("message")
+                if message and message.role == "tool":
+                    print(f"\n[Tool execution: {message.name}]\n")
+            elif event.type.name == "EXECUTION_COMPLETE":
                 print("\n\nProcessing complete!")
                 
     finally:
