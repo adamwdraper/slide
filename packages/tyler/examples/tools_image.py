@@ -31,7 +31,7 @@ thread_store = ThreadStore()
 async def init():
     # Initialize the agent with image tools and thread store
     return Agent(
-        model_name="gpt-4.1",
+        model_name="gpt-4o",
         purpose="To help create and generate images based on text descriptions.",
         tools=["image"],  # Load the image tools module
         temperature=0.7,
@@ -68,13 +68,20 @@ async def main():
     )
     generation_thread.add_message(message)
 
-    # Process the generation thread
-    processed_thread, new_messages = await agent.go(generation_thread)
+    # Process the generation thread with the new API
+    result = await agent.go(generation_thread)
 
-    # Log responses and track generated image
-    for message in new_messages:
-        if message.role == "assistant":
-            logger.info("Assistant: %s", message.content)
+    # Log response and execution details
+    logger.info("Assistant: %s", result.output)
+    
+    # Show tool usage
+    if result.execution.tool_calls:
+        logger.info("Tools used:")
+        for tc in result.execution.tool_calls:
+            logger.info("  - %s: %.2fms", tc.tool_name, tc.duration_ms)
+    
+    # Track generated image from new messages
+    new_messages = result.messages
             if message.tool_calls:
                 tool_calls_info = [{
                     "name": tc.get('function', {}).get('name'),
@@ -139,13 +146,12 @@ async def main():
         
         logger.info("User (Thread 2): Analyzing image for bridge presence")
         
-        # Process the analysis thread
-        processed_thread, new_messages = await agent.go(analysis_thread)
+        # Process the analysis thread with the new API
+        result = await agent.go(analysis_thread)
         
-        # Log responses
-        for message in new_messages:
-            if message.role == "assistant":
-                logger.info("Assistant: %s", message.content)
+        # Log response
+        logger.info("Assistant: %s", result.output)
+        logger.info("Execution time: %.2fms", result.execution.duration_ms)
                 if message.tool_calls:
                     tool_calls_info = [{
                         "name": tc.get('function', {}).get('name'),

@@ -41,7 +41,7 @@ except Exception as e:
 # Initialize the agent with W&B workspace tools
 agent = Agent(
     name="wandb_workspace_agent",
-    model_name="gpt-4.1", 
+    model_name="gpt-4o",
     purpose="To help create and manage Weights & Biases workspaces for ML experiment tracking and visualization",
     tools=WANDB_TOOLS  # All W&B workspace management tools
 )
@@ -112,17 +112,18 @@ async def main():
         thread.add_message(message)
         
         try:
-            # Process the thread
-            processed_thread, new_messages = await agent.go(thread)
+            # Process the thread with the new API
+            result = await agent.go(thread)
             
-            # Log responses
-            for message in new_messages:
-                if message.role == "assistant":
-                    logger.info("Assistant: %s", message.content)
-                    print(f"🤖 Agent: {message.content}")
-                elif message.role == "tool":
-                    logger.info("Tool (%s): %s", message.name, message.content[:200] + "..." if len(message.content) > 200 else message.content)
-                    print(f"🔧 Tool ({message.name}): {'Success' if 'success' in message.content and 'true' in message.content else 'Called'}")
+            # Log response and tool usage
+            logger.info("Assistant: %s", result.output)
+            print(f"🤖 Agent: {result.output}")
+            
+            if result.execution.tool_calls:
+                logger.info("Tools used:")
+                for tc in result.execution.tool_calls:
+                    logger.info("  - %s: %.2fms", tc.tool_name, tc.duration_ms)
+                    print(f"🔧 Tool ({tc.tool_name}): {'Success' if tc.success else 'Failed'}")
             
         except Exception as e:
             logger.error(f"Error in example {i}: {e}")
@@ -167,13 +168,17 @@ async def interactive_demo():
         message = Message(role="user", content=user_input)
         thread.add_message(message)
         
-        processed_thread, new_messages = await agent.go(thread)
+        result = await agent.go(thread)
         
-        for message in new_messages:
-            if message.role == "assistant":
-                print(f"\n🤖 Agent: {message.content}")
-            elif message.role == "tool":
-                print(f"🔧 Tool executed: {message.name}")
+        print(f"\n🤖 Agent: {result.output}")
+        
+        # Show execution details
+        print(f"\n📊 Execution stats:")
+        print(f"  - Duration: {result.execution.duration_ms:.2f}ms")
+        print(f"  - Total tokens: {result.execution.total_tokens}")
+        
+        if result.execution.tool_calls:
+            print(f"  - Tools used: {len(result.execution.tool_calls)}")
         
     except KeyboardInterrupt:
         print("\n👋 Interactive demo cancelled")

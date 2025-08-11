@@ -160,7 +160,7 @@ async def create_coordinator_agent() -> Agent:
     # Create coordinator agent
     coordinator = Agent(
         name="Project Coordinator",
-        model_name="gpt-4o",  # Use more powerful model for coordination
+        model_name="gpt-4o",
         purpose="""You are a project coordinator that manages complex multi-agent workflows.
         
         Your role is to:

@@ -127,11 +127,14 @@ async def main():
             content="List the files in the current directory"
         ))
         
-        result_thread, messages = await agent.go(thread)
+        result = await agent.go(thread)
         print("\nAgent response:")
-        for msg in messages:
-            if msg.role == "assistant":
-                print(msg.content)
+        print(result.output)
+        
+        # Show execution details
+        print(f"\nExecution time: {result.execution.duration_ms:.2f}ms")
+        if result.execution.tool_calls:
+            print(f"Tools used: {len(result.execution.tool_calls)}")
         
         await mcp.disconnect_all()
     

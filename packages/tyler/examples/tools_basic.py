@@ -78,7 +78,7 @@ except Exception as e:
 
 # Initialize the agent with both built-in and custom tools
 agent = Agent(
-    model_name="gpt-4.1",
+    model_name="gpt-4o",
     purpose="To help with calculations and web searches",
     tools=[
         "web",                    # Load the web tools module
@@ -106,16 +106,19 @@ async def main():
         )
         thread.add_message(message)
 
-        # Process the thread
-        processed_thread, new_messages = await agent.go(thread)
+        # Process the thread with the new API
+        result = await agent.go(thread)
 
-        # Log responses
-        for message in new_messages:
-            if message.role == "assistant":
-                logger.info("Assistant: %s", message.content)
-            elif message.role == "tool":
-                logger.info("Tool (%s): %s", message.name, message.content)
+        # Log response and execution details
+        logger.info("Assistant: %s", result.output)
         
+        # Show tool usage
+        if result.execution.tool_calls:
+            logger.info("Tools used:")
+            for tc in result.execution.tool_calls:
+                logger.info("  - %s: %.2fms", tc.tool_name, tc.duration_ms)
+        
+        logger.info("Execution time: %.2fms", result.execution.duration_ms)
         logger.info("-" * 50)
 
 if __name__ == "__main__":

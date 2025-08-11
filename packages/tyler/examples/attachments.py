@@ -33,7 +33,7 @@ async def setup():
     
     # Initialize the agent with thread_store, file_store and image tools
     agent = Agent(
-        model_name="gpt-4.1",
+        model_name="gpt-4o",
         purpose="To help with image generation and analysis.",
         temperature=0.7,
         tools=["image"],  # Include image tools for this example
@@ -94,12 +94,14 @@ async def example_tool_generated_attachment(thread_store, agent, file_store):
     thread.add_message(message)
 
     # Process the thread - this will trigger image generation
-    processed_thread, new_messages = await agent.go(thread)
+    result = await agent.go(thread)
     
     # The thread is automatically saved by the agent, which processes any attachments
+    logger.info(f"Agent response: {result.output}")
+    logger.info(f"Execution time: {result.execution.duration_ms:.2f}ms")
     
     # Log information about generated attachments
-    for msg in new_messages:
+    for msg in result.messages:
         if msg.attachments:
             logger.info(f"Message from {msg.role} has {len(msg.attachments)} attachments:")
             for att in msg.attachments:
@@ -107,7 +109,13 @@ async def example_tool_generated_attachment(thread_store, agent, file_store):
                 logger.info(f"  Status: {att.status}")
                 logger.info(f"  Storage path: {att.storage_path}")
     
-    return processed_thread
+    # Show which tools were used
+    if result.execution.tool_calls:
+        logger.info(f"Tools used:")
+        for tc in result.execution.tool_calls:
+            logger.info(f"  - {tc.tool_name}: {tc.duration_ms:.2f}ms")
+    
+    return thread  # Return the updated thread
 
 async def example_adding_attachment_to_existing_message(thread_store, file_store):
     """Example of adding an attachment to an existing message"""

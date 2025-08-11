@@ -48,7 +48,7 @@ async def main():
     # Create an agent to evaluate
     agent = Agent(
         name="travel_assistant", 
-        model_name="gpt-4.1",
+        model_name="gpt-4o",
         purpose="To help users plan and book travel arrangements",
         tools=[web.fetch_page, files.write_file, book_flight],  # Namespace + custom tool!
         temperature=0.7

@@ -27,21 +27,21 @@ async def main():
     # Create specialized agents
     research_agent = Agent(
         name="Research",  # Using simple, unique names
-        model_name="gpt-4.1",
+        model_name="gpt-4o",
         purpose="To conduct in-depth research on topics and provide comprehensive information.",
         tools=["web"]  # Give research agent web search tools
     )
     
     code_agent = Agent(
         name="Code",  # Using simple, unique names
-        model_name="gpt-4.1",
+        model_name="gpt-4o",
         purpose="To write, review, and explain code in various programming languages.",
         tools=[]  # No additional tools needed for coding
     )
     
     creative_agent = Agent(
         name="Creative",  # Using simple, unique names
-        model_name="gpt-4.1",
+        model_name="gpt-4o",
         purpose="To generate creative content such as stories, poems, and marketing copy.",
         tools=[]  # No additional tools needed for creative writing
     )
@@ -49,7 +49,7 @@ async def main():
     # Create main agent with specialized agents as a list
     main_agent = Agent(
         name="Coordinator",
-        model_name="gpt-4.1",
+        model_name="gpt-4o",
         purpose="To coordinate work by delegating tasks to specialized agents when appropriate.",
         tools=[],  # No additional tools needed since agents will be added as tools
         agents=[research_agent, code_agent, creative_agent]  # Simple list instead of dictionary
@@ -76,12 +76,28 @@ Please help me with these tasks.
     logger.info(f"Configured child agents: {child_agent_names}")
     logger.info(f"Available delegation tools: {len([t for t in main_agent._processed_tools if 'delegate_to_' in t.get('function', {}).get('name', '')])}")
     
-    # Process with the main agent
-    result_thread, messages = await main_agent.go(thread)
+    # Process with the main agent using the new API
+    result = await main_agent.go(thread)
     
     # Print the results
     print("\n=== FINAL CONVERSATION ===\n")
-    for message in result_thread.messages:
+    print(f"Final Response:\n{result.output}")
+    
+    # Show execution details
+    print(f"\n=== EXECUTION DETAILS ===")
+    print(f"Duration: {result.execution.duration_ms:.2f}ms")
+    print(f"Total tokens: {result.execution.total_tokens}")
+    
+    # Show delegation details
+    delegation_calls = [tc for tc in result.execution.tool_calls if 'delegate_to_' in tc.tool_name]
+    if delegation_calls:
+        print(f"\nDelegated to {len(delegation_calls)} agents:")
+        for dc in delegation_calls:
+            print(f"  - {dc.tool_name.replace('delegate_to_', '')}: {dc.duration_ms:.2f}ms")
+    
+    # Show all messages for debugging
+    print("\n=== FULL CONVERSATION TRACE ===\n")
+    for message in thread.messages:
         if message.role == "user":
             print(f"\nUser: {message.content}\n")
         elif message.role == "assistant":
@@ -89,7 +105,7 @@ Please help me with these tasks.
             if message.tool_calls:
                 print(f"[Tool calls: {', '.join([tc['function']['name'] for tc in message.tool_calls])}]")
         elif message.role == "tool":
-            print(f"\nTool ({message.name}): {message.content}\n")
+            print(f"\nTool ({message.name}): {message.content[:200]}...\n" if len(message.content) > 200 else f"\nTool ({message.name}): {message.content}\n")
 
 if __name__ == "__main__":
     asyncio.run(main()) 

@@ -14,7 +14,7 @@ import os
 import asyncio
 import weave
 import sys
-from tyler import Agent, Thread, Message, StreamUpdate
+from tyler import Agent, Thread, Message, EventType
 
 def custom_calculator_implementation(operation: str, x: float, y: float) -> str:
     """
@@ -106,18 +106,27 @@ async def main():
         )
         thread.add_message(message)
 
-        # Process the thread with streaming
-        async for update in agent.go_stream(thread):
-            if update.type == StreamUpdate.Type.CONTENT_CHUNK:
-                logger.info("Content chunk: %s", update.data)
-            elif update.type == StreamUpdate.Type.ASSISTANT_MESSAGE:
-                logger.info("Complete assistant message: %s", update.data.content)
-            elif update.type == StreamUpdate.Type.TOOL_MESSAGE:
-                logger.info("Tool message: %s", update.data.content)
-            elif update.type == StreamUpdate.Type.ERROR:
-                logger.error("Error: %s", update.data)
-            elif update.type == StreamUpdate.Type.COMPLETE:
-                logger.info("Processing complete")
+        # Process the thread with streaming using the new API
+        async for event in agent.go(thread, stream=True):
+            if event.type == EventType.LLM_STREAM_CHUNK:
+                # Real-time content streaming
+                print(event.data.get("content_chunk", ""), end="", flush=True)
+            elif event.type == EventType.TOOL_SELECTED:
+                print()  # New line after content
+                logger.info("Using tool: %s", event.data.get("tool_name"))
+            elif event.type == EventType.TOOL_RESULT:
+                logger.info("Tool result: %s", event.data.get("result")[:100] + "..." if len(str(event.data.get("result", ""))) > 100 else event.data.get("result"))
+            elif event.type == EventType.MESSAGE_CREATED:
+                msg = event.data.get("message")
+                if msg and msg.role == "assistant" and msg.content:
+                    print()  # Ensure we're on a new line
+                    logger.info("Complete assistant message created")
+            elif event.type == EventType.EXECUTION_ERROR:
+                logger.error("Error: %s", event.data.get("message"))
+            elif event.type == EventType.EXECUTION_COMPLETE:
+                logger.info("Processing complete - Duration: %.2fms, Tokens: %d", 
+                           event.data.get("duration_ms", 0),
+                           event.data.get("total_tokens", 0))
         
         logger.info("-" * 50)
 

@@ -27,7 +27,7 @@ except Exception as e:
 # Initialize an agent with selective tools from the notion module
 # This agent can only search Notion but can't create/edit pages
 agent = Agent(
-    model_name="gpt-4.1",
+    model_name="gpt-4o",
     purpose="To help with searching Notion without being able to modify anything",
     tools=[
         "notion:notion-search,notion-get_page",  # Only include search and get_page tools
@@ -55,13 +55,19 @@ async def main():
     )
     thread.add_message(message)
 
-    # Process the thread
-    processed_thread, new_messages = await agent.go(thread)
+    # Process the thread with the new API
+    result = await agent.go(thread)
 
-    # Log responses
-    for message in new_messages:
-        if message.role == "assistant":
-            logger.info("Assistant: %s", message.content)
+    # Log response and execution details
+    logger.info("Assistant: %s", result.output)
+    logger.info("Execution time: %.2fms", result.execution.duration_ms)
+    logger.info("Total tokens: %d", result.execution.total_tokens)
+    
+    # Show which tools were considered
+    if result.execution.tool_calls:
+        logger.info("Tools used:")
+        for tc in result.execution.tool_calls:
+            logger.info("  - %s", tc.tool_name)
     
     logger.info("-" * 50)
 

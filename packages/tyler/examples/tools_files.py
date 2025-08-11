@@ -36,7 +36,7 @@ thread_store = ThreadStore()
 async def init():
     # Initialize the agent with files tools and thread store
     agent = Agent(
-        model_name="gpt-4.1",
+        model_name="gpt-4o",
         purpose="To help extract and analyze content from PDF files.",
         tools=["files"],  # Use the files module
         temperature=0.7,
@@ -76,8 +76,8 @@ async def main():
     )
     thread.add_message(message)
     
-    # Process the thread
-    processed_thread, new_messages = await agent.go(thread)
+    # Process the thread with the new API
+    result = await agent.go(thread)
 
     # Log available tools for debugging
     if hasattr(agent, '_processed_tools'):
@@ -128,17 +128,16 @@ async def main():
         thread.add_message(message)
 
         # Process the thread - agent will handle saving
-        processed_thread, new_messages = await agent.go(thread)
+        result = await agent.go(thread)
 
-        # Log responses
-        for message in new_messages:
-            if message.role == "assistant":
-                logger.info("Assistant: %s", message.content)
-                if message.tool_calls:
-                    # Only log tool call metadata, not the full content
-                    tool_calls_info = [{
-                        "name": tc.get('function', {}).get('name'),
-                        "arguments": tc.get('function', {}).get('arguments')
+        # Log response and execution details
+        logger.info("Assistant: %s", result.output)
+        
+        # Show tool usage
+        if result.execution.tool_calls:
+            logger.info("Tools used:")
+            for tc in result.execution.tool_calls:
+                logger.info("  - %s: %.2fms", tc.tool_name, tc.duration_ms)
                     } for tc in message.tool_calls]
                     logger.info("Tool Calls: %s", tool_calls_info)
             elif message.role == "tool":

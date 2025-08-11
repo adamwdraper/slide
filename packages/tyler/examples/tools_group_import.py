@@ -33,7 +33,7 @@ async def main():
     # Create agent with all tools from multiple groups
     agent1 = Agent(
         name="multi_tool_agent",
-        model_name="gpt-4.1",
+        model_name="gpt-4o",
         purpose="To help with web, audio, and file tasks",
         tools=[
             *WEB_TOOLS,      # Unpacks all web tools
@@ -50,7 +50,7 @@ async def main():
     
     agent2 = Agent(
         name="specific_tools_agent", 
-        model_name="gpt-4.1",
+        model_name="gpt-4o",
         purpose="To help with specific tasks",
         tools=[
             fetch_page,       # Just web fetch
@@ -66,7 +66,7 @@ async def main():
     
     agent3 = Agent(
         name="mixed_agent",
-        model_name="gpt-4.1", 
+        model_name="gpt-4o", 
         purpose="To help with web tasks and command execution",
         tools=[
             *WEB_TOOLS,      # All web tools
@@ -78,7 +78,7 @@ async def main():
     # Method 4: Legacy string-based (still works!)
     agent4 = Agent(
         name="legacy_agent",
-        model_name="gpt-4.1",
+        model_name="gpt-4o",
         purpose="To help with web and file tasks",
         tools=["web", "files"]  # Old way still supported
     )
@@ -99,7 +99,7 @@ async def main():
     
     agent5 = Agent(
         name="download_agent",
-        model_name="gpt-4.1",
+        model_name="gpt-4o",
         purpose="To help download files",
         tools=web_download_tools  # Filtered subset
     )
@@ -111,11 +111,11 @@ async def main():
     message = Message(role="user", content="What tools do you have available?")
     thread.add_message(message)
     
-    processed_thread, new_messages = await agent1.go(thread)
+    result = await agent1.go(thread)
     
-    for msg in new_messages:
-        if msg.role == "assistant":
-            print(f"Multi-tool agent: {msg.content}")
+    print(f"Multi-tool agent: {result.output}")
+    print(f"\nAvailable tools: {len(agent1._processed_tools)}")
+    print(f"Execution time: {result.execution.duration_ms:.2f}ms")
 
 
 if __name__ == "__main__":

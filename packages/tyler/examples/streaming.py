@@ -26,7 +26,7 @@ except Exception as e:
 
 # Initialize the agent
 agent = Agent(
-    model_name="gpt-4o-mini",  # Updated to latest model
+    model_name="gpt-4o",
     purpose="To demonstrate streaming updates.",
     temperature=0.7
 )

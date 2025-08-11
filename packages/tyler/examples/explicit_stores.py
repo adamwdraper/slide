@@ -1,5 +1,5 @@
 import asyncio
-from tyler import Agent, Thread, Message, ThreadStore, FileStore
+from tyler import Agent, Thread, Message, ThreadStore, FileStore, AgentResult
 
 async def main():
     """
@@ -18,7 +18,7 @@ async def main():
     agent = Agent(
         name="StoreAwareAssistant",
         purpose="Answer questions concisely using explicitly set stores.",
-        model_name="gpt-4.1", # Using preferred model
+        model_name="gpt-4o",
         thread_store=thread_store,  # Pass store instance directly
         file_store=file_store       # Pass store instance directly
     )
@@ -37,20 +37,16 @@ async def main():
 
     # 5. Run the agent. It will use the configured stores internally.
     print("Running agent...")
-    final_thread, new_messages = await agent.go(thread)
+    result = await agent.go(thread)
     print("Agent finished processing.")
 
-    # 6. Print the assistant's response
-    if new_messages:
-        # Filter for the actual assistant response (last non-tool message)
-        assistant_message = next((msg for msg in reversed(new_messages) if msg.role == 'assistant'), None)
-        if assistant_message:
-            print(f"Assistant Response: {assistant_message.content}")
-        else:
-            print("No assistant message found in new messages.")
-            print("All new messages:", new_messages)
-    else:
-        print("No new messages were generated.")
+    # 6. Print the assistant's response and execution details
+    print(f"Assistant Response: {result.output}")
+    print(f"Execution time: {result.execution.duration_ms:.2f}ms")
+    print(f"Total tokens used: {result.execution.total_tokens}")
+    
+    # The thread is automatically saved to the store during execution
+    print(f"Thread saved to store with ID: {thread.id}")
 
     # 7. Demonstrate sharing stores between multiple agents
     print("\n--- Sharing Stores Between Agents ---")
@@ -59,7 +55,7 @@ async def main():
     second_agent = Agent(
         name="SecondAssistant", 
         purpose="Another assistant that shares the same storage.",
-        model_name="gpt-4.1",
+        model_name="gpt-4o",
         thread_store=thread_store,  # Same store instance
         file_store=file_store       # Same store instance
     )

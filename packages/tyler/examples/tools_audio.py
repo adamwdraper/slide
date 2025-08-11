@@ -33,7 +33,7 @@ thread_store = ThreadStore()
 async def init():
     # Initialize the agent with audio tools and thread store
     return Agent(
-        model_name="gpt-4.1",
+        model_name="gpt-4o",
         purpose="To help convert text to speech and transcribe speech to text.",
         tools=["audio"],  # Load the audio tools module
         temperature=0.7,
@@ -65,12 +65,20 @@ async def text_to_speech_example():
     thread.add_message(message)
 
     # Process the thread - agent will handle saving
-    processed_thread, new_messages = await agent.go(thread)
+    result = await agent.go(thread)
 
     # Track the generated audio file details
     generated_audio = None
 
-    # Log responses
+    # Log response and tool usage
+    logger.info("Assistant: %s", result.output)
+    if result.execution.tool_calls:
+        logger.info("Tools used:")
+        for tc in result.execution.tool_calls:
+            logger.info("  - %s: %.2fms", tc.tool_name, tc.duration_ms)
+    
+    # Check messages for generated audio files
+    new_messages = result.messages
     for message in new_messages:
         if message.role == "assistant":
             logger.info("Assistant: %s", message.content)
@@ -117,13 +125,12 @@ async def speech_to_text_example(audio_attachment):
     )
     thread.add_message(message)
 
-    # Process the thread
-    processed_thread, new_messages = await agent.go(thread)
+    # Process the thread with the new API
+    result = await agent.go(thread)
 
-    # Log responses
-    for message in new_messages:
-        if message.role == "assistant":
-            logger.info("Assistant: %s", message.content)
+    # Log response
+    logger.info("Assistant: %s", result.output)
+    logger.info("Execution time: %.2fms", result.execution.duration_ms)
             if message.tool_calls:
                 tool_calls_info = [{
                     "name": tc.get('function', {}).get('name'),

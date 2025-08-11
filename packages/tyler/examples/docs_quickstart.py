@@ -1,10 +1,11 @@
 """
 Example from the quickstart page of the documentation.
 This demonstrates building a research assistant agent with multiple tool types.
+Now with execution observability!
 """
 
 import asyncio
-from tyler import Agent, Thread, Message
+from tyler import Agent, Thread, Message, EventType
 from lye import WEB_TOOLS, IMAGE_TOOLS, FILES_TOOLS
 
 
@@ -12,7 +13,7 @@ async def main():
     # Create your agent
     agent = Agent(
         name="research-assistant",
-        model_name="gpt-4o",  # Use the model for your API key provider
+        model_name="gpt-4o",
         purpose="To help with research and analysis tasks",
         tools=[
             *WEB_TOOLS,      # Can search and fetch web content
@@ -31,16 +32,20 @@ async def main():
     )
     thread.add_message(message)
     
-    # Let the agent work
-    print("🤖 Agent is working...")
-    processed_thread, new_messages = await agent.go(thread)
+    # Let the agent work with streaming for real-time feedback
+    print("🤖 Agent is working...\n")
     
-    # Print the results
-    for msg in new_messages:
-        if msg.role == "assistant":
-            print(f"\n💬 Assistant: {msg.content}")
-        elif msg.role == "tool":
-            print(f"\n🔧 Used tool '{msg.name}'")
+    # Use streaming mode to show progress
+    tool_count = 0
+    async for event in agent.go(thread, stream=True):
+        if event.type == EventType.TOOL_SELECTED:
+            tool_count += 1
+            print(f"🔧 Using tool: {event.data.get('tool_name')}")
+        elif event.type == EventType.LLM_STREAM_CHUNK:
+            # Print content as it arrives
+            print(event.data.get("content_chunk", ""), end="", flush=True)
+        elif event.type == EventType.EXECUTION_COMPLETE:
+            print(f"\n\n✅ Complete! Used {tool_count} tools in {event.data.get('duration_ms', 0):.2f}ms")
 
 
 if __name__ == "__main__":

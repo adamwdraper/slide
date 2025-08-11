@@ -123,7 +123,7 @@ Top 3 performing runs:"""
     
     return Agent(
         name="ml_experiment_analyst",
-        model_name="gpt-4.1",
+        model_name="gpt-4o",
         purpose="""Expert ML experiment analyst who helps researchers understand their model performance, 
         create insightful visualizations, and build professional W&B workspace dashboards for experiment tracking.""",
         tools=[
@@ -228,12 +228,10 @@ async def run_conversation_step(agent, thread, user_message):
     thread.add_message(message)
     
     try:
-        processed_thread, new_messages = await agent.go(thread)
+        result = await agent.go(thread)
         
-        for msg in new_messages:
-            if msg.role == "assistant":
-                # Truncate long responses for readability
-                content = msg.content
+        # Display the agent's response
+        content = result.output
                 if len(content) > 500:
                     content = content[:500] + "... [truncated]"
                 print(f"🤖 {content}")
