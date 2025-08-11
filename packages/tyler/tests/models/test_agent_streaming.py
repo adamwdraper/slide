@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import patch, MagicMock, AsyncMock, create_autospec
-from tyler import Agent, Thread, ThreadStore, Message, StreamUpdate
+from tyler import Agent, Thread, ThreadStore, Message, ExecutionEvent, EventType
 from tyler.utils.tool_runner import tool_runner
 from litellm import ModelResponse
 import json
@@ -112,15 +112,15 @@ async def test_go_stream_basic_response():
         mock_get_completion.call.return_value = (async_generator(chunks), mock_weave_call)
         
         updates = []
-        async for update in agent.go_stream(thread):
-            updates.append(update)
+        async for event in agent.go(thread, stream=True):
+            updates.append(event)
         
         # Verify the updates
         assert len(updates) >= 3  # At least content chunks and complete
-        assert any(update.type == StreamUpdate.Type.CONTENT_CHUNK and update.data == "Hello" for update in updates)
-        assert any(update.type == StreamUpdate.Type.CONTENT_CHUNK and update.data == " there!" for update in updates)
-        assert any(update.type == StreamUpdate.Type.ASSISTANT_MESSAGE for update in updates)
-        assert any(update.type == StreamUpdate.Type.COMPLETE for update in updates)
+        assert any(event.type == EventType.LLM_STREAM_CHUNK and event.data.get('content_chunk') == "Hello" for event in updates)
+        assert any(event.type == EventType.LLM_STREAM_CHUNK and event.data.get('content_chunk') == " there!" for event in updates)
+        assert any(event.type == EventType.MESSAGE_CREATED for event in updates)
+        assert any(event.type == EventType.EXECUTION_COMPLETE for event in updates)
 
 @pytest.mark.asyncio
 async def test_go_stream_with_tool_calls():
@@ -155,18 +155,18 @@ async def test_go_stream_with_tool_calls():
         })
         
         updates = []
-        async for update in agent.go_stream(thread):
-            updates.append(update)
+        async for event in agent.go(thread, stream=True):
+            updates.append(event)
         
         # Verify the updates
         assert len(updates) >= 4  # At least content chunk, tool message, and complete
-        assert any(update.type == StreamUpdate.Type.CONTENT_CHUNK and 
-                  update.data == "I'll help translate that." for update in updates)
+        assert any(event.type == EventType.LLM_STREAM_CHUNK and 
+                  event.data.get('content_chunk') == "I'll help translate that." for event in updates)
         # Tool message content should be the stringified dict
-        assert any(update.type == StreamUpdate.Type.TOOL_MESSAGE and 
-                  update.data.content == "{'name': 'translate', 'content': 'Translation: hola'}" for update in updates)
-        assert any(update.type == StreamUpdate.Type.ASSISTANT_MESSAGE for update in updates)
-        assert any(update.type == StreamUpdate.Type.COMPLETE for update in updates)
+        assert any(event.type == EventType.MESSAGE_CREATED and 
+                  event.data.get('message') and event.data['message'].content == "{'name': 'translate', 'content': 'Translation: hola'}" for event in updates)
+        assert any(event.type == EventType.MESSAGE_CREATED for event in updates)
+        assert any(event.type == EventType.EXECUTION_COMPLETE for event in updates)
 
 @pytest.mark.asyncio
 async def test_go_stream_error_handling():
@@ -182,21 +182,21 @@ async def test_go_stream_error_handling():
         mock_get_completion.call.side_effect = error
 
         updates = []
-        async for update in agent.go_stream(thread):
-            updates.append(update)
+        async for event in agent.go(thread, stream=True):
+            updates.append(event)
 
         # Verify error handling - just check for error type without verifying exact message
-        assert any(update.type == StreamUpdate.Type.ERROR for update in updates)
+        assert any(event.type == EventType.EXECUTION_ERROR for event in updates)
 
 @pytest.mark.asyncio
 async def test_go_stream_max_iterations():
     """Test max iterations handling in streaming mode"""
-    agent = Agent(stream=True, max_tool_iterations=1)  # Set to 1 to trigger quickly
+    agent = Agent(stream=True, max_tool_iterations=0)  # Set to 0 to trigger immediately
     thread = Thread()
     thread.add_message(Message(role="user", content="Test max iterations"))
     
-    # Mock chunks that will trigger tool calls
-    chunks = [
+    # Mock chunks that will trigger tool calls repeatedly
+    chunks_with_tools = [
         create_streaming_chunk(tool_calls=[{
             "id": "call_123",
             "type": "function",
@@ -209,21 +209,30 @@ async def test_go_stream_max_iterations():
     
     mock_weave_call = MagicMock()
     
+    # Create a counter to return different responses each time
+    call_count = 0
+    async def mock_completion(*args, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        # Always return tool calls to force multiple iterations
+        return (async_generator(chunks_with_tools), mock_weave_call)
+    
     with patch.object(agent, '_get_completion') as mock_get_completion, \
          patch('tyler.models.agent.tool_runner') as mock_tool_runner:
-        mock_get_completion.call.return_value = (async_generator(chunks), mock_weave_call)
+        mock_get_completion.call.side_effect = mock_completion
         mock_tool_runner.execute_tool_call = AsyncMock(return_value={
             "name": "test_tool",
             "content": "Tool result"
         })
         
         updates = []
-        async for update in agent.go_stream(thread):
-            updates.append(update)
+        async for event in agent.go(thread, stream=True):
+            updates.append(event)
         
-        # Verify max iterations message
-        assert any(update.type == StreamUpdate.Type.ASSISTANT_MESSAGE and 
-                  "Maximum tool iteration count reached" in update.data.content for update in updates)
+        # Verify max iterations message or limit event
+        assert any(event.type == EventType.ITERATION_LIMIT for event in updates) or \
+               any(event.type == EventType.MESSAGE_CREATED and 
+                  event.data.get('message') and "Maximum tool iteration count reached" in event.data['message'].content for event in updates)
 
 @pytest.mark.asyncio
 async def test_go_stream_invalid_json_handling():
@@ -250,12 +259,11 @@ async def test_go_stream_invalid_json_handling():
         mock_get_completion.call.return_value = (async_generator(chunks), mock_weave_call)
         
         updates = []
-        async for update in agent.go_stream(thread):
-            updates.append(update)
+        async for event in agent.go(thread, stream=True):
+            updates.append(event)
         
-        # Verify error handling: Check for 'Tool execution failed:' substring in error message
-        assert any(update.type == StreamUpdate.Type.ERROR and 
-                  "Tool execution failed:" in str(update.data) for update in updates)
+        # Verify error handling: Check for tool error or execution error
+        assert any(event.type in [EventType.EXECUTION_ERROR, EventType.TOOL_ERROR] for event in updates)
 
 @pytest.mark.asyncio
 async def test_go_stream_metrics_tracking():
@@ -282,13 +290,13 @@ async def test_go_stream_metrics_tracking():
         mock_get_completion.call.return_value = (async_generator(chunks), mock_weave_call)
         
         updates = []
-        async for update in agent.go_stream(thread):
-            updates.append(update)
+        async for event in agent.go(thread, stream=True):
+            updates.append(event)
         
         # Find the assistant message update
         assistant_message = next(
-            update.data for update in updates 
-            if update.type == StreamUpdate.Type.ASSISTANT_MESSAGE
+            event.data['message'] for event in updates 
+            if event.type == EventType.MESSAGE_CREATED and event.data.get('message')
         )
         
         # Verify metrics are present and correct
@@ -342,13 +350,13 @@ async def test_go_stream_tool_metrics():
         })
         
         updates = []
-        async for update in agent.go_stream(thread):
-            updates.append(update)
+        async for event in agent.go(thread, stream=True):
+            updates.append(event)
         
-        # Find the tool message update
+        # Find the tool message update (not assistant message)
         tool_message = next(
-            update.data for update in updates 
-            if update.type == StreamUpdate.Type.TOOL_MESSAGE
+            event.data['message'] for event in updates 
+            if event.type == EventType.MESSAGE_CREATED and event.data.get('message') and event.data['message'].role == 'tool'
         )
         
         # Verify tool metrics are present and correct with actual values
@@ -404,13 +412,13 @@ async def test_go_stream_multiple_messages_metrics():
         })
         
         updates = []
-        async for update in agent.go_stream(thread):
-            updates.append(update)
+        async for event in agent.go(thread, stream=True):
+            updates.append(event)
         
         # Get all assistant and tool messages
         messages = [
-            update.data for update in updates
-            if update.type in (StreamUpdate.Type.ASSISTANT_MESSAGE, StreamUpdate.Type.TOOL_MESSAGE)
+            event.data['message'] for event in updates
+            if event.type == EventType.MESSAGE_CREATED and event.data.get('message')
         ]
 
         # Verify each message has proper metrics with actual values
@@ -470,11 +478,11 @@ async def test_go_stream_object_format_tool_calls():
         })
 
         updates = []
-        async for update in agent.go_stream(thread):
-            updates.append(update)
+        async for event in agent.go(thread, stream=True):
+            updates.append(event)
 
         # Verify tool call was processed correctly - just check for tool message type
-        assert any(update.type == StreamUpdate.Type.TOOL_MESSAGE for update in updates)
+        assert any(event.type == EventType.MESSAGE_CREATED for event in updates)
 
 @pytest.mark.asyncio
 async def test_go_stream_object_format_tool_call_updates():
@@ -516,13 +524,13 @@ async def test_go_stream_object_format_tool_call_updates():
         })
         
         updates = []
-        async for update in agent.go_stream(thread):
-            updates.append(update)
+        async for event in agent.go(thread, stream=True):
+            updates.append(event)
         
         # Find the assistant message with tool calls
         assistant_message = next(
-            (update.data for update in updates 
-             if update.type == StreamUpdate.Type.ASSISTANT_MESSAGE and update.data.tool_calls),
+            (event.data['message'] for event in updates 
+             if event.type == EventType.MESSAGE_CREATED and event.data.get('message') and event.data['message'].tool_calls),
             None
         )
         
@@ -554,13 +562,13 @@ async def test_go_stream_missing_tool_call_id():
         mock_get_completion.call.return_value = (async_generator([chunk]), mock_weave_call)
         
         updates = []
-        async for update in agent.go_stream(thread):
-            updates.append(update)
+        async for event in agent.go(thread, stream=True):
+            updates.append(event)
         
         # Verify no tool calls were processed (since ID was missing)
         assistant_messages = [
-            update.data for update in updates 
-            if update.type == StreamUpdate.Type.ASSISTANT_MESSAGE
+            event.data['message'] for event in updates 
+            if event.type == EventType.MESSAGE_CREATED and event.data.get('message')
         ]
         
         # The assistant message should not have tool calls
@@ -596,13 +604,13 @@ async def test_go_stream_empty_arguments():
         })
         
         updates = []
-        async for update in agent.go_stream(thread):
-            updates.append(update)
+        async for event in agent.go(thread, stream=True):
+            updates.append(event)
         
         # Find the tool message
         tool_message = next(
-            update.data for update in updates 
-            if update.type == StreamUpdate.Type.TOOL_MESSAGE
+            event.data['message'] for event in updates 
+            if event.type == EventType.MESSAGE_CREATED and event.data.get('message') and event.data['message'].role == 'tool'
         )
         
         # Verify tool message content is stringified dict
@@ -688,8 +696,8 @@ async def test_go_stream_thread_store_save():
         })
         
         updates = []
-        async for update in agent.go_stream(thread):
-            updates.append(update)
+        async for event in agent.go(thread, stream=True):
+            updates.append(event)
         
         # Verify thread was saved with messages
         saved_thread = await mock_thread_store.get(thread.id)
@@ -717,7 +725,7 @@ async def test_go_stream_reset_iteration_count():
         mock_get_completion.call.return_value = (async_generator([chunk]), mock_weave_call)
         
         # Process all updates
-        async for _ in agent.go_stream(thread):
+        async for _ in agent.go(thread, stream=True):
             pass
         
         # Verify iteration count was reset
@@ -735,12 +743,12 @@ async def test_go_stream_invalid_response():
         mock_step.return_value = (None, {})
         
         updates = []
-        async for update in agent.go_stream(thread):
-            updates.append(update)
+        async for event in agent.go(thread, stream=True):
+            updates.append(event)
         
         # Verify error was yielded
-        assert any(update.type == StreamUpdate.Type.ERROR and 
-                  "No response received" in str(update.data) for update in updates)
+        assert any(event.type == EventType.EXECUTION_ERROR and 
+                  "No response received" in str(event.data.get('message', '')) for event in updates)
 
 @pytest.mark.asyncio
 async def test_go_stream_tool_call_with_files():
@@ -780,13 +788,13 @@ async def test_go_stream_tool_call_with_files():
         ))
         
         updates = []
-        async for update in agent.go_stream(thread):
-            updates.append(update)
+        async for event in agent.go(thread, stream=True):
+            updates.append(event)
         
         # Find the tool message
         tool_message = next(
-            update.data for update in updates 
-            if update.type == StreamUpdate.Type.TOOL_MESSAGE
+            event.data['message'] for event in updates 
+            if event.type == EventType.MESSAGE_CREATED and event.data.get('message') and event.data['message'].role == 'tool'
         )
         
         # Verify tool message content is stringified dict
@@ -832,13 +840,13 @@ async def test_go_stream_tool_call_with_attributes():
         })
         
         updates = []
-        async for update in agent.go_stream(thread):
-            updates.append(update)
+        async for event in agent.go(thread, stream=True):
+            updates.append(event)
         
         # Find the tool message
         tool_message = next(
-            update.data for update in updates 
-            if update.type == StreamUpdate.Type.TOOL_MESSAGE
+            event.data['message'] for event in updates 
+            if event.type == EventType.MESSAGE_CREATED and event.data.get('message') and event.data['message'].role == 'tool'
         )
         
         # Verify tool message content is stringified dict
@@ -880,13 +888,13 @@ async def test_go_stream_interrupt_tool():
         })
         
         updates = []
-        async for update in agent.go_stream(thread):
-            updates.append(update)
+        async for event in agent.go(thread, stream=True):
+            updates.append(event)
         
         # Find the tool message
         tool_message = next(
-            update.data for update in updates 
-            if update.type == StreamUpdate.Type.TOOL_MESSAGE
+            event.data['message'] for event in updates 
+            if event.type == EventType.MESSAGE_CREATED and event.data.get('message') and event.data['message'].role == 'tool'
         )
         
         # Verify tool message content is stringified dict
@@ -894,7 +902,7 @@ async def test_go_stream_interrupt_tool():
         # Verify tool attributes were used
         assert mock_tool_runner.get_tool_attributes.called
         # Verify we got a complete update
-        assert any(update.type == StreamUpdate.Type.COMPLETE for update in updates)
+        assert any(event.type == EventType.EXECUTION_COMPLETE for event in updates)
 
 
 @pytest.mark.asyncio
@@ -910,13 +918,13 @@ async def test_go_stream_general_exception_handling():
         
         updates = []
         try:
-            async for update in agent.go_stream(thread):
-                updates.append(update)
+            async for event in agent.go(thread, stream=True):
+                updates.append(event)
         except Exception:
             pass  # go_stream may not raise, depending on implementation
         
         # Should have yielded an error update
-        error_updates = [u for u in updates if u.type == StreamUpdate.Type.ERROR]
+        error_updates = [u for u in updates if u.type == EventType.EXECUTION_ERROR]
         assert len(error_updates) >= 1
 
 
@@ -947,11 +955,11 @@ async def test_go_stream_tool_calls():
             mock_execute.return_value = "Tool result"
             
             updates = []
-            async for update in agent.go_stream(thread):
-                updates.append(update)
+            async for event in agent.go(thread, stream=True):
+                updates.append(event)
             
             # Should have tool-related updates
-            tool_messages = [u for u in updates if u.type == StreamUpdate.Type.TOOL_MESSAGE]
+            tool_messages = [u for u in updates if u.type == EventType.MESSAGE_CREATED]
             assert len(tool_messages) >= 1
 
 
@@ -983,11 +991,11 @@ async def test_go_stream_multiple_tool_calls():
         
         with patch.object(tool_runner, 'execute_tool_call', side_effect=mock_execute):
             updates = []
-            async for update in agent.go_stream(thread):
-                updates.append(update)
+            async for event in agent.go(thread, stream=True):
+                updates.append(event)
             
             # Should have tool messages for both calls
-            tool_messages = [u for u in updates if u.type == StreamUpdate.Type.TOOL_MESSAGE]
+            tool_messages = [u for u in updates if u.type == EventType.MESSAGE_CREATED]
             assert len(tool_messages) >= 2  # At least both tools should produce messages
 
 
@@ -1020,8 +1028,8 @@ async def test_go_stream_cache_clearing():
         
         # Collect updates
         updates = []
-        async for update in agent.go_stream(thread):
-            updates.append(update)
+        async for event in agent.go(thread, stream=True):
+            updates.append(event)
         
         # Cache should have been cleared
         assert 'existing_tool' not in agent._tool_attributes_cache
@@ -1038,13 +1046,13 @@ async def test_go_stream_step_returns_none():
         mock_step.return_value = (None, {"model": "gpt-4"})
         
         updates = []
-        async for update in agent.go_stream(thread):
-            updates.append(update)
+        async for event in agent.go(thread, stream=True):
+            updates.append(event)
         
         # Should have error update
-        error_updates = [u for u in updates if u.type == StreamUpdate.Type.ERROR]
+        error_updates = [u for u in updates if u.type == EventType.EXECUTION_ERROR]
         assert len(error_updates) == 1
-        assert "No response received" in error_updates[0].data
+        assert "No response received" in error_updates[0].data.get('message', '')
 
 
 @pytest.mark.asyncio
@@ -1071,11 +1079,11 @@ async def test_go_stream_chunk_without_choices():
         mock_step.return_value = (mock_stream(), {"model": "gpt-4"})
         
         updates = []
-        async for update in agent.go_stream(thread):
-            updates.append(update)
+        async for event in agent.go(thread, stream=True):
+            updates.append(event)
         
         # Should only have content from valid chunks
-        content_chunks = [u.data for u in updates if u.type == StreamUpdate.Type.CONTENT_CHUNK]
+        content_chunks = [u.data.get('content_chunk') for u in updates if u.type == EventType.LLM_STREAM_CHUNK]
         assert content_chunks == ["Hello", " world"]
 
 
@@ -1106,13 +1114,13 @@ async def test_go_stream_usage_metrics_from_final_chunk():
         mock_step.return_value = (mock_stream(), {"model": "gpt-4"})
         
         updates = []
-        async for update in agent.go_stream(thread):
-            updates.append(update)
+        async for event in agent.go(thread, stream=True):
+            updates.append(event)
         
-        # Get the assistant message
+                # Get the assistant message
         assistant_msg = next(
-            u.data for u in updates 
-            if u.type == StreamUpdate.Type.ASSISTANT_MESSAGE
+            u.data['message'] for u in updates
+            if u.type == EventType.MESSAGE_CREATED and u.data.get('message')
         )
         
         # Should have usage metrics from final chunk

@@ -204,12 +204,12 @@ async def test_go_max_recursion(agent, mock_thread_store):
         
         # No need to patch _get_thread_store since we already set it in the fixture
         with patch.object(agent, '_get_thread', return_value=thread):
-            result_thread, new_messages = await agent.go("test-conv")
+            result = await agent.go("test-conv")
             
-            assert len(new_messages) == 1
-            assert new_messages[0].role == "assistant"
-            assert new_messages[0].content == "Maximum tool iteration count reached. Stopping further tool calls."
-            mock_thread_store.save.assert_called_with(result_thread)
+            assert len(result.messages) == 1
+            assert result.messages[0].role == "assistant"
+            assert result.messages[0].content == "Maximum tool iteration count reached. Stopping further tool calls."
+            mock_thread_store.save.assert_called_with(result.thread)
 
 @pytest.mark.asyncio
 async def test_go_no_tool_calls(agent, mock_thread_store, mock_prompt, mock_litellm):
@@ -246,18 +246,18 @@ async def test_go_no_tool_calls(agent, mock_thread_store, mock_prompt, mock_lite
 
     # No need to patch _get_thread_store since we already set it in the fixture
     with patch.object(agent, '_get_thread', return_value=thread):
-        result_thread, new_messages = await agent.go("test-conv")
+        result = await agent.go("test-conv")
 
         # Since system messages are ephemeral, we only expect the assistant message
-        assert len(result_thread.messages) == 1  
-        assert result_thread.messages[0].role == "assistant"
-        assert result_thread.messages[0].content == "Test response"
-        assert len(new_messages) == 1
-        assert new_messages[0].role == "assistant"
-        assert "metrics" in new_messages[0].model_dump()
-        assert "timing" in new_messages[0].metrics
-        assert "usage" in new_messages[0].metrics
-        mock_thread_store.save.assert_called_with(result_thread)
+        assert len(result.thread.messages) == 1  
+        assert result.thread.messages[0].role == "assistant"
+        assert result.thread.messages[0].content == "Test response"
+        assert len(result.messages) == 1
+        assert result.messages[0].role == "assistant"
+        assert "metrics" in result.messages[0].model_dump()
+        assert "timing" in result.messages[0].metrics
+        assert "usage" in result.messages[0].metrics
+        mock_thread_store.save.assert_called_with(result.thread)
         assert agent._iteration_count == 0
 
 @pytest.mark.asyncio
@@ -333,10 +333,10 @@ async def test_go_with_tool_calls(agent, mock_thread_store, mock_prompt, mock_li
 
             # No need to patch _get_thread_store since we already set it in the fixture
             with patch.object(agent, '_get_thread', return_value=thread):
-                result_thread, new_messages = await agent.go("test-conv")
+                result = await agent.go("test-conv")
 
     # Verify the sequence of messages (without system message)
-    messages = result_thread.messages
+    messages = result.thread.messages
     assert len(messages) == 3  # assistant with tool call, tool result, final assistant
     assert messages[0].role == "assistant"
     assert messages[0].tool_calls is not None
@@ -667,10 +667,10 @@ async def test_go_with_weave_metrics(agent, mock_thread_store, mock_prompt):
     with patch.object(agent, 'step', side_effect=mock_step_metrics):
         # No need to patch _get_thread_store since we already set it in the fixture
         with patch.object(agent, '_get_thread', return_value=thread):
-            result_thread, new_messages = await agent.go(thread)
+            result = await agent.go(thread)
             
-            assert len(new_messages) == 1
-            message = new_messages[0]
+            assert len(result.messages) == 1
+            message = result.messages[0]
             assert 'model' in message.metrics
             assert 'timing' in message.metrics
             assert 'usage' in message.metrics
@@ -840,10 +840,10 @@ async def test_go_with_multiple_tool_call_iterations(agent, mock_thread_store, m
 
         # No need to patch _get_thread_store since we already set it in the fixture
         with patch.object(agent, '_get_thread', return_value=thread):
-            result_thread, new_messages = await agent.go("test-conv")
+            result = await agent.go("test-conv")
 
     # Verify the sequence of messages (without system message)
-    messages = result_thread.messages
+    messages = result.thread.messages
     assert len(messages) == 5  # 2 pairs of assistant+tool, final assistant
     assert messages[0].role == "assistant"
     assert messages[0].content == "Let me help you with that"
@@ -956,10 +956,10 @@ async def test_go_with_tool_calls_no_content(agent, mock_thread_store, mock_prom
 
         # No need to patch _get_thread_store since we already set it in the fixture
         with patch.object(agent, '_get_thread', return_value=thread):
-            result_thread, new_messages = await agent.go("test-conv")
+            result = await agent.go("test-conv")
 
     # Verify the sequence of messages (without system message)
-    messages = result_thread.messages
+    messages = result.thread.messages
     assert len(messages) == 3  # assistant with tool call, tool result, final assistant
     assert messages[0].role == "assistant"
     assert messages[0].content == ""  # Empty content
@@ -1159,17 +1159,17 @@ async def test_go_with_tool_returning_image(mock_thread_store, mock_file_store):
         # Also mock _get_thread directly to return the thread
         with patch.object(agent, '_get_thread', return_value=Thread(id="test-thread")):
             # Execute go method
-            result_thread, new_messages = await agent.go("test-thread")
+            result = await agent.go("test-thread")
 
             # Verify messages
-            assert len(new_messages) == 3
-            assert new_messages[0].role == "assistant"  # Initial message with tool call
-            assert new_messages[0].content == "Let me generate that image for you"
-            assert new_messages[1].role == "tool"  # Tool response with image
-            assert len(new_messages[1].attachments) == 1
-            assert new_messages[1].attachments[0].content == encoded_content
-            assert new_messages[2].role == "assistant"  # Final message
-            assert new_messages[2].content == "Here's your generated image"
+            assert len(result.messages) == 3
+            assert result.messages[0].role == "assistant"  # Initial message with tool call
+            assert result.messages[0].content == "Let me generate that image for you"
+            assert result.messages[1].role == "tool"  # Tool response with image
+            assert len(result.messages[1].attachments) == 1
+            assert result.messages[1].attachments[0].content == encoded_content
+            assert result.messages[2].role == "assistant"  # Final message
+            assert result.messages[2].content == "Here's your generated image"
 
 @pytest.mark.asyncio
 async def test_normalize_tool_call():
@@ -1245,12 +1245,12 @@ async def test_go_with_completion_error(agent, mock_thread_store):
         mock_step.side_effect = Exception("Completion API error")
         
         # No need to patch _get_thread_store since we already set it in the fixture
-        result_thread, new_messages = await agent.go(thread)
+        result = await agent.go(thread)
 
         # Verify error was handled and added to thread
-        assert len(new_messages) == 1
+        assert len(result.messages) == 1
         # Check that the error is reflected in the message content
-        assert "error" in new_messages[0].content.lower() or "Completion API error" in new_messages[0].content
+        assert "error" in result.messages[0].content.lower() or "Completion API error" in result.messages[0].content
 
         # Verify thread was saved
         assert mock_thread_store.save.call_count > 0  # Allow multiple saves
@@ -1266,12 +1266,12 @@ async def test_go_with_invalid_response(agent, mock_thread_store):
         mock_step.return_value = (None, {})
         
         # No need to patch _get_thread_store since we already set it in the fixture
-        result_thread, new_messages = await agent.go(thread)
+        result = await agent.go(thread)
 
         # Verify error was handled and added to thread
-        assert len(new_messages) == 1
+        assert len(result.messages) == 1
         # Check for presence of error message without requiring exact format
-        assert "error" in new_messages[0].content.lower() or "response" in new_messages[0].content.lower()
+        assert "error" in result.messages[0].content.lower() or "response" in result.messages[0].content.lower()
 
         # Verify thread was saved
         assert mock_thread_store.save.call_count > 0  # Allow multiple saves
@@ -1522,12 +1522,12 @@ async def test_go_with_custom_api_params(mock_thread_store):
         
         # No need to patch _get_thread_store since we already set it in the fixture
         with patch.object(agent, '_get_thread', return_value=thread):
-            result_thread, new_messages = await agent.go("test-conv")
+            result = await agent.go("test-conv")
             
             # Verify basic functionality still works
-            assert len(new_messages) == 1
-            assert new_messages[0].role == "assistant"
-            assert new_messages[0].content == "Test response"
+            assert len(result.messages) == 1
+            assert result.messages[0].role == "assistant"
+            assert result.messages[0].content == "Test response"
 
 @pytest.mark.asyncio
 async def test_step_with_streaming_and_custom_params(mock_thread_store):
@@ -1699,13 +1699,13 @@ async def test_go_general_exception_handling(mock_thread_store):
     with patch.object(agent, 'step') as mock_step:
         mock_step.side_effect = RuntimeError("Unexpected error")
         
-        result_thread, messages = await agent.go(thread)
+        result = await agent.go(thread)
         
         # Should have an error message
-        assert len(messages) == 1
-        assert messages[0].role == "assistant"
-        assert "I encountered an error:" in messages[0].content
-        assert "Unexpected error" in messages[0].content
+        assert len(result.messages) == 1
+        assert result.messages[0].role == "assistant"
+        assert "I encountered an error:" in result.messages[0].content
+        assert "Unexpected error" in result.messages[0].content
         
         # Thread should be saved even on error
         mock_thread_store.save.assert_called()
@@ -1733,10 +1733,14 @@ async def test_go_with_thread_id(mock_thread_store):
         )
         
         # Call with thread ID
-        result_thread, messages = await agent.go("test_thread_id")
+        result = await agent.go("test_thread_id")
         
         # Verify thread was fetched
         mock_thread_store.get.assert_called_with("test_thread_id")
+        
+        # Verify we got a response
+        assert len(result.messages) == 1
+        assert result.messages[0].content == "Response"
 
 
 @pytest.mark.asyncio
@@ -1922,11 +1926,11 @@ async def test_step_error_handling():
         mock_completion.side_effect = Exception("API Error")
         
         # Use go() method to see error handling (step() returns response and metrics)
-        result_thread, messages = await agent.go(thread)
+        result = await agent.go(thread)
         
         # Should have error message
-        assert len(messages) > 0
-        assert any("encountered an error" in m.content for m in messages if m.role == "assistant")
+        assert len(result.messages) > 0
+        assert any("encountered an error" in m.content for m in result.messages if m.role == "assistant")
 
 
 def test_stream_update_slots():
