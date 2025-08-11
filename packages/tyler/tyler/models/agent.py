@@ -745,7 +745,7 @@ class Agent(Model):
     
     async def _go_complete_wrapper(self, thread_or_id: Union[Thread, str]) -> AgentResult:
         """Wrapper to make go() return the right type."""
-            return await self._go_complete(thread_or_id)
+        return await self._go_complete(thread_or_id)
     
     @weave.op()
     async def _go_complete(self, thread_or_id: Union[Thread, str]) -> AgentResult:
@@ -773,7 +773,7 @@ class Agent(Model):
         try:
             # Get thread
             try:
-            thread = await self._get_thread(thread_or_id)
+                thread = await self._get_thread(thread_or_id)
             except ValueError:
                 raise  # Re-raise ValueError for thread not found
             
@@ -798,39 +798,39 @@ class Agent(Model):
                     await self.thread_store.save(thread)
             
             else:
-        # Main iteration loop
-        while self._iteration_count < self.max_tool_iterations:
-            try:
+                # Main iteration loop
+                while self._iteration_count < self.max_tool_iterations:
+                    try:
                         # Record LLM request
                         record_event(EventType.LLM_REQUEST, {
-                        "message_count": len(thread.messages),
-                        "model": self.model_name,
-                        "temperature": self.temperature
+                            "message_count": len(thread.messages),
+                            "model": self.model_name,
+                            "temperature": self.temperature
                         })
-                
-                # Get completion
-                response, metrics = await self.step(thread)
-                    
-                    if not response or not hasattr(response, 'choices') or not response.choices:
-                        error_msg = "No response received from chat completion"
-                        logger.error(error_msg)
+                        
+                        # Get completion
+                        response, metrics = await self.step(thread)
+                        
+                        if not response or not hasattr(response, 'choices') or not response.choices:
+                            error_msg = "No response received from chat completion"
+                            logger.error(error_msg)
                             record_event(EventType.EXECUTION_ERROR, {
                                 "error_type": "NoResponse",
                                 "message": error_msg
                             })
-                        message = self._create_error_message(error_msg)
-                        thread.add_message(message)
-                        new_messages.append(message)
+                            message = self._create_error_message(error_msg)
+                            thread.add_message(message)
+                            new_messages.append(message)
                             record_event(EventType.MESSAGE_CREATED, {"message": message})
-                        if self.thread_store:
-                            await self.thread_store.save(thread)
-                        break
-                    
+                            if self.thread_store:
+                                await self.thread_store.save(thread)
+                            break
+                        
                         # Process response
-                    assistant_message = response.choices[0].message
+                        assistant_message = response.choices[0].message
                         content = assistant_message.content or ""
-                    tool_calls = getattr(assistant_message, 'tool_calls', None)
-                    has_tool_calls = tool_calls is not None and len(tool_calls) > 0
+                        tool_calls = getattr(assistant_message, 'tool_calls', None)
+                        has_tool_calls = tool_calls is not None and len(tool_calls) > 0
 
                         # Record LLM response
                         record_event(EventType.LLM_RESPONSE, {
@@ -842,20 +842,20 @@ class Agent(Model):
                         
                         # Create assistant message
                         if content or has_tool_calls:
-                        message = Message(
-                            role="assistant",
+                            message = Message(
+                                role="assistant",
                                 content=content,
-                            tool_calls=self._serialize_tool_calls(tool_calls) if has_tool_calls else None,
-                            source=self._create_assistant_source(include_version=True),
-                            metrics=metrics
-                        )
-                        thread.add_message(message)
-                        new_messages.append(message)
+                                tool_calls=self._serialize_tool_calls(tool_calls) if has_tool_calls else None,
+                                source=self._create_assistant_source(include_version=True),
+                                metrics=metrics
+                            )
+                            thread.add_message(message)
+                            new_messages.append(message)
                             record_event(EventType.MESSAGE_CREATED, {"message": message})
 
                         # Process tool calls
                         should_break = False
-                    if has_tool_calls:
+                        if has_tool_calls:
                             # Record tool selections
                             for tool_call in tool_calls:
                                 tool_name = tool_call.function.name if hasattr(tool_call, 'function') else tool_call['function']['name']
@@ -875,18 +875,18 @@ class Agent(Model):
                                 })
                             
                             # Execute tools in parallel
-                        tool_tasks = [
-                            self._handle_tool_execution(tool_call)
-                            for tool_call in tool_calls
-                        ]
-                        
-                        tool_results = await asyncio.gather(*tool_tasks, return_exceptions=True)
-                        
+                            tool_tasks = [
+                                self._handle_tool_execution(tool_call)
+                                for tool_call in tool_calls
+                            ]
+                            
+                            tool_results = await asyncio.gather(*tool_tasks, return_exceptions=True)
+                            
                             # Process results
-                        should_break = False
-                        for i, result in enumerate(tool_results):
-                            tool_call = tool_calls[i]
-                            tool_name = tool_call.function.name if hasattr(tool_call, 'function') else tool_call['function']['name']
+                            should_break = False
+                            for i, result in enumerate(tool_results):
+                                tool_call = tool_calls[i]
+                                tool_name = tool_call.function.name if hasattr(tool_call, 'function') else tool_call['function']['name']
                                 tool_id = tool_call.id if hasattr(tool_call, 'id') else tool_call.get('id')
                                 
                                 # Record tool result or error
@@ -912,12 +912,12 @@ class Agent(Model):
                                 
                                 # Process tool result into message
                                 tool_message, break_iteration = self._process_tool_result(result, tool_call, tool_name)
-                            thread.add_message(tool_message)
-                            new_messages.append(tool_message)
+                                thread.add_message(tool_message)
+                                new_messages.append(tool_message)
                                 record_event(EventType.MESSAGE_CREATED, {"message": tool_message})
-                            
-                            if break_iteration:
-                                should_break = True
+                                
+                                if break_iteration:
+                                    should_break = True
                                 
                         # Save after processing all tool calls but before next completion
                         if self.thread_store:
@@ -926,37 +926,37 @@ class Agent(Model):
                         if should_break:
                             break
                     
-                    # If no tool calls, we are done
-                    if not has_tool_calls:
-                        break
+                        # If no tool calls, we are done
+                        if not has_tool_calls:
+                            break
                         
-                    self._iteration_count += 1
+                        self._iteration_count += 1
 
-                except Exception as e:
-                    error_msg = f"Error during chat completion: {str(e)}"
-                    logger.error(error_msg)
+                    except Exception as e:
+                        error_msg = f"Error during chat completion: {str(e)}"
+                        logger.error(error_msg)
                         record_event(EventType.EXECUTION_ERROR, {
                             "error_type": type(e).__name__,
                             "message": error_msg,
                             "traceback": None  # Could add traceback if needed
                         })
-                    message = self._create_error_message(error_msg)
-                    thread.add_message(message)
-                    new_messages.append(message)
+                        message = self._create_error_message(error_msg)
+                        thread.add_message(message)
+                        new_messages.append(message)
                         record_event(EventType.MESSAGE_CREATED, {"message": message})
-                    if self.thread_store:
-                        await self.thread_store.save(thread)
-                    break
+                        if self.thread_store:
+                            await self.thread_store.save(thread)
+                        break
                 
                 # Check for max iterations
-            if self._iteration_count >= self.max_tool_iterations:
-                message = Message(
-                    role="assistant",
-                    content="Maximum tool iteration count reached. Stopping further tool calls.",
-                    source=self._create_assistant_source(include_version=False)
-                )
-                thread.add_message(message)
-                new_messages.append(message)
+                if self._iteration_count >= self.max_tool_iterations:
+                    message = Message(
+                        role="assistant",
+                        content="Maximum tool iteration count reached. Stopping further tool calls.",
+                        source=self._create_assistant_source(include_version=False)
+                    )
+                    thread.add_message(message)
+                    new_messages.append(message)
                     record_event(EventType.MESSAGE_CREATED, {"message": message})
                     record_event(EventType.ITERATION_LIMIT, {"iterations_used": self._iteration_count})
                 
