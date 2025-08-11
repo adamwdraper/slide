@@ -91,6 +91,32 @@ description = await describe_image("photo.jpg")
 transcript = await transcribe_audio("recording.mp3")
 ```
 
+## Optional Dependencies
+
+For advanced file processing capabilities, you can install these system libraries:
+
+<Tabs>
+  <Tab title="macOS">
+    ```bash
+    # Enhanced file type detection and PDF OCR
+    brew install libmagic poppler
+    ```
+  </Tab>
+  <Tab title="Ubuntu/Debian">
+    ```bash
+    # Enhanced file type detection and PDF OCR
+    sudo apt-get install libmagic1 poppler-utils
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+These are optional and only needed for:
+- More accurate file type detection for unusual formats
+- Processing scanned PDFs or PDFs without embedded text
+</Note>
+
+
 ## Next Steps
 
 <CardGroup cols={2}>
