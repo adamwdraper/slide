@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 Basic example demonstrating a simple conversation with the agent.
+Now with execution observability!
 """
 # Load environment variables and configure logging first
 from dotenv import load_dotenv
@@ -14,7 +15,7 @@ import os
 import asyncio
 import weave
 import sys
-from tyler import Agent, Thread, Message
+from tyler import Agent, Thread, Message, AgentResult
 
 try:
     if os.getenv("WANDB_API_KEY"):
@@ -25,7 +26,7 @@ except Exception as e:
 
 # Initialize the agent
 agent = Agent(
-    model_name="gpt-4.1",
+    model_name="gpt-4o-mini",  # Updated to latest model
     purpose="To be a helpful assistant.",
     temperature=0.7
 )
@@ -51,13 +52,23 @@ async def main():
         )
         thread.add_message(message)
 
-        # Process the thread
-        processed_thread, new_messages = await agent.go(thread)
-
-        # Log responses
-        for message in new_messages:
-            if message.role == "assistant":
-                logger.info("Assistant: %s", message.content)
+        # Process the thread with the new API
+        result = await agent.go(thread)
+        
+        # The thread is updated in-place, but we also get rich execution details
+        logger.info("Assistant: %s", result.output)
+        
+        # Show execution metrics
+        logger.debug("Execution metrics:")
+        logger.debug("  - Duration: %.2fms", result.execution.duration_ms)
+        logger.debug("  - Total tokens: %d", result.execution.total_tokens)
+        logger.debug("  - Success: %s", result.success)
+        
+        # Show any tool usage
+        if result.execution.tool_calls:
+            logger.debug("  - Tools used:")
+            for tool_call in result.execution.tool_calls:
+                logger.debug("    * %s (%.2fms)", tool_call.tool_name, tool_call.duration_ms)
         
         logger.info("-" * 50)
 
