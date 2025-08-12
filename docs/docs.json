@@ -58,6 +58,12 @@
               "api-reference/tyler-executionevent",
               "api-reference/tyler-eventtype"
             ]
+          },
+          {
+            "group": "Space Monkey",
+            "pages": [
+              "api-reference/space-monkey-slackapp"
+            ]
           }
         ]
       },
