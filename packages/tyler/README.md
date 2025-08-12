@@ -34,7 +34,7 @@ Tyler is the core agent framework in the Slide ecosystem. It makes it easy to bu
 
 While Tyler can be used as a library, it comes with two interactive interfaces:
 1. A web-based chat interface available as a separate repository at [tyler-chat](https://github.com/adamwdraper/tyler-chat)
-2. A built-in command-line interface (CLI) accessible via the `tyler-chat` command after installation. See the [Chat with Tyler](https://adamwdraper.github.io/tyler/docs/chat-with-tyler) documentation for details on both interfaces.
+2. A built-in command-line interface (CLI) accessible via the `tyler-chat` command after installation. See the [Tyler chat CLI](https://adamwdraper.github.io/tyler/apps/tyler-chat-cli) documentation for details.
 
 
 &nbsp;
