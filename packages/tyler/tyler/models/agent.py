@@ -4,7 +4,7 @@ import weave
 from weave import Model, Prompt
 import json
 import types
-from typing import List, Dict, Any, Optional, Union, AsyncGenerator, Tuple, Callable
+from typing import List, Dict, Any, Optional, Union, AsyncGenerator, Tuple, Callable, overload, Literal
 from datetime import datetime, UTC
 from pydantic import Field, PrivateAttr
 from litellm import acompletion
@@ -694,6 +694,22 @@ class Agent(Model):
             await self.thread_store.save(thread)
         return thread, [m for m in new_messages if m.role != "user"]
 
+    @overload
+    def go(
+        self, 
+        thread_or_id: Union[Thread, str],
+        stream: Literal[False] = False
+    ) -> AgentResult:
+        ...
+    
+    @overload
+    def go(
+        self, 
+        thread_or_id: Union[Thread, str],
+        stream: Literal[True]
+    ) -> AsyncGenerator[ExecutionEvent, None]:
+        ...
+    
     def go(
         self, 
         thread_or_id: Union[Thread, str],
@@ -741,11 +757,7 @@ class Agent(Model):
         if stream:
             return self._go_stream(thread_or_id)
         else:
-            return self._go_complete_wrapper(thread_or_id)
-    
-    async def _go_complete_wrapper(self, thread_or_id: Union[Thread, str]) -> AgentResult:
-        """Wrapper to make go() return the right type."""
-        return await self._go_complete(thread_or_id)
+            return self._go_complete(thread_or_id)
     
     @weave.op()
     async def _go_complete(self, thread_or_id: Union[Thread, str]) -> AgentResult:
@@ -865,7 +877,7 @@ class Agent(Model):
                                 # Parse arguments
                                 try:
                                     parsed_args = json.loads(args) if isinstance(args, str) else args
-                                except:
+                                except (json.JSONDecodeError, TypeError, AttributeError):
                                     parsed_args = {}
                                 
                                 record_event(EventType.TOOL_SELECTED, {
@@ -874,11 +886,14 @@ class Agent(Model):
                                     "tool_call_id": tool_id
                                 })
                             
-                            # Execute tools in parallel
-                            tool_tasks = [
-                                self._handle_tool_execution(tool_call)
-                                for tool_call in tool_calls
-                            ]
+                            # Execute tools in parallel with timing
+                            tool_start_times = {}
+                            tool_tasks = []
+                            
+                            for tool_call in tool_calls:
+                                tool_id = tool_call.id if hasattr(tool_call, 'id') else tool_call.get('id')
+                                tool_start_times[tool_id] = datetime.now(UTC)
+                                tool_tasks.append(self._handle_tool_execution(tool_call))
                             
                             tool_results = await asyncio.gather(*tool_tasks, return_exceptions=True)
                             
@@ -888,6 +903,10 @@ class Agent(Model):
                                 tool_call = tool_calls[i]
                                 tool_name = tool_call.function.name if hasattr(tool_call, 'function') else tool_call['function']['name']
                                 tool_id = tool_call.id if hasattr(tool_call, 'id') else tool_call.get('id')
+                                
+                                # Calculate duration
+                                tool_end_time = datetime.now(UTC)
+                                tool_duration_ms = (tool_end_time - tool_start_times[tool_id]).total_seconds() * 1000
                                 
                                 # Record tool result or error
                                 if isinstance(result, Exception):
@@ -907,7 +926,7 @@ class Agent(Model):
                                         "tool_name": tool_name,
                                         "result": result_content,
                                         "tool_call_id": tool_id,
-                                        "duration_ms": 0  # TODO: track actual duration
+                                        "duration_ms": tool_duration_ms
                                     })
                                 
                                 # Process tool result into message
@@ -1251,7 +1270,7 @@ class Agent(Model):
                                     if not args.startswith('{'):
                                         args = '{' + args
                                     parsed_args = json.loads(args)
-                                except:
+                                except (json.JSONDecodeError, ValueError):
                                     parsed_args = {}
                             
                             tool_call['function']['arguments'] = json.dumps(parsed_args)
@@ -1266,11 +1285,14 @@ class Agent(Model):
                                 }
                             )
                         
-                        # Execute tools in parallel
-                        tool_tasks = [
-                            self._handle_tool_execution(tool_call)
-                            for tool_call in current_tool_calls
-                        ]
+                        # Execute tools in parallel with timing
+                        tool_start_times = {}
+                        tool_tasks = []
+                        
+                        for tool_call in current_tool_calls:
+                            tool_id = tool_call['id']
+                            tool_start_times[tool_id] = datetime.now(UTC)
+                            tool_tasks.append(self._handle_tool_execution(tool_call))
                         
                         tool_results = await asyncio.gather(*tool_tasks, return_exceptions=True)
                         
@@ -1280,6 +1302,10 @@ class Agent(Model):
                             tool_call = current_tool_calls[i]
                             tool_name = tool_call['function']['name']
                             tool_id = tool_call['id']
+                            
+                            # Calculate duration
+                            tool_end_time = datetime.now(UTC)
+                            tool_duration_ms = (tool_end_time - tool_start_times[tool_id]).total_seconds() * 1000
                             
                             # Yield result or error event
                             if isinstance(result, Exception):
@@ -1306,7 +1332,7 @@ class Agent(Model):
                                         "tool_name": tool_name,
                                         "result": result_content,
                                         "tool_call_id": tool_id,
-                                        "duration_ms": 0  # TODO: track actual duration
+                                        "duration_ms": tool_duration_ms
                                     }
                                 )
                             
