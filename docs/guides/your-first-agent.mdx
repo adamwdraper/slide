@@ -1,5 +1,5 @@
 ---
-title: 'Your First Agent'
+title: 'Your first agent'
 description: 'Step-by-step guide to building your first AI agent'
 ---
 
@@ -78,10 +78,10 @@ We'll create an agent that can:
         
         # Let the agent work
         print("🔍 Researching renewable energy...")
-        processed_thread, new_messages = await agent.go(thread)
+        result = await agent.go(thread)
         
         # Print the results
-        for msg in new_messages:
+        for msg in result.new_messages:
             if msg.role == "assistant":
                 print(f"\n💬 Assistant: {msg.content}")
             elif msg.role == "tool":
@@ -130,11 +130,11 @@ async def main():
     thread.add_message(message)
     
     print("🤖 Agent is thinking...")
-    processed_thread, new_messages = await agent.go(thread)
+    result = await agent.go(thread)
     
     # Show the complete conversation
     print("\n=== Complete Conversation ===")
-    for msg in processed_thread.messages:
+    for msg in result.thread.messages:
         if msg.role == "user":
             print(f"\n👤 User: {msg.content}")
         elif msg.role == "assistant":
@@ -190,13 +190,13 @@ async def main():
     thread.add_message(message)
     
     # Process
-    processed_thread, new_messages = await agent.go(thread)
+    result = await agent.go(thread)
     
     # Save the conversation
-    await thread_store.save_thread(processed_thread)
+    await thread_store.save_thread(result.thread)
     
     # Print response
-    for msg in new_messages:
+    for msg in result.new_messages:
         if msg.role == "assistant":
             print(f"\n🤖 {msg.content}")
 
@@ -236,21 +236,21 @@ async def interactive_session():
         
         # Process with agent
         print("\n🤖 Thinking...", end="", flush=True)
-        processed_thread, new_messages = await agent.go(thread)
+        result = await agent.go(thread)
         
         # Clear thinking message
         print("\r" + " " * 20 + "\r", end="")
         
         # Display response
-        for msg in new_messages:
+        for msg in result.new_messages:
             if msg.role == "assistant":
                 print(f"🤖 Assistant: {msg.content}\n")
             elif msg.role == "tool":
                 print(f"   [Used {msg.name}]")
         
         # Save conversation
-        await thread_store.save_thread(processed_thread)
-        thread = processed_thread
+        await thread_store.save_thread(result.thread)
+        thread = result.thread
     
     print("\n👋 Session saved. See you next time!")
 
@@ -303,7 +303,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 ```
 
-### Advanced Tracing with Weave
+### Advanced tracing with Weave
 
 For comprehensive debugging and observability, Slide integrates with [Weights & Biases Weave](https://weave-docs.wandb.ai/). Weave provides:
 
@@ -327,7 +327,7 @@ weave.init("my-research-agent")
   Weave traces are invaluable for debugging complex agent behaviors. You can see exactly what prompts were sent to the LLM, what tools were called, and how the agent made its decisions.
 </Tip>
 
-## Next Steps
+## Next steps
 
 You've built your first agent! Here's what to explore next:
 
@@ -394,7 +394,7 @@ You've built your first agent! Here's what to explore next:
     Always handle potential errors:
     ```python
     try:
-        processed_thread, new_messages = await agent.go(thread)
+        result = await agent.go(thread)
     except Exception as e:
         print(f"❌ Error: {e}")
         # Handle gracefully

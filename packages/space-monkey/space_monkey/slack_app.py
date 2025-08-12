@@ -420,10 +420,10 @@ class SlackApp:
             
             logger.info(f"Passing copy of thread {classifier_thread.id} with {len(classifier_thread.messages)} messages to classifier")
             with weave.attributes({'env': os.getenv("ENV", "development"), 'event_id': thread_ts}):
-                _, classify_messages = await self.message_classifier_agent.go(classifier_thread)
+                classifier_result = await self.message_classifier_agent.go(classifier_thread)
             
             # Parse classification result
-            classify_result = classify_messages[-1].content if classify_messages else None
+            classify_result = classifier_result.new_messages[-1].content if classifier_result.new_messages else None
             if classify_result:
                 try:
                     classification = json.loads(classify_result)
@@ -465,7 +465,8 @@ class SlackApp:
             
             try:
                 with weave.attributes({'env': os.getenv("ENV", "development"), 'event_id': thread_ts}):
-                    _, new_messages = await self.agent.go(thread)
+                    result = await self.agent.go(thread)
+                    new_messages = result.new_messages
             except ValueError as e:
                 if "Thread with ID" in str(e) and "not found" in str(e):
                     logger.error(f"Thread lookup failed: {e}")

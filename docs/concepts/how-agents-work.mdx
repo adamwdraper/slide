@@ -128,7 +128,7 @@ message = Message(
 thread.add_message(message)
 
 # Agent automatically chooses the right tools
-processed_thread, new_messages = await agent.go(thread)
+result = await agent.go(thread)
 # Agent will: 1) Use web.search, 2) Use web.fetch for details, 3) Use files.write
 ```
 
@@ -149,7 +149,7 @@ message = Message(
 )
 thread.add_message(message)
 
-processed_thread, new_messages = await agent.go(thread)
+result = await agent.go(thread)
 ```
 
 ### 3. Context Awareness
@@ -174,19 +174,19 @@ thread = Thread(id="research-session")
 # First query
 message1 = Message(role="user", content="What is FastAPI?")
 thread.add_message(message1)
-processed_thread, _ = await agent.go(thread)
+result = await agent.go(thread)
 
 # Save the thread
-await thread_store.save_thread(processed_thread)
+await thread_store.save_thread(result.thread)
 
 # Follow-up uses context
 message2 = Message(role="user", content="How does it compare to Flask?")
-processed_thread.add_message(message2)
-final_thread, new_messages = await agent.go(processed_thread)
+result.thread.add_message(message2)
+final_result = await agent.go(result.thread)
 # Agent knows we're talking about FastAPI
 ```
 
-## Advanced Features
+## Advanced features
 
 ### Streaming Responses
 
@@ -312,7 +312,7 @@ eval = AgentEval(
 )
 ```
 
-## Best Practices
+## Best practices
 
 <AccordionGroup>
   <Accordion title="1. Name agents descriptively">
@@ -383,7 +383,7 @@ eval = AgentEval(
         message = Message(role="user", content=task)
         thread.add_message(message)
         
-        processed_thread, new_messages = await agent.go(thread)
+        result = await agent.go(thread)
     except ToolError as e:
         print(f"Tool failed: {e}")
         # Retry with different approach
@@ -437,7 +437,7 @@ Key testing features:
 - **Caching**: Use Narrator's thread system to avoid redundant work
 - **Parallel Execution**: Enable `parallel_tool_calls` when tools can run concurrently
 
-## Next Steps
+## Next steps
 
 <CardGroup cols={2}>
   <Card

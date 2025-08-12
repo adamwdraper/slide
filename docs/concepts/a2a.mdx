@@ -1,5 +1,5 @@
 ---
-title: 'Agent-to-Agent (A2A) Protocol'
+title: 'Agent-to-Agent (A2A) protocol'
 description: 'Using A2A to enable multi-agent coordination and delegation across platforms'
 ---
 
@@ -30,7 +30,7 @@ graph LR
     F --> L[Enterprise Services]
 ```
 
-## Quick Start
+## Quick start
 
 ### Delegating to Remote A2A Agents
 
@@ -64,7 +64,7 @@ async def main():
     thread.add_message(message)
     
     # Agent will automatically delegate to appropriate remote agents
-    processed_thread, new_messages = await agent.go(thread)
+    result = await agent.go(thread)
 
 if __name__ == "__main__":
     asyncio.run(main())
@@ -493,7 +493,7 @@ async def research_workflow(topic: str):
     return await coordinator.go(thread)
 ```
 
-## Best Practices
+## Best practices
 
 <Card title="Design Principles" icon="lightbulb">
   - **Specialized Agents**: Create agents with focused, well-defined capabilities
@@ -503,7 +503,7 @@ async def research_workflow(topic: str):
   - **Security**: Always use secure connections and proper authentication
 </Card>
 
-## Next Steps
+## Next steps
 
 <CardGroup cols={2}>
   <Card

@@ -4,7 +4,7 @@ import weave
 from weave import Model, Prompt
 import json
 import types
-from typing import List, Dict, Any, Optional, Union, AsyncGenerator, Tuple, Callable
+from typing import List, Dict, Any, Optional, Union, AsyncGenerator, Tuple, Callable, overload, Literal
 from datetime import datetime, UTC
 from pydantic import Field, PrivateAttr
 from litellm import acompletion
@@ -13,28 +13,18 @@ from litellm import acompletion
 from narrator import Thread, Message, Attachment, ThreadStore, FileStore
 
 from tyler.utils.tool_runner import tool_runner
-from enum import Enum
 from tyler.utils.logging import get_logger
+from tyler.models.execution import (
+    EventType, ExecutionEvent,
+    AgentResult
+)
 import asyncio
 from functools import partial
 
 # Get configured logger
 logger = get_logger(__name__)
 
-class StreamUpdate:
-    """Update from streaming response"""
-    __slots__ = ('type', 'data')
-    
-    class Type(Enum):
-        CONTENT_CHUNK = "content_chunk"      # Partial content from assistant
-        ASSISTANT_MESSAGE = "assistant_message"  # Complete assistant message with tool calls
-        TOOL_MESSAGE = "tool_message"        # Tool execution result
-        COMPLETE = "complete"                # Final thread state and messages
-        ERROR = "error"                      # Error during processing
-        
-    def __init__(self, type: Type, data: Any):
-        self.type = type
-        self.data = data
+
 
 class AgentPrompt(Prompt):
     system_template: str = Field(default="""<agent_overview>
@@ -704,25 +694,87 @@ class Agent(Model):
             await self.thread_store.save(thread)
         return thread, [m for m in new_messages if m.role != "user"]
 
-    @weave.op()
-    async def go(self, thread_or_id: Union[str, Thread], new_messages: Optional[List[Message]] = None) -> Tuple[Thread, List[Message]]:
+    @overload
+    def go(
+        self, 
+        thread_or_id: Union[Thread, str],
+        stream: Literal[False] = False
+    ) -> AgentResult:
+        ...
+    
+    @overload
+    def go(
+        self, 
+        thread_or_id: Union[Thread, str],
+        stream: Literal[True]
+    ) -> AsyncGenerator[ExecutionEvent, None]:
+        ...
+    
+    def go(
+        self, 
+        thread_or_id: Union[Thread, str],
+        stream: bool = False
+    ) -> Union[AgentResult, AsyncGenerator[ExecutionEvent, None]]:
         """
-        Process the next step in the thread by generating a response and handling any tool calls.
-        Uses an iterative approach to handle multiple tool calls.
+        Process the thread with the agent.
+        
+        This method executes the agent on the given thread, handling tool calls,
+        managing conversation flow, and providing detailed execution telemetry.
         
         Args:
-            thread_or_id (Union[str, Thread]): Either a Thread object or thread ID to process
-            new_messages (List[Message], optional): Messages added during this processing round
+            thread_or_id: Thread object or thread ID to process. The thread will be
+                         modified in-place with new messages.
+            stream: If True, returns an async generator yielding ExecutionEvents
+                   as they occur. If False, collects all events and returns an
+                   AgentResult after completion.
             
         Returns:
-            Tuple[Thread, List[Message]]: The processed thread and list of new non-user messages
+            If stream=False:
+                AgentResult containing the updated thread, new messages,
+                final output, and complete execution details.
             
+            If stream=True:
+                Async generator yielding ExecutionEvent objects in real-time.
+                Events include message creation, tool execution, and all
+                intermediate steps.
+        
         Raises:
-            ValueError: If thread_or_id is a string and the thread is not found
+            ValueError: If thread_id is provided but thread is not found
+            Exception: Re-raises any unhandled exceptions during execution,
+                      but execution details are still available in the result
+                      
+        Example:
+            # Non-streaming usage
+            result = await agent.go(thread)
+            print(f"Response: {result.content}")
+            print(f"Tokens used: {result.execution.total_tokens}")
+            
+            # Streaming usage
+            async for event in agent.go(thread, stream=True):
+                if event.type == EventType.MESSAGE_CREATED:
+                    print(f"New message: {event.data['message'].content}")
         """
-        # Initialize new messages if not provided
-        if new_messages is None:
-            new_messages = []
+        if stream:
+            return self._go_stream(thread_or_id)
+        else:
+            return self._go_complete(thread_or_id)
+    
+    @weave.op()
+    async def _go_complete(self, thread_or_id: Union[Thread, str]) -> AgentResult:
+        """Non-streaming implementation that collects all events and returns AgentResult."""
+        # Initialize execution tracking
+        events = []
+        start_time = datetime.now(UTC)
+        new_messages = []
+        
+        # Helper to record events
+        def record_event(event_type: EventType, data: Dict[str, Any], attributes=None):
+            events.append(ExecutionEvent(
+                type=event_type,
+                timestamp=datetime.now(UTC),
+                data=data,
+                attributes=attributes
+            ))
             
         # Reset iteration count at the beginning of each go call
         self._iteration_count = 0
@@ -731,103 +783,19 @@ class Agent(Model):
             
         thread = None
         try:
-            # Get and initialize thread - let ValueError propagate for thread not found
+            # Get thread
             try:
                 thread = await self._get_thread(thread_or_id)
             except ValueError:
                 raise  # Re-raise ValueError for thread not found
             
-            # Check if we've already hit max iterations
-            if self._iteration_count >= self.max_tool_iterations:
-                return await self._handle_max_iterations(thread, new_messages)
+            # Record iteration start
+            record_event(EventType.ITERATION_START, {
+                "iteration_number": 0,
+                "max_iterations": self.max_tool_iterations
+            })
             
-            # Main iteration loop
-            while self._iteration_count < self.max_tool_iterations:
-                try:
-                    # Get completion and process response
-                    response, metrics = await self.step(thread)
-                    
-                    if not response or not hasattr(response, 'choices') or not response.choices:
-                        error_msg = "No response received from chat completion"
-                        logger.error(error_msg)
-                        message = self._create_error_message(error_msg)
-                        thread.add_message(message)
-                        new_messages.append(message)
-                        # Save on error
-                        if self.thread_store:
-                            await self.thread_store.save(thread)
-                        break
-                    
-                    # For non-streaming responses, get content and tool calls directly
-                    assistant_message = response.choices[0].message
-                    pre_tool = assistant_message.content or ""
-                    tool_calls = getattr(assistant_message, 'tool_calls', None)
-                    has_tool_calls = tool_calls is not None and len(tool_calls) > 0
-
-                    # Create and add assistant message for pre-tool content if any
-                    if pre_tool or has_tool_calls:
-                        message = Message(
-                            role="assistant",
-                            content=pre_tool,
-                            tool_calls=self._serialize_tool_calls(tool_calls) if has_tool_calls else None,
-                            source=self._create_assistant_source(include_version=True),
-                            metrics=metrics
-                        )
-                        thread.add_message(message)
-                        new_messages.append(message)
-
-                    # Process tool calls if any (in parallel)
-                    if has_tool_calls:
-                        # Execute all tool calls in parallel
-                        tool_tasks = [
-                            self._handle_tool_execution(tool_call)
-                            for tool_call in tool_calls
-                        ]
-                        
-                        # Gather results (with exception handling)
-                        tool_results = await asyncio.gather(*tool_tasks, return_exceptions=True)
-                        
-                        # Process results sequentially to update thread safely
-                        should_break = False
-                        for i, result in enumerate(tool_results):
-                            tool_call = tool_calls[i]
-                            tool_name = tool_call.function.name if hasattr(tool_call, 'function') else tool_call['function']['name']
-                            
-                            # Process tool result using helper
-                            tool_message, break_iteration = self._process_tool_result(result, tool_call, tool_name)
-                            
-                            # Add message to thread and new_messages
-                            thread.add_message(tool_message)
-                            new_messages.append(tool_message)
-                            
-                            if break_iteration:
-                                should_break = True
-                                
-                        # Save after processing all tool calls but before next completion
-                        if self.thread_store:
-                            await self.thread_store.save(thread)
-                            
-                        if should_break:
-                            break
-                    
-                    # If no tool calls, we are done
-                    if not has_tool_calls:
-                        break
-                        
-                    self._iteration_count += 1
-
-                except Exception as e:
-                    error_msg = f"Error during chat completion: {str(e)}"
-                    logger.error(error_msg)
-                    message = self._create_error_message(error_msg)
-                    thread.add_message(message)
-                    new_messages.append(message)
-                    # Save on error
-                    if self.thread_store:
-                        await self.thread_store.save(thread)
-                    break
-                
-            # Handle max iterations if needed
+            # Check if we've already hit max iterations
             if self._iteration_count >= self.max_tool_iterations:
                 message = Message(
                     role="assistant",
@@ -836,12 +804,210 @@ class Agent(Model):
                 )
                 thread.add_message(message)
                 new_messages.append(message)
+                record_event(EventType.MESSAGE_CREATED, {"message": message})
+                record_event(EventType.ITERATION_LIMIT, {"iterations_used": self._iteration_count})
+                if self.thread_store:
+                    await self.thread_store.save(thread)
+            
+            else:
+                # Main iteration loop
+                while self._iteration_count < self.max_tool_iterations:
+                    try:
+                        # Record LLM request
+                        record_event(EventType.LLM_REQUEST, {
+                            "message_count": len(thread.messages),
+                            "model": self.model_name,
+                            "temperature": self.temperature
+                        })
+                        
+                        # Get completion
+                        response, metrics = await self.step(thread)
+                        
+                        if not response or not hasattr(response, 'choices') or not response.choices:
+                            error_msg = "No response received from chat completion"
+                            logger.error(error_msg)
+                            record_event(EventType.EXECUTION_ERROR, {
+                                "error_type": "NoResponse",
+                                "message": error_msg
+                            })
+                            message = self._create_error_message(error_msg)
+                            thread.add_message(message)
+                            new_messages.append(message)
+                            record_event(EventType.MESSAGE_CREATED, {"message": message})
+                            if self.thread_store:
+                                await self.thread_store.save(thread)
+                            break
+                        
+                        # Process response
+                        assistant_message = response.choices[0].message
+                        content = assistant_message.content or ""
+                        tool_calls = getattr(assistant_message, 'tool_calls', None)
+                        has_tool_calls = tool_calls is not None and len(tool_calls) > 0
+
+                        # Record LLM response
+                        record_event(EventType.LLM_RESPONSE, {
+                            "content": content,
+                            "tool_calls": self._serialize_tool_calls(tool_calls) if has_tool_calls else None,
+                            "tokens": metrics.get("usage", {}),
+                            "latency_ms": metrics.get("timing", {}).get("latency", 0)
+                        })
+                        
+                        # Create assistant message
+                        if content or has_tool_calls:
+                            message = Message(
+                                role="assistant",
+                                content=content,
+                                tool_calls=self._serialize_tool_calls(tool_calls) if has_tool_calls else None,
+                                source=self._create_assistant_source(include_version=True),
+                                metrics=metrics
+                            )
+                            thread.add_message(message)
+                            new_messages.append(message)
+                            record_event(EventType.MESSAGE_CREATED, {"message": message})
+
+                        # Process tool calls
+                        should_break = False
+                        if has_tool_calls:
+                            # Record tool selections
+                            for tool_call in tool_calls:
+                                tool_name = tool_call.function.name if hasattr(tool_call, 'function') else tool_call['function']['name']
+                                tool_id = tool_call.id if hasattr(tool_call, 'id') else tool_call.get('id')
+                                args = tool_call.function.arguments if hasattr(tool_call, 'function') else tool_call['function']['arguments']
+                                
+                                # Parse arguments
+                                try:
+                                    parsed_args = json.loads(args) if isinstance(args, str) else args
+                                except (json.JSONDecodeError, TypeError, AttributeError):
+                                    parsed_args = {}
+                                
+                                record_event(EventType.TOOL_SELECTED, {
+                                    "tool_name": tool_name,
+                                    "arguments": parsed_args,
+                                    "tool_call_id": tool_id
+                                })
+                            
+                            # Execute tools in parallel with timing
+                            tool_start_times = {}
+                            tool_tasks = []
+                            
+                            for tool_call in tool_calls:
+                                tool_id = tool_call.id if hasattr(tool_call, 'id') else tool_call.get('id')
+                                tool_start_times[tool_id] = datetime.now(UTC)
+                                tool_tasks.append(self._handle_tool_execution(tool_call))
+                            
+                            tool_results = await asyncio.gather(*tool_tasks, return_exceptions=True)
+                            
+                            # Process results
+                            should_break = False
+                            for i, result in enumerate(tool_results):
+                                tool_call = tool_calls[i]
+                                tool_name = tool_call.function.name if hasattr(tool_call, 'function') else tool_call['function']['name']
+                                tool_id = tool_call.id if hasattr(tool_call, 'id') else tool_call.get('id')
+                                
+                                # Calculate duration
+                                tool_end_time = datetime.now(UTC)
+                                tool_duration_ms = (tool_end_time - tool_start_times[tool_id]).total_seconds() * 1000
+                                
+                                # Record tool result or error
+                                if isinstance(result, Exception):
+                                    record_event(EventType.TOOL_ERROR, {
+                                        "tool_name": tool_name,
+                                        "error": str(result),
+                                        "tool_call_id": tool_id
+                                    })
+                                else:
+                                    # Extract result content
+                                    if isinstance(result, tuple) and len(result) >= 1:
+                                        result_content = str(result[0])
+                                    else:
+                                        result_content = str(result)
+                                    
+                                    record_event(EventType.TOOL_RESULT, {
+                                        "tool_name": tool_name,
+                                        "result": result_content,
+                                        "tool_call_id": tool_id,
+                                        "duration_ms": tool_duration_ms
+                                    })
+                                
+                                # Process tool result into message
+                                tool_message, break_iteration = self._process_tool_result(result, tool_call, tool_name)
+                                thread.add_message(tool_message)
+                                new_messages.append(tool_message)
+                                record_event(EventType.MESSAGE_CREATED, {"message": tool_message})
+                                
+                                if break_iteration:
+                                    should_break = True
+                                
+                        # Save after processing all tool calls but before next completion
+                        if self.thread_store:
+                            await self.thread_store.save(thread)
+                            
+                        if should_break:
+                            break
+                    
+                        # If no tool calls, we are done
+                        if not has_tool_calls:
+                            break
+                        
+                        self._iteration_count += 1
+
+                    except Exception as e:
+                        error_msg = f"Error during chat completion: {str(e)}"
+                        logger.error(error_msg)
+                        record_event(EventType.EXECUTION_ERROR, {
+                            "error_type": type(e).__name__,
+                            "message": error_msg,
+                            "traceback": None  # Could add traceback if needed
+                        })
+                        message = self._create_error_message(error_msg)
+                        thread.add_message(message)
+                        new_messages.append(message)
+                        record_event(EventType.MESSAGE_CREATED, {"message": message})
+                        if self.thread_store:
+                            await self.thread_store.save(thread)
+                        break
                 
-            # Final save at end of processing
+                # Check for max iterations
+                if self._iteration_count >= self.max_tool_iterations:
+                    message = Message(
+                        role="assistant",
+                        content="Maximum tool iteration count reached. Stopping further tool calls.",
+                        source=self._create_assistant_source(include_version=False)
+                    )
+                    thread.add_message(message)
+                    new_messages.append(message)
+                    record_event(EventType.MESSAGE_CREATED, {"message": message})
+                    record_event(EventType.ITERATION_LIMIT, {"iterations_used": self._iteration_count})
+                
+            # Final save
             if self.thread_store:
                 await self.thread_store.save(thread)
                 
-            return thread, [m for m in new_messages if m.role != "user"]
+            # Record completion
+            end_time = datetime.now(UTC)
+            total_tokens = sum(
+                event.data.get("tokens", {}).get("total_tokens", 0)
+                for event in events
+                if event.type == EventType.LLM_RESPONSE
+            )
+            
+            record_event(EventType.EXECUTION_COMPLETE, {
+                "duration_ms": (end_time - start_time).total_seconds() * 1000,
+                "total_tokens": total_tokens
+            })
+            
+            # Extract final output
+            output = None
+            for msg in reversed(new_messages):
+                if msg.role == "assistant" and msg.content:
+                    output = msg.content
+                    break
+            
+            return AgentResult(
+                thread=thread,
+                new_messages=new_messages,
+                content=output
+            )
 
         except ValueError:
             # Re-raise ValueError for thread not found
@@ -859,34 +1025,54 @@ class Agent(Model):
                 thread = Thread()
                 
             thread.add_message(message)
-            # Save on error
+            new_messages.append(message)
+            
+            # Still try to return a result with error information
+            if events is None:
+                events = []
+            record_event(EventType.EXECUTION_ERROR, {
+                "error_type": type(e).__name__,
+                "message": error_msg
+            })
+            
             if self.thread_store:
                 await self.thread_store.save(thread)
-            return thread, [message]
+            
+            # Build result even with error
+            end_time = datetime.now(UTC)
+            
+            return AgentResult(
+                thread=thread,
+                new_messages=new_messages,
+                content=None
+            )
 
     @weave.op()
-    async def go_stream(self, thread: Thread) -> AsyncGenerator[StreamUpdate, None]:
-        """Process the thread with streaming updates.
-        
-        Yields:
-            StreamUpdate objects containing:
-            - Content chunks as they arrive
-            - Complete assistant messages with tool calls
-            - Tool execution results
-            - Final thread state
-            - Any errors that occur
-        """
+    async def _go_stream(self, thread_or_id: Union[Thread, str]) -> AsyncGenerator[ExecutionEvent, None]:
+        """Streaming implementation that yields ExecutionEvent objects in real-time."""
         try:
+            # Get thread
+            thread = await self._get_thread(thread_or_id)
+            
+            # Initialize tracking
             self._iteration_count = 0
-            # Clear tool attributes cache for fresh request
             self._tool_attributes_cache.clear()
-            current_content = []  # Accumulate content chunks
-            current_tool_calls = []  # Accumulate tool calls
-            current_tool_call = None  # Track current tool call being built
-            api_start_time = None  # Track API call start time
-            current_weave_call = None  # Track current weave call
-            new_messages = []  # Track new messages for tool processing
-
+            current_content = []
+            current_tool_calls = []
+            current_tool_call = None
+            start_time = datetime.now(UTC)
+            new_messages = []
+            
+            # Yield iteration start
+            yield ExecutionEvent(
+                type=EventType.ITERATION_START,
+                timestamp=datetime.now(UTC),
+                data={
+                    "iteration_number": 0,
+                    "max_iterations": self.max_tool_iterations
+                }
+            )
+            
             # Check if we've already hit max iterations
             if self._iteration_count >= self.max_tool_iterations:
                 message = Message(
@@ -895,53 +1081,84 @@ class Agent(Model):
                     source=self._create_assistant_source(include_version=False)
                 )
                 thread.add_message(message)
-                yield StreamUpdate(StreamUpdate.Type.ASSISTANT_MESSAGE, message)
+                new_messages.append(message)
+                yield ExecutionEvent(
+                    type=EventType.MESSAGE_CREATED,
+                    timestamp=datetime.now(UTC),
+                    data={"message": message}
+                )
+                yield ExecutionEvent(
+                    type=EventType.ITERATION_LIMIT,
+                    timestamp=datetime.now(UTC),
+                    data={"iterations_used": self._iteration_count}
+                )
                 if self.thread_store:
                     await self.thread_store.save(thread)
                 return
-
+            
+            # Main iteration loop
             while self._iteration_count < self.max_tool_iterations:
                 try:
-                    # Get streaming response using step
+                    # Yield LLM request event
+                    yield ExecutionEvent(
+                        type=EventType.LLM_REQUEST,
+                        timestamp=datetime.now(UTC),
+                        data={
+                            "message_count": len(thread.messages),
+                            "model": self.model_name,
+                            "temperature": self.temperature
+                        }
+                    )
+                    
+                    # Get streaming response
                     streaming_response, metrics = await self.step(thread, stream=True)
                     
                     if not streaming_response:
                         error_msg = "No response received from chat completion"
                         logger.error(error_msg)
+                        yield ExecutionEvent(
+                            type=EventType.EXECUTION_ERROR,
+                            timestamp=datetime.now(UTC),
+                            data={
+                                "error_type": "NoResponse",
+                                "message": error_msg
+                            }
+                        )
                         message = self._create_error_message(error_msg)
                         thread.add_message(message)
                         new_messages.append(message)
-                        yield StreamUpdate(StreamUpdate.Type.ERROR, error_msg)
-                        # Save on error like in go
+                        yield ExecutionEvent(
+                            type=EventType.MESSAGE_CREATED,
+                            timestamp=datetime.now(UTC),
+                            data={"message": message}
+                        )
                         if self.thread_store:
                             await self.thread_store.save(thread)
                         break
-
-                    # Process streaming response
+                    
+                    # Process streaming chunks
+                    current_content = []
+                    current_tool_calls = []
+                    current_tool_call = None
+                    
                     async for chunk in streaming_response:
                         if not hasattr(chunk, 'choices') or not chunk.choices:
                             continue
-
+                        
                         delta = chunk.choices[0].delta
                         
                         # Handle content chunks
                         if hasattr(delta, 'content') and delta.content is not None:
                             current_content.append(delta.content)
-                            yield StreamUpdate(StreamUpdate.Type.CONTENT_CHUNK, delta.content)
-                            
-                        # Gather tool calls (don't yield yet)
+                            yield ExecutionEvent(
+                                type=EventType.LLM_STREAM_CHUNK,
+                                timestamp=datetime.now(UTC),
+                                data={"content_chunk": delta.content}
+                            )
+                        
+                        # Process tool calls (same logic as legacy streaming)
                         if hasattr(delta, 'tool_calls') and delta.tool_calls:
-                            logger.debug(f"Tool call chunk: {delta.tool_calls}")
                             for tool_call in delta.tool_calls:
-                                # Log the tool call structure
-                                logger.debug(f"Processing tool call: {tool_call}")
-                                if isinstance(tool_call, dict):
-                                    logger.debug(f"Dict tool call: {tool_call}")
-                                else:
-                                    logger.debug(f"Object tool call - has id: {hasattr(tool_call, 'id')}, has function: {hasattr(tool_call, 'function')}")
-                                    if hasattr(tool_call, 'function'):
-                                        logger.debug(f"Function attrs - has name: {hasattr(tool_call.function, 'name')}, has arguments: {hasattr(tool_call.function, 'arguments')}")
-
                                 # Handle both dict and object formats
                                 if isinstance(tool_call, dict):
                                     if 'id' in tool_call and tool_call['id']:
@@ -990,58 +1207,63 @@ class Agent(Model):
                                             else:
                                                 # Append to existing arguments, handling JSON chunks
                                                 current_tool_call['function']['arguments'] = current_tool_call['function']['arguments'].rstrip('}') + tool_call.function.arguments.lstrip('{')
-
-                                # Validate tool call is complete before proceeding
-                                if current_tool_call:
-                                    logger.debug(f"Current tool call state: {current_tool_call}")
-                                    if not current_tool_call['id']:
-                                        logger.warning("Tool call missing ID")
-                                    if not current_tool_call['function']['name']:
-                                        logger.warning("Tool call missing function name")
-
-                            logger.debug(f"Current tool calls after processing: {current_tool_calls}")
-
-                    # Create and add assistant message with complete content and tool calls
+                    
+                    # After streaming completes, process the accumulated data
                     content = ''.join(current_content)
-                    # Add usage metrics from the final chunk if available
+                    
+                    # Add usage metrics if available
                     if hasattr(chunk, 'usage'):
                         metrics["usage"] = {
                             "completion_tokens": getattr(chunk.usage, "completion_tokens", 0),
                             "prompt_tokens": getattr(chunk.usage, "prompt_tokens", 0),
                             "total_tokens": getattr(chunk.usage, "total_tokens", 0)
                         }
+                    
+                    yield ExecutionEvent(
+                        type=EventType.LLM_RESPONSE,
+                        timestamp=datetime.now(UTC),
+                        data={
+                            "content": content,
+                            "tool_calls": current_tool_calls if current_tool_calls else None,
+                            "tokens": metrics.get("usage", {}),
+                            "latency_ms": metrics.get("timing", {}).get("latency", 0)
+                        }
+                    )
+                    
+                    # Create assistant message
                     assistant_message = Message(
                         role="assistant",
                         content=content,
                         tool_calls=current_tool_calls if current_tool_calls else None,
                         source=self._create_assistant_source(include_version=True),
-                        metrics=metrics  # metrics from step() already includes model name
+                        metrics=metrics
                     )
                     thread.add_message(assistant_message)
                     new_messages.append(assistant_message)
-                    yield StreamUpdate(StreamUpdate.Type.ASSISTANT_MESSAGE, assistant_message)
-
+                    yield ExecutionEvent(
+                        type=EventType.MESSAGE_CREATED,
+                        timestamp=datetime.now(UTC),
+                        data={"message": assistant_message}
+                    )
+                    
                     # If no tool calls, we're done
                     if not current_tool_calls:
-                        # Save state like in go
                         if self.thread_store:
                             await self.thread_store.save(thread)
                         break
-
-                    # Execute tools in parallel and yield results
+                    
+                    # Process tool calls
                     try:
-                        # Prepare all tool calls for parallel execution
-                        tool_tasks = []
+                        # Yield tool selected events
                         for tool_call in current_tool_calls:
-                            # Ensure we have valid JSON for arguments
+                            tool_name = tool_call['function']['name']
                             args = tool_call['function']['arguments']
-                            if not args.strip():
-                                args = '{}'
-                            # Parse arguments to ensure valid JSON
+                            
+                            # Parse arguments
                             try:
-                                parsed_args = json.loads(args)
-                            except json.JSONDecodeError as json_err:
-                                # If invalid JSON, try to fix common streaming artifacts
+                                parsed_args = json.loads(args) if args.strip() else {}
+                            except json.JSONDecodeError:
+                                # Try to fix JSON
                                 try:
                                     args = args.strip().rstrip(',').rstrip('"')
                                     if not args.endswith('}'):
@@ -1049,136 +1271,171 @@ class Agent(Model):
                                     if not args.startswith('{'):
                                         args = '{' + args
                                     parsed_args = json.loads(args)
-                                except json.JSONDecodeError:
-                                    # If fix attempt fails, create error message with expected format and raise
-                                    error_msg = f"Tool execution failed: Invalid JSON in tool arguments: {json_err}"
-                                    yield StreamUpdate(StreamUpdate.Type.ERROR, error_msg)
-                                    # Save on error
-                                    if self.thread_store:
-                                        await self.thread_store.save(thread)
-                                    # Break out of the inner loop and continue to the next iteration
-                                    raise ValueError(error_msg)
-
+                                except (json.JSONDecodeError, ValueError):
+                                    parsed_args = {}
+                            
                             tool_call['function']['arguments'] = json.dumps(parsed_args)
                             
-                            # Add to tasks
+                            yield ExecutionEvent(
+                                type=EventType.TOOL_SELECTED,
+                                timestamp=datetime.now(UTC),
+                                data={
+                                    "tool_name": tool_name,
+                                    "arguments": parsed_args,
+                                    "tool_call_id": tool_call['id']
+                                }
+                            )
+                        
+                        # Execute tools in parallel with timing
+                        tool_start_times = {}
+                        tool_tasks = []
+                        
+                        for tool_call in current_tool_calls:
+                            tool_id = tool_call['id']
+                            tool_start_times[tool_id] = datetime.now(UTC)
                             tool_tasks.append(self._handle_tool_execution(tool_call))
-                            
-                        # Execute all tool calls in parallel
+                        
                         tool_results = await asyncio.gather(*tool_tasks, return_exceptions=True)
                         
-                        # Process results sequentially to update thread safely
+                        # Process results
                         should_break = False
                         for i, result in enumerate(tool_results):
                             tool_call = current_tool_calls[i]
                             tool_name = tool_call['function']['name']
+                            tool_id = tool_call['id']
                             
-                            # Process tool result using helper
+                            # Calculate duration
+                            tool_end_time = datetime.now(UTC)
+                            tool_duration_ms = (tool_end_time - tool_start_times[tool_id]).total_seconds() * 1000
+                            
+                            # Yield result or error event
+                            if isinstance(result, Exception):
+                                yield ExecutionEvent(
+                                    type=EventType.TOOL_ERROR,
+                                    timestamp=datetime.now(UTC),
+                                    data={
+                                        "tool_name": tool_name,
+                                        "error": str(result),
+                                        "tool_call_id": tool_id
+                                    }
+                                )
+                            else:
+                                # Extract result content
+                                if isinstance(result, tuple) and len(result) >= 1:
+                                    result_content = str(result[0])
+                                else:
+                                    result_content = str(result)
+                                
+                                yield ExecutionEvent(
+                                    type=EventType.TOOL_RESULT,
+                                    timestamp=datetime.now(UTC),
+                                    data={
+                                        "tool_name": tool_name,
+                                        "result": result_content,
+                                        "tool_call_id": tool_id,
+                                        "duration_ms": tool_duration_ms
+                                    }
+                                )
+                            
+                            # Process tool result into message
                             tool_message, break_iteration = self._process_tool_result(result, tool_call, tool_name)
-                            
-                            # Add message to thread and yield update
                             thread.add_message(tool_message)
                             new_messages.append(tool_message)
-                            
-                            # Yield appropriate update based on message type
-                            if isinstance(result, Exception):
-                                yield StreamUpdate(StreamUpdate.Type.ERROR, f"Tool execution failed: {str(result)}")
-                            else:
-                                yield StreamUpdate(StreamUpdate.Type.TOOL_MESSAGE, tool_message)
+                            yield ExecutionEvent(
+                                type=EventType.MESSAGE_CREATED,
+                                timestamp=datetime.now(UTC),
+                                data={"message": tool_message}
+                            )
                             
                             if break_iteration:
                                 should_break = True
                         
-                        # Save after processing all tool calls but before next completion
+                        # Save after tool calls
                         if self.thread_store:
                             await self.thread_store.save(thread)
-                            
+                        
                         if should_break:
                             break
                     
                     except Exception as e:
-                        tool_name_for_error = "unknown_tool"
-                        if current_tool_call and 'function' in current_tool_call and 'name' in current_tool_call['function']:
-                            tool_name_for_error = current_tool_call['function']['name']
                         error_msg = f"Tool execution failed: {str(e)}"
-                        error_message = Message(
-                            role="tool",
-                            name=tool_name_for_error,
-                            content=error_msg,
-                            tool_call_id=current_tool_call.get('id') if current_tool_call else None,
-                            source=self._create_tool_source(tool_name_for_error),
-                            metrics={
-                                "timing": {
-                                    "started_at": datetime.now(UTC).isoformat(),
-                                    "ended_at": datetime.now(UTC).isoformat(),
-                                    "latency": 0
-                                }
+                        yield ExecutionEvent(
+                            type=EventType.EXECUTION_ERROR,
+                            timestamp=datetime.now(UTC),
+                            data={
+                                "error_type": type(e).__name__,
+                                "message": error_msg
                             }
                         )
-                        thread.add_message(error_message)
-                        yield StreamUpdate(StreamUpdate.Type.ERROR, error_msg)
-                        # Save on error like in go
+                        message = self._create_error_message(error_msg)
+                        thread.add_message(message)
+                        yield ExecutionEvent(
+                            type=EventType.MESSAGE_CREATED,
+                            timestamp=datetime.now(UTC),
+                            data={"message": message}
+                        )
                         if self.thread_store:
                             await self.thread_store.save(thread)
                         break
-
-                    # Save after processing all tool calls but before next completion
-                    if self.thread_store:
-                        await self.thread_store.save(thread)
-                            
-                    if should_break:
-                        break
-
+                    
                     # Reset for next iteration
                     current_content = []
                     current_tool_calls = []
                     current_tool_call = None
-                    api_start_time = None
                     self._iteration_count += 1
-
+                    
                 except Exception as e:
                     error_msg = f"Completion failed: {str(e)}"
-                    error_message = self._create_error_message(error_msg)
-                    thread.add_message(error_message)
-                    new_messages.append(error_message)
-                    yield StreamUpdate(StreamUpdate.Type.ERROR, error_msg)
-                    # Save on error like in go
+                    yield ExecutionEvent(
+                        type=EventType.EXECUTION_ERROR,
+                        timestamp=datetime.now(UTC),
+                        data={
+                            "error_type": type(e).__name__,
+                            "message": error_msg
+                        }
+                    )
+                    message = self._create_error_message(error_msg)
+                    thread.add_message(message)
+                    new_messages.append(message)
+                    yield ExecutionEvent(
+                        type=EventType.MESSAGE_CREATED,
+                        timestamp=datetime.now(UTC),
+                        data={"message": message}
+                    )
                     if self.thread_store:
                         await self.thread_store.save(thread)
                     break
-
-            # Handle max iterations
-            if self._iteration_count >= self.max_tool_iterations:
-                message = Message(
-                    role="assistant",
-                    content="Maximum tool iteration count reached. Stopping further tool calls.",
-                    source=self._create_assistant_source(include_version=False)
-                )
-                thread.add_message(message)
-                new_messages.append(message)
-                yield StreamUpdate(StreamUpdate.Type.ASSISTANT_MESSAGE, message)
-
-            # Save final state if using thread store
-            if self.thread_store:
-                await self.thread_store.save(thread)
-
-            # Yield final complete update
-            final_new_messages = [m for m in thread.messages if m.role != "user"]
-            yield StreamUpdate(StreamUpdate.Type.COMPLETE, (thread, final_new_messages))
-
+            
+            # Calculate total tokens
+            total_tokens = sum(
+                msg.metrics.get("usage", {}).get("total_tokens", 0)
+                for msg in new_messages
+                if msg.metrics and "usage" in msg.metrics
+            )
+            
+            # Yield completion event
+            yield ExecutionEvent(
+                type=EventType.EXECUTION_COMPLETE,
+                timestamp=datetime.now(UTC),
+                data={
+                    "duration_ms": (datetime.now(UTC) - start_time).total_seconds() * 1000,
+                    "total_tokens": total_tokens
+                }
+            )
+            
         except Exception as e:
             error_msg = f"Stream processing failed: {str(e)}"
-            error_message = self._create_error_message(error_msg)
-            thread.add_message(error_message)
-            yield StreamUpdate(StreamUpdate.Type.ERROR, error_msg)
-            # Save on error like in go
+            yield ExecutionEvent(
+                type=EventType.EXECUTION_ERROR,
+                timestamp=datetime.now(UTC),
+                data={
+                    "error_type": type(e).__name__,
+                    "message": error_msg
+                }
+            )
             if self.thread_store:
                 await self.thread_store.save(thread)
-            raise  # Re-raise to ensure error is properly propagated
-
-        finally:
-            # Finally block intentionally left empty
-            pass 
+            raise
 
     def _create_tool_source(self, tool_name: str) -> Dict:
         """Creates a standardized source entity dict for tool messages."""

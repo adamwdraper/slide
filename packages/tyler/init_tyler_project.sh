@@ -28,9 +28,8 @@ uv add --dev --editable "$TYLER_SOURCE_DIR"
 
 # Copy example files directly to root
 echo "Copying example files..."
-cp "$TYLER_SOURCE_DIR/examples/basic.py" ./
-cp "$TYLER_SOURCE_DIR/examples/database_storage.py" ./
-cp "$TYLER_SOURCE_DIR/examples/memory_storage.py" ./
+cp "$TYLER_SOURCE_DIR/examples/002_basic.py" ./002_basic.py
+cp "$TYLER_SOURCE_DIR/examples/005_thread_persistence.py" ./005_thread_persistence.py
 
 # Create .env file
 echo "Creating .env file..."
@@ -43,6 +42,5 @@ echo "Project initialization complete!"
 echo "Next steps:"
 echo "1. Edit .env file with your API keys"
 echo "2. Run examples with:"
-echo "   uv run python basic.py"
-echo "   uv run python memory_storage.py"
-echo "   uv run python database_storage.py" 
+echo "   uv run python 002_basic.py"
+echo "   uv run python 005_thread_persistence.py" 

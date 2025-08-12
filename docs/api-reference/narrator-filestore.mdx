@@ -1,0 +1,377 @@
+---
+title: 'FileStore'
+description: 'File storage system with validation, processing, and retrieval'
+---
+
+## Overview
+
+The `FileStore` class provides secure file storage with automatic validation, MIME type detection, and configurable limits. It's designed to handle attachments and files in conversational AI applications.
+
+## Creating a FileStore
+
+### Recommended: Factory Method
+
+```python
+from narrator import FileStore
+
+# Default configuration
+store = await FileStore.create()
+
+# Custom directory
+store = await FileStore.create("/path/to/files")
+
+# Full configuration
+store = await FileStore.create(
+    base_path="/var/app/files",
+    max_file_size=100*1024*1024,  # 100MB
+    max_storage_size=10*1024*1024*1024,  # 10GB
+    allowed_mime_types={"image/jpeg", "image/png", "application/pdf"}
+)
+```
+
+The factory method validates storage access immediately, ensuring the directory is writable.
+
+### Direct Constructor
+
+```python
+# Creates store without validation
+store = FileStore("/path/to/files")
+
+# Validation happens on first use
+file_id = await store.save(content, "file.pdf")  # Validates here
+```
+
+## Configuration Options
+
+<ParamField path="base_path" type="string" default="./narrator_files">
+  Base directory for file storage
+</ParamField>
+
+<ParamField path="max_file_size" type="int" default="52428800">
+  Maximum file size in bytes (default: 50MB)
+</ParamField>
+
+<ParamField path="max_storage_size" type="int" default="5368709120">
+  Maximum total storage in bytes (default: 5GB)
+</ParamField>
+
+<ParamField path="allowed_mime_types" type="Set[str]" default="common types">
+  Set of allowed MIME types. Default includes documents, images, archives, and audio formats.
+</ParamField>
+
+## Default Allowed File Types
+
+```python
+# Documents
+'application/pdf'
+'application/msword'
+'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+'text/plain'
+'text/csv'
+'application/json'
+
+# Images
+'image/jpeg'
+'image/png'
+'image/gif'
+'image/webp'
+'image/svg+xml'
+
+# Archives
+'application/zip'
+'application/x-tar'
+'application/gzip'
+
+# Audio
+'audio/mpeg'
+'audio/mp3'
+'audio/wav'
+'audio/ogg'
+# ... and more
+```
+
+## Saving Files
+
+```python
+# Save from bytes
+file_info = await store.save(
+    content=pdf_bytes,
+    filename="report.pdf",
+    mime_type="application/pdf"  # Optional, auto-detected if not provided
+)
+
+print(f"File ID: {file_info['id']}")
+print(f"Stored at: {file_info['storage_path']}")
+print(f"Size: {file_info['size']} bytes")
+
+# Save from base64
+import base64
+encoded = base64.b64encode(image_bytes).decode()
+file_info = await store.save(
+    content=encoded,
+    filename="photo.jpg"
+)
+
+# Save with metadata
+file_info = await store.save(
+    content=data,
+    filename="document.docx",
+    metadata={
+        "author": "John Doe",
+        "department": "Sales",
+        "version": "1.2"
+    }
+)
+```
+
+## Retrieving Files
+
+```python
+# Get file content
+file_id = "abc123..."
+storage_path = "2024/01/15/abc123_report.pdf"
+
+content = await store.get(file_id, storage_path)
+# Returns bytes
+
+# Get file URL for web access
+file_url = FileStore.get_file_url(storage_path)
+# Returns: "/files/2024/01/15/abc123_report.pdf"
+
+# Get file metadata
+metadata = await store.get_metadata(file_id, storage_path)
+print(f"Filename: {metadata['filename']}")
+print(f"Size: {metadata['size']}")
+print(f"MIME type: {metadata['mime_type']}")
+print(f"Created: {metadata['created_at']}")
+```
+
+## Deleting Files
+
+```python
+# Delete a file
+deleted = await store.delete(file_id, storage_path)
+print(f"Deleted: {deleted}")
+
+# Delete all files (careful!)
+await store.delete_all()
+```
+
+## Storage Management
+
+```python
+# Check storage usage
+current_size = await store.get_storage_size()
+print(f"Using {current_size / 1024 / 1024:.2f} MB")
+
+# List all files
+files = await store.list_files()
+for file_info in files:
+    print(f"{file_info['filename']}: {file_info['size']} bytes")
+
+# Get file statistics
+stats = await store.get_stats()
+print(f"Total files: {stats['total_files']}")
+print(f"Total size: {stats['total_size_mb']:.2f} MB")
+print(f"Average size: {stats['average_size_mb']:.2f} MB")
+print(f"Storage used: {stats['storage_percentage']:.1f}%")
+
+# File type breakdown
+for mime_type, count in stats['mime_type_counts'].items():
+    print(f"{mime_type}: {count} files")
+```
+
+## Error handling
+
+FileStore includes specific exceptions for different error cases:
+
+```python
+from narrator.storage.file_store import (
+    FileTooLargeError,
+    UnsupportedFileTypeError,
+    StorageFullError,
+    FileNotFoundError
+)
+
+try:
+    # Save a large file
+    await store.save(large_content, "huge.zip")
+except FileTooLargeError as e:
+    print(f"File too large: {e}")
+
+try:
+    # Save unsupported type
+    await store.save(exe_content, "app.exe")
+except UnsupportedFileTypeError as e:
+    print(f"File type not allowed: {e}")
+
+try:
+    # Storage limit exceeded
+    await store.save(content, "file.pdf")
+except StorageFullError as e:
+    print(f"Storage full: {e}")
+
+try:
+    # Retrieve non-existent file
+    await store.get("bad-id", "bad-path")
+except FileNotFoundError as e:
+    print(f"File not found: {e}")
+```
+
+## Integration with Attachments
+
+FileStore is designed to work with the Attachment class:
+
+```python
+from narrator import Attachment, FileStore
+
+# Create store
+store = await FileStore.create("./uploads")
+
+# Process attachment
+attachment = Attachment(
+    filename="presentation.pdf",
+    content=pdf_bytes
+)
+
+# Store the attachment
+await attachment.process_and_store(store)
+
+# Attachment now has storage info
+print(f"Stored at: {attachment.storage_path}")
+print(f"File ID: {attachment.file_id}")
+print(f"URL: {attachment.attributes.get('url')}")
+
+# Later: retrieve content
+content = await attachment.get_content_bytes(file_store=store)
+```
+
+## File Organization
+
+Files are organized by date for easy management:
+
+```
+narrator_files/
+├── 2024/
+│   ├── 01/
+│   │   ├── 15/
+│   │   │   ├── abc123_report.pdf
+│   │   │   ├── def456_image.jpg
+│   │   │   └── metadata/
+│   │   │       ├── abc123.json
+│   │   │       └── def456.json
+```
+
+## Example: Document Management System
+
+```python
+from narrator import FileStore
+import asyncio
+
+class DocumentManager:
+    def __init__(self, store: FileStore):
+        self.store = store
+    
+    async def upload_document(self, content: bytes, filename: str, 
+                            department: str, doc_type: str):
+        """Upload a document with metadata"""
+        try:
+            file_info = await self.store.save(
+                content=content,
+                filename=filename,
+                metadata={
+                    "department": department,
+                    "doc_type": doc_type,
+                    "uploaded_by": "current_user",
+                    "upload_time": datetime.now().isoformat()
+                }
+            )
+            return {
+                "success": True,
+                "file_id": file_info["id"],
+                "url": FileStore.get_file_url(file_info["storage_path"])
+            }
+        except FileTooLargeError:
+            return {"success": False, "error": "File exceeds size limit"}
+        except UnsupportedFileTypeError:
+            return {"success": False, "error": "File type not allowed"}
+    
+    async def get_department_documents(self, department: str):
+        """Get all documents for a department"""
+        all_files = await self.store.list_files()
+        dept_files = []
+        
+        for file_info in all_files:
+            metadata = await self.store.get_metadata(
+                file_info["id"], 
+                file_info["storage_path"]
+            )
+            if metadata.get("metadata", {}).get("department") == department:
+                dept_files.append({
+                    "filename": metadata["filename"],
+                    "size": metadata["size"],
+                    "uploaded": metadata["created_at"],
+                    "type": metadata.get("metadata", {}).get("doc_type"),
+                    "url": FileStore.get_file_url(file_info["storage_path"])
+                })
+        
+        return dept_files
+    
+    async def cleanup_old_files(self, days: int = 30):
+        """Remove files older than specified days"""
+        cutoff = datetime.now() - timedelta(days=days)
+        all_files = await self.store.list_files()
+        deleted = 0
+        
+        for file_info in all_files:
+            metadata = await self.store.get_metadata(
+                file_info["id"],
+                file_info["storage_path"]
+            )
+            if metadata["created_at"] < cutoff:
+                await self.store.delete(
+                    file_info["id"],
+                    file_info["storage_path"]
+                )
+                deleted += 1
+        
+        return deleted
+
+# Usage
+store = await FileStore.create(
+    base_path="/var/documents",
+    max_file_size=25*1024*1024,  # 25MB
+    max_storage_size=100*1024*1024*1024  # 100GB
+)
+
+doc_manager = DocumentManager(store)
+
+# Upload a document
+result = await doc_manager.upload_document(
+    content=pdf_bytes,
+    filename="Q4_Report.pdf",
+    department="Finance",
+    doc_type="quarterly_report"
+)
+
+# Get department documents
+finance_docs = await doc_manager.get_department_documents("Finance")
+for doc in finance_docs:
+    print(f"{doc['filename']} - {doc['type']} - {doc['url']}")
+
+# Storage maintenance
+stats = await store.get_stats()
+if stats["storage_percentage"] > 80:
+    deleted = await doc_manager.cleanup_old_files(60)
+    print(f"Cleaned up {deleted} old files")
+```
+
+## Best practices
+
+1. **Use the factory method** for immediate validation of storage access
+2. **Set appropriate limits** based on your application needs
+3. **Monitor storage usage** to prevent running out of space
+4. **Use metadata** to organize and search files
+5. **Handle errors gracefully** - files can fail validation
+6. **Clean up old files** periodically to manage storage
+7. **Back up the file directory** - FileStore doesn't handle backups

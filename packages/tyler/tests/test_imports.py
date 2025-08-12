@@ -7,7 +7,6 @@ def test_top_level_imports():
     try:
         from tyler import (
             Agent,
-            StreamUpdate,
             Thread,
             Message,
             ThreadStore,

@@ -1,5 +1,5 @@
 ---
-title: 'A2A Integration Guide'
+title: 'A2A integration guide'
 description: 'Step-by-step guide to integrating Agent-to-Agent (A2A) protocol with Tyler agents'
 ---
 
@@ -108,10 +108,10 @@ async def coordinate_project():
     ))
     
     # The coordinator will automatically delegate to appropriate agents
-    processed_thread, new_messages = await coordinator.go(thread)
+    result = await coordinator.go(thread)
     
     # Print the coordinated response
-    for message in processed_thread.messages:
+    for message in result.thread.messages:
         if message.role == "assistant":
             print(f"Coordinator: {message.content}")
 
@@ -614,7 +614,7 @@ async def customer_support_network():
   - Provide meaningful error messages to users
 </Card>
 
-## Next Steps
+## Next steps
 
 Now that you have A2A integration working, explore these advanced topics:
 

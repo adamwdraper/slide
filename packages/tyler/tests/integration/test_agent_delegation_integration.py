@@ -209,11 +209,11 @@ async def test_parallel_agent_delegation(mock_thread_store):
         with patch.object(tool_runner, 'execute_tool_call', timed_tool_execution):
             # Run the coordinator agent
             start_time = datetime.now(UTC)
-            result_thread, messages = await coordinator_agent.go(thread)
+            result = await coordinator_agent.go(thread)
             total_time = (datetime.now(UTC) - start_time).total_seconds()
             
             # Verify all three delegations occurred
-            delegations = [msg for msg in result_thread.messages 
+            delegations = [msg for msg in result.thread.messages 
                           if msg.role == "tool" and "delegate_to_" in msg.name]
             
             assert len(delegations) == 3
@@ -318,14 +318,14 @@ async def test_agent_delegation_error_handling(mock_thread_store):
         
         with patch.object(tool_runner, 'execute_tool_call', mock_tool_execution):
             # Run the coordinator agent
-            result_thread, messages = await coordinator_agent.go(thread)
+            result = await coordinator_agent.go(thread)
             
             # Verify both delegations were attempted
-            tool_messages = [msg for msg in result_thread.messages if msg.role == "tool"]
+            tool_messages = [msg for msg in result.thread.messages if msg.role == "tool"]
             
             # Log messages for debugging
             print("Messages in thread:")
-            for msg in result_thread.messages:
+            for msg in result.thread.messages:
                 print(f"{msg.role}: {msg.content}")
                 if hasattr(msg, 'name'):
                     print(f"  Name: {msg.name}")

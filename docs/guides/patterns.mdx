@@ -1,5 +1,5 @@
 ---
-title: 'Advanced Patterns'
+title: 'Advanced patterns'
 description: 'Design patterns and best practices for building sophisticated AI applications'
 ---
 
@@ -7,7 +7,7 @@ This guide covers advanced patterns for building production-ready AI application
 
 ## Agent Patterns
 
-### Tool Selection Pattern
+### Tool selection pattern
 
 Dynamically select tools based on the task:
 
@@ -56,7 +56,7 @@ adapter = AdaptiveAgent()
 agent = await adapter.create_agent_for_task("Research AI and create a visual report")
 ```
 
-### Validation Pattern
+### Validation pattern
 
 Ensure agent outputs meet requirements:
 
@@ -73,7 +73,9 @@ class ValidatedAgent:
         """Process thread with output validation"""
         
         # Process normally
-        result_thread, messages = await self.agent.go(thread)
+        result = await self.agent.go(thread)
+        result_thread = result.thread
+        messages = result.new_messages
         
         # Validate outputs
         for message in messages:
@@ -136,7 +138,7 @@ validated_agent = ValidatedAgent(
 
 ## Persistence Patterns
 
-### Context Window Management
+### Context window management
 
 Manage long conversations efficiently:
 
@@ -192,11 +194,11 @@ class ContextManager:
         ))
         
         # Get summary
-        _, summary_messages = await agent.go(summary_thread)
-        return summary_messages[-1].content if summary_messages else "No summary available"
+        result = await agent.go(summary_thread)
+        return result.new_messages[-1].content if result.new_messages else "No summary available"
 ```
 
-### Branching Conversations
+### Branching conversations
 
 Support multiple conversation branches:
 
@@ -244,7 +246,7 @@ class ConversationTree:
         await self.thread_store.save_thread(target_thread)
 ```
 
-## Tool Patterns
+## Tool patterns
 
 ### Retry with Fallback
 
@@ -306,7 +308,7 @@ executor = RobustToolExecutor(
 result = await executor.execute_with_fallback(search, "web-search", "AI news")
 ```
 
-### Tool Composition
+### Tool composition
 
 Create complex tools from simple ones:
 
@@ -455,7 +457,7 @@ async def progress_callback(update):
 tracker.add_listener(progress_callback)
 ```
 
-## Error Handling Patterns
+## Error handling patterns
 
 ### Graceful Degradation
 
@@ -585,7 +587,7 @@ class AgentHealthMonitor:
         return metrics
 ```
 
-## Next Steps
+## Next steps
 
 <CardGroup cols={2}>
   <Card

@@ -11,14 +11,14 @@
   "navigation": {
     "groups": [
       {
-        "group": "Getting Started",
+        "group": "Getting started",
         "pages": [
           "introduction",
           "quickstart"
         ]
       },
       {
-        "group": "Building Agents",
+        "group": "Building agents",
         "pages": [
           "guides/your-first-agent",
           "guides/adding-tools",
@@ -42,46 +42,53 @@
         "pages": [
           "concepts/how-agents-work",
           "concepts/architecture",
+          "concepts/tools",
           "concepts/mcp",
-          "concepts/a2a",
-          "packages/overview"
+          "concepts/a2a"
         ]
       },
       {
-        "group": "Standalone Packages",
-        "pages": [
-          "standalone-packages/using-narrator",
-          "standalone-packages/using-lye"
-        ]
-      },
-      {
-        "group": "API Reference",
+        "group": "API reference",
         "pages": [
           {
             "group": "Tyler",
             "pages": [
-              "packages/tyler/introduction",
-              "packages/tyler/evaluations"
-            ]
-          },
-          {
-            "group": "Lye",
-            "pages": [
-              "packages/lye/introduction"
+              "api-reference/tyler-agent",
+              "api-reference/tyler-agentresult",
+              "api-reference/tyler-executionevent",
+              "api-reference/tyler-eventtype"
             ]
           },
           {
             "group": "Narrator",
             "pages": [
-              "packages/narrator/introduction"
+              "api-reference/narrator-thread",
+              "api-reference/narrator-message",
+              "api-reference/narrator-attachment",
+              "api-reference/narrator-threadstore",
+              "api-reference/narrator-filestore"
             ]
           },
           {
             "group": "Space Monkey",
             "pages": [
-              "packages/space-monkey/introduction"
+              "api-reference/space-monkey-slackapp"
+            ]
+          },
+          {
+            "group": "Lye",
+            "pages": [
+              "api-reference/lye-tool-format",
+              "api-reference/lye-collections"
             ]
           }
+        ]
+      },
+      {
+        "group": "Standalone packages",
+        "pages": [
+          "standalone-packages/using-narrator",
+          "standalone-packages/using-lye"
         ]
       }
     ]

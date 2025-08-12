@@ -1,0 +1,609 @@
+---
+title: 'Tool collections'
+description: 'Detailed reference for all Lye tool collections'
+---
+
+## Overview
+
+This page provides detailed documentation for each tool collection in Lye, including parameters, return values, and usage examples.
+
+## WEB_TOOLS
+
+Tools for web browsing, searching, and content extraction.
+
+### web-fetch_page
+
+Fetches content from a web page in text or HTML format.
+
+<ParamField path="url" type="string" required>
+  The URL to fetch
+</ParamField>
+
+<ParamField path="format" type="string" default="text">
+  Output format - "text" for readable content, "html" for raw HTML
+</ParamField>
+
+<ParamField path="headers" type="object" optional>
+  Custom headers to send with request
+</ParamField>
+
+```python
+# Example usage
+thread.add_message(Message(
+    role="user",
+    content="Get the content from https://example.com"
+))
+```
+
+### web-search
+
+Search the web using Google.
+
+<ParamField path="query" type="string" required>
+  The search query
+</ParamField>
+
+<ParamField path="num_results" type="integer" default="5">
+  Number of results to return (max 10)
+</ParamField>
+
+```python
+# Example usage
+thread.add_message(Message(
+    role="user",
+    content="Search for recent AI developments"
+))
+```
+
+### web-download_file
+
+Download files from URLs.
+
+<ParamField path="url" type="string" required>
+  URL of the file to download
+</ParamField>
+
+<ParamField path="headers" type="object" optional>
+  Custom headers for the request
+</ParamField>
+
+Returns downloaded file as attachment.
+
+## FILES_TOOLS
+
+Tools for file system operations.
+
+### files-read_file
+
+Read contents of a file.
+
+<ParamField path="path" type="string" required>
+  Path to the file to read
+</ParamField>
+
+<ParamField path="encoding" type="string" default="utf-8">
+  File encoding
+</ParamField>
+
+### files-write_file
+
+Write content to a file.
+
+<ParamField path="path" type="string" required>
+  Path where to write the file
+</ParamField>
+
+<ParamField path="content" type="string" required>
+  Content to write
+</ParamField>
+
+<ParamField path="encoding" type="string" default="utf-8">
+  File encoding
+</ParamField>
+
+<ParamField path="create_dirs" type="boolean" default="false">
+  Create parent directories if they don't exist
+</ParamField>
+
+### files-list_directory
+
+List contents of a directory.
+
+<ParamField path="path" type="string" default=".">
+  Directory path to list
+</ParamField>
+
+<ParamField path="recursive" type="boolean" default="false">
+  List subdirectories recursively
+</ParamField>
+
+<ParamField path="include_hidden" type="boolean" default="false">
+  Include hidden files (starting with .)
+</ParamField>
+
+### files-move_file
+
+Move or rename a file.
+
+<ParamField path="source" type="string" required>
+  Source file path
+</ParamField>
+
+<ParamField path="destination" type="string" required>
+  Destination file path
+</ParamField>
+
+### files-copy_file
+
+Copy a file.
+
+<ParamField path="source" type="string" required>
+  Source file path
+</ParamField>
+
+<ParamField path="destination" type="string" required>
+  Destination file path
+</ParamField>
+
+### files-delete_file
+
+Delete a file.
+
+<ParamField path="path" type="string" required>
+  Path to file to delete
+</ParamField>
+
+### files-create_directory
+
+Create a directory.
+
+<ParamField path="path" type="string" required>
+  Directory path to create
+</ParamField>
+
+<ParamField path="parents" type="boolean" default="true">
+  Create parent directories if needed
+</ParamField>
+
+### files-search_files
+
+Search for files matching a pattern.
+
+<ParamField path="pattern" type="string" required>
+  Search pattern (supports wildcards)
+</ParamField>
+
+<ParamField path="directory" type="string" default=".">
+  Directory to search in
+</ParamField>
+
+<ParamField path="recursive" type="boolean" default="true">
+  Search subdirectories
+</ParamField>
+
+## IMAGE_TOOLS
+
+Tools for image generation and analysis.
+
+### image-generate_image
+
+Generate images using DALL-E 3.
+
+<ParamField path="prompt" type="string" required>
+  Description of the image to generate
+</ParamField>
+
+<ParamField path="model" type="string" default="dall-e-3">
+  Model to use: "dall-e-3" or "dall-e-2"
+</ParamField>
+
+<ParamField path="size" type="string" default="1024x1024">
+  Image size: "1024x1024", "1792x1024", or "1024x1792" (DALL-E 3)
+</ParamField>
+
+<ParamField path="quality" type="string" default="standard">
+  Image quality: "standard" or "hd" (DALL-E 3 only)
+</ParamField>
+
+<ParamField path="style" type="string" default="vivid">
+  Style: "vivid" or "natural" (DALL-E 3 only)
+</ParamField>
+
+Returns generated image as attachment.
+
+### image-analyze_image
+
+Analyze images using GPT-4 Vision.
+
+<ParamField path="image_path" type="string" required>
+  Path to image file or URL
+</ParamField>
+
+<ParamField path="prompt" type="string" default="What do you see?">
+  Question about the image
+</ParamField>
+
+<ParamField path="detail" type="string" default="auto">
+  Analysis detail: "low", "high", or "auto"
+</ParamField>
+
+### image-create_qr_code
+
+Generate QR codes.
+
+<ParamField path="data" type="string" required>
+  Data to encode in QR code
+</ParamField>
+
+<ParamField path="size" type="integer" default="300">
+  QR code size in pixels
+</ParamField>
+
+<ParamField path="border" type="integer" default="4">
+  Border size in modules
+</ParamField>
+
+Returns QR code image as attachment.
+
+### image-resize_image
+
+Resize images.
+
+<ParamField path="image_path" type="string" required>
+  Path to image file
+</ParamField>
+
+<ParamField path="width" type="integer" optional>
+  Target width (maintains aspect if height not specified)
+</ParamField>
+
+<ParamField path="height" type="integer" optional>
+  Target height (maintains aspect if width not specified)
+</ParamField>
+
+<ParamField path="mode" type="string" default="contain">
+  Resize mode: "contain", "cover", "fill", or "exact"
+</ParamField>
+
+### image-convert_image
+
+Convert between image formats.
+
+<ParamField path="image_path" type="string" required>
+  Path to source image
+</ParamField>
+
+<ParamField path="output_format" type="string" required>
+  Target format: "JPEG", "PNG", "WEBP", "BMP", "GIF"
+</ParamField>
+
+<ParamField path="quality" type="integer" default="95">
+  Output quality (1-100, for lossy formats)
+</ParamField>
+
+## AUDIO_TOOLS
+
+Tools for audio processing.
+
+### audio-transcribe
+
+Transcribe audio using OpenAI Whisper.
+
+<ParamField path="audio_path" type="string" required>
+  Path to audio file
+</ParamField>
+
+<ParamField path="model" type="string" default="whisper-1">
+  Whisper model to use
+</ParamField>
+
+<ParamField path="language" type="string" optional>
+  Language code (e.g., "en", "es")
+</ParamField>
+
+<ParamField path="temperature" type="number" default="0">
+  Sampling temperature (0-1)
+</ParamField>
+
+## COMMAND_LINE_TOOLS
+
+System command execution.
+
+### run_terminal_command
+
+Execute shell commands.
+
+<ParamField path="command" type="string" required>
+  Command to execute
+</ParamField>
+
+<ParamField path="working_directory" type="string" default=".">
+  Directory to run command in
+</ParamField>
+
+<ParamField path="timeout" type="integer" default="30">
+  Command timeout in seconds
+</ParamField>
+
+<ParamField path="shell" type="boolean" default="true">
+  Run command in shell
+</ParamField>
+
+## SLACK_TOOLS
+
+Slack integration tools.
+
+### slack-send_message
+
+Send messages to Slack.
+
+<ParamField path="channel" type="string" required>
+  Channel ID or name (e.g., "C1234567890" or "#general")
+</ParamField>
+
+<ParamField path="text" type="string" required>
+  Message text
+</ParamField>
+
+<ParamField path="thread_ts" type="string" optional>
+  Thread timestamp to reply to
+</ParamField>
+
+<ParamField path="blocks" type="array" optional>
+  Rich message blocks
+</ParamField>
+
+### slack-get_messages
+
+Retrieve messages from a channel.
+
+<ParamField path="channel" type="string" required>
+  Channel ID
+</ParamField>
+
+<ParamField path="limit" type="integer" default="100">
+  Number of messages to retrieve
+</ParamField>
+
+<ParamField path="oldest" type="string" optional>
+  Oldest message timestamp
+</ParamField>
+
+<ParamField path="latest" type="string" optional>
+  Latest message timestamp
+</ParamField>
+
+### slack-list_channels
+
+List available Slack channels.
+
+<ParamField path="types" type="string" default="public_channel">
+  Channel types: "public_channel", "private_channel", "mpim", "im"
+</ParamField>
+
+<ParamField path="exclude_archived" type="boolean" default="true">
+  Exclude archived channels
+</ParamField>
+
+### slack-react_to_message
+
+Add emoji reaction to a message.
+
+<ParamField path="channel" type="string" required>
+  Channel ID
+</ParamField>
+
+<ParamField path="timestamp" type="string" required>
+  Message timestamp
+</ParamField>
+
+<ParamField path="emoji" type="string" required>
+  Emoji name (without colons)
+</ParamField>
+
+## NOTION_TOOLS
+
+Notion workspace integration.
+
+### notion-create_page
+
+Create a new Notion page.
+
+<ParamField path="parent_id" type="string" required>
+  Parent page or database ID
+</ParamField>
+
+<ParamField path="title" type="string" required>
+  Page title
+</ParamField>
+
+<ParamField path="content" type="string | array" required>
+  Page content (text or blocks)
+</ParamField>
+
+<ParamField path="properties" type="object" optional>
+  Page properties for database items
+</ParamField>
+
+### notion-update_page
+
+Update existing Notion page.
+
+<ParamField path="page_id" type="string" required>
+  Page ID to update
+</ParamField>
+
+<ParamField path="content" type="string | array" optional>
+  New content
+</ParamField>
+
+<ParamField path="properties" type="object" optional>
+  Properties to update
+</ParamField>
+
+### notion-search
+
+Search Notion workspace.
+
+<ParamField path="query" type="string" required>
+  Search query
+</ParamField>
+
+<ParamField path="filter" type="object" optional>
+  Filter by object type: "page" or "database"
+</ParamField>
+
+<ParamField path="sort" type="object" optional>
+  Sort results by "last_edited_time"
+</ParamField>
+
+## BROWSER_TOOLS
+
+Browser automation with Playwright.
+
+### browser-navigate
+
+Navigate to a URL.
+
+<ParamField path="url" type="string" required>
+  URL to navigate to
+</ParamField>
+
+<ParamField path="wait_until" type="string" default="networkidle">
+  Wait condition: "load", "domcontentloaded", "networkidle"
+</ParamField>
+
+### browser-click
+
+Click an element.
+
+<ParamField path="selector" type="string" required>
+  CSS selector or text
+</ParamField>
+
+<ParamField path="timeout" type="integer" default="30000">
+  Timeout in milliseconds
+</ParamField>
+
+### browser-type
+
+Type text into an input.
+
+<ParamField path="selector" type="string" required>
+  Input selector
+</ParamField>
+
+<ParamField path="text" type="string" required>
+  Text to type
+</ParamField>
+
+<ParamField path="delay" type="integer" default="0">
+  Delay between keystrokes (ms)
+</ParamField>
+
+### browser-screenshot
+
+Take a screenshot.
+
+<ParamField path="path" type="string" optional>
+  Save screenshot to path
+</ParamField>
+
+<ParamField path="full_page" type="boolean" default="false">
+  Capture full page
+</ParamField>
+
+<ParamField path="selector" type="string" optional>
+  Capture specific element
+</ParamField>
+
+## WANDB_TOOLS
+
+Weights & Biases integration.
+
+### wandb-create_workspace
+
+Create a W&B workspace.
+
+<ParamField path="name" type="string" required>
+  Workspace name
+</ParamField>
+
+<ParamField path="project" type="string" required>
+  W&B project name
+</ParamField>
+
+<ParamField path="config" type="object" optional>
+  Workspace configuration
+</ParamField>
+
+### wandb-log_metrics
+
+Log metrics to W&B.
+
+<ParamField path="metrics" type="object" required>
+  Metrics to log
+</ParamField>
+
+<ParamField path="step" type="integer" optional>
+  Step number
+</ParamField>
+
+<ParamField path="commit" type="boolean" default="true">
+  Commit immediately
+</ParamField>
+
+## Usage Examples
+
+### Web research agent
+
+```python
+from tyler import Agent, Thread, Message
+from lye import WEB_TOOLS, FILES_TOOLS
+
+agent = Agent(
+    name="researcher",
+    tools=[*WEB_TOOLS, *FILES_TOOLS]
+)
+
+thread = Thread()
+thread.add_message(Message(
+    role="user",
+    content="Research the latest developments in quantum computing and save a summary to research.md"
+))
+
+result = await agent.go(thread)
+```
+
+### Creative assistant
+
+```python
+from lye import IMAGE_TOOLS, AUDIO_TOOLS
+
+agent = Agent(
+    name="creative",
+    tools=[*IMAGE_TOOLS, *AUDIO_TOOLS]
+)
+
+thread.add_message(Message(
+    role="user",
+    content="Generate an image of a futuristic city and transcribe this audio note",
+    attachments=[audio_file]
+))
+```
+
+### DevOps Agent
+
+```python
+from lye import COMMAND_LINE_TOOLS, FILES_TOOLS, SLACK_TOOLS
+
+agent = Agent(
+    name="devops",
+    tools=[*COMMAND_LINE_TOOLS, *FILES_TOOLS, *SLACK_TOOLS]
+)
+
+thread.add_message(Message(
+    role="user",
+    content="Check system status, create a report, and notify the team on Slack"
+))
+```

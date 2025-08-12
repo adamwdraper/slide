@@ -19,7 +19,7 @@ Lye is designed to be:
 uv add slide-lye
 ```
 
-## Quick Start
+## Quick start
 
 ```python
 from lye import WEB_TOOLS, FILES_TOOLS, IMAGE_TOOLS
@@ -33,31 +33,31 @@ agent = Agent(
 )
 ```
 
-## Available Tool Groups
+## Available tool groups
 
-### Web Tools
+### Web tools
 - `search` - Search the web for information
 - `fetch` - Fetch and parse web pages
 - `scrape` - Extract structured data from websites
 
-### File Tools
+### File tools
 - `read_file` - Read file contents
 - `write_file` - Write content to files
 - `list_files` - List directory contents
 - `delete_file` - Delete files
 
-### Image Tools
+### Image tools
 - `describe_image` - Get AI descriptions of images
 - `generate_image` - Create images from text
 - `edit_image` - Modify existing images
 
-### Audio Tools
+### Audio tools
 - `transcribe_audio` - Convert speech to text
 - `generate_speech` - Convert text to speech
 
-## Usage Examples
+## Usage examples
 
-### Web Research
+### Web research
 ```python
 from lye.web import search, fetch
 
@@ -68,7 +68,7 @@ results = await search("latest AI developments 2024")
 content = await fetch("https://example.com/article")
 ```
 
-### File Operations
+### File operations
 ```python
 from lye.files import read_file, write_file
 
@@ -79,7 +79,7 @@ content = await read_file("data.txt")
 await write_file("results.txt", processed_content)
 ```
 
-### Multimodal Processing
+### Multimodal processing
 ```python
 from lye.image import describe_image
 from lye.audio import transcribe_audio
@@ -91,7 +91,7 @@ description = await describe_image("photo.jpg")
 transcript = await transcribe_audio("recording.mp3")
 ```
 
-## Optional Dependencies
+## Optional dependencies
 
 For advanced file processing capabilities, you can install these system libraries:
 
@@ -117,7 +117,7 @@ These are optional and only needed for:
 </Note>
 
 
-## Next Steps
+## Next steps
 
 <CardGroup cols={2}>
   <Card

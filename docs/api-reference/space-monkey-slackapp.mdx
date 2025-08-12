@@ -1,0 +1,209 @@
+---
+title: 'SlackApp'
+description: 'Main class for deploying Tyler agents as Slack bots'
+---
+
+## Overview
+
+The `SlackApp` class provides a clean interface for running Tyler agents as Slack bots with intelligent message routing, thread management, and health monitoring.
+
+## Creating a SlackApp
+
+```python
+from space_monkey import SlackApp
+from tyler import Agent
+from narrator import ThreadStore, FileStore
+
+# Initialize storage
+thread_store = await ThreadStore.create()
+file_store = await FileStore.create()
+
+# Create your agent
+agent = Agent(
+    name="slack-assistant",
+    model_name="gpt-4o",
+    purpose="To help Slack users with their questions",
+    tools=[...]  # Optional tools
+)
+
+# Create Slack app
+app = SlackApp(
+    agent=agent,
+    thread_store=thread_store,
+    file_store=file_store,
+    response_topics="technical questions and code help"  # Optional
+)
+
+# Start the app
+await app.start(port=3000)
+```
+
+## Key Parameters
+
+<ParamField path="agent" type="Agent" required>
+  The Tyler agent that will handle conversations
+</ParamField>
+
+<ParamField path="thread_store" type="ThreadStore" required>
+  ThreadStore instance for conversation persistence across Slack channels
+</ParamField>
+
+<ParamField path="file_store" type="FileStore" required>
+  FileStore instance for handling file uploads and attachments
+</ParamField>
+
+<ParamField path="response_topics" type="string" default="None">
+  Simple sentence describing what topics the bot should respond to. Used for intelligent message filtering when the bot is in channels.
+</ParamField>
+
+## Environment Variables
+
+SlackApp requires these environment variables to be set:
+
+<ParamField path="SLACK_BOT_TOKEN" type="string" required>
+  Bot User OAuth Token (starts with `xoxb-`)
+</ParamField>
+
+<ParamField path="SLACK_APP_TOKEN" type="string" required>
+  App-level token for Socket Mode (starts with `xapp-`)
+</ParamField>
+
+<ParamField path="OPENAI_API_KEY" type="string" required>
+  OpenAI API key for the agent (or other LLM provider keys)
+</ParamField>
+
+<ParamField path="HEALTH_CHECK_URL" type="string" optional>
+  URL to ping for health monitoring
+</ParamField>
+
+<ParamField path="HEALTH_PING_INTERVAL_SECONDS" type="int" default="120">
+  Interval in seconds between health check pings
+</ParamField>
+
+<ParamField path="WANDB_PROJECT" type="string" optional>
+  Weights & Biases project name for Weave tracing
+</ParamField>
+
+<ParamField path="WANDB_API_KEY" type="string" optional>
+  Weights & Biases API key for Weave tracing
+</ParamField>
+
+## Starting the App
+
+The `start()` method launches the Slack bot server:
+
+```python
+await app.start(
+    host="0.0.0.0",  # Host to bind to
+    port=8000        # Port to listen on
+)
+```
+
+<ParamField path="host" type="string" default="0.0.0.0">
+  Host address to bind the server to
+</ParamField>
+
+<ParamField path="port" type="int" default="8000">
+  Port number for the server
+</ParamField>
+
+## Message Routing
+
+SlackApp automatically handles different types of Slack events:
+
+### Direct messages
+All direct messages to the bot are processed automatically.
+
+### Channel messages
+In channels, the bot responds to:
+- Messages where the bot is @mentioned
+- Thread replies where the bot has previously participated
+- Messages matching the configured `response_topics` (if set)
+
+### Thread management
+Each Slack channel gets its own persistent conversation thread, maintaining context across messages.
+
+## Features
+
+### Intelligent message classification
+When `response_topics` is configured, SlackApp uses an AI classifier to determine whether to respond to messages based on relevance.
+
+### File handling
+Automatically downloads and processes files shared in Slack when the agent has file-handling tools.
+
+### Health monitoring
+Built-in health check endpoint at `/health` and optional external health check pings.
+
+### Graceful shutdown
+Proper signal handling for clean shutdown in containerized environments.
+
+## Example with Advanced Features
+
+```python
+import os
+from space_monkey import SlackApp
+from tyler import Agent
+from narrator import ThreadStore, FileStore
+from lye import WEB_TOOLS, IMAGE_TOOLS
+
+async def create_advanced_bot():
+    # PostgreSQL persistence
+    thread_store = await ThreadStore.create(
+        os.getenv("DATABASE_URL", "postgresql://localhost/slackbot")
+    )
+    file_store = await FileStore.create("./slack_files")
+    
+    # Create agent with tools
+    agent = Agent(
+        name="team-assistant",
+        model_name="gpt-4o",
+        purpose="To help the team with research and image analysis",
+        tools=[*WEB_TOOLS, *IMAGE_TOOLS]
+    )
+    
+    # Create app with topic filtering
+    app = SlackApp(
+        agent=agent,
+        thread_store=thread_store,
+        file_store=file_store,
+        response_topics="technical questions, research requests, and image analysis"
+    )
+    
+    return app
+
+# Run the bot
+app = await create_advanced_bot()
+await app.start(port=3000)
+```
+
+## Server Endpoints
+
+SlackApp runs a FastAPI server with these endpoints:
+
+### `GET /health`
+Health check endpoint returning server status.
+
+### `GET /`
+Root endpoint with basic server information.
+
+## Error handling
+
+SlackApp includes comprehensive error handling:
+- Automatic retries for transient Slack API errors
+- Graceful handling of missing threads or messages
+- Detailed logging for debugging
+- User-friendly error messages in Slack
+
+## Docker Support
+
+SlackApp is designed for easy containerization:
+
+```dockerfile
+FROM python:3.11-slim
+WORKDIR /app
+COPY . .
+RUN pip install slide-space-monkey
+CMD ["python", "your_bot.py"]
+```
+
+See the [Slack Agent Guide](/apps/slack-agent) for complete deployment instructions.

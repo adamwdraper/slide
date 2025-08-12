@@ -369,6 +369,7 @@ class TestAgentEval:
         
         # Mock the agent's go method to return tool usage
         from narrator import Message
+        from tyler import AgentResult
         import uuid
         async def mock_go(thread):
             # Return a response that uses the mock_tool
@@ -385,7 +386,12 @@ class TestAgentEval:
                 }]
             )
             thread.add_message(assistant_msg)
-            return thread, [assistant_msg]
+            
+            return AgentResult(
+                thread=thread,
+                new_messages=[assistant_msg],
+                content="Using tool"
+            )
         
         # Run evaluation with mocked go method
         with patch.object(simple_agent, 'tools', [mock_tool]):

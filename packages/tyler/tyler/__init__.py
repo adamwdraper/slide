@@ -3,7 +3,12 @@
 __version__ = "1.3.0"
 
 from tyler.utils.logging import get_logger
-from tyler.models.agent import Agent, StreamUpdate
+from tyler.models.agent import Agent
+from tyler.models.execution import (
+    AgentResult,
+    ExecutionEvent,
+    EventType
+)
 from narrator import Thread, Message, ThreadStore, FileStore, Attachment
 
 # Configure logging when package is imported
