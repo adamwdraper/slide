@@ -1,0 +1,389 @@
+---
+title: 'Tool Format'
+description: 'Understanding Lye tool structure and usage'
+---
+
+## Overview
+
+Lye tools follow a specific format that makes them compatible with Tyler agents and LLM function calling. Each tool consists of a definition (for the LLM) and an implementation (the actual function).
+
+## Tool Structure
+
+Each Lye tool is a dictionary with the following structure:
+
+```python
+{
+    "definition": {
+        "type": "function",
+        "function": {
+            "name": "tool-name",
+            "description": "What the tool does",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "param1": {
+                        "type": "string",
+                        "description": "Parameter description"
+                    }
+                },
+                "required": ["param1"]
+            }
+        }
+    },
+    "implementation": tool_function,
+    "type": "standard"  # Optional metadata
+}
+```
+
+## Tool Implementation
+
+Tool functions follow specific patterns:
+
+### Basic Tool
+
+```python
+import weave
+
+@weave.op(name="category-tool_name")
+def tool_function(*, param1: str, param2: Optional[int] = None) -> str:
+    """
+    Tool implementation.
+    
+    Args:
+        param1: Required parameter
+        param2: Optional parameter with default
+        
+    Returns:
+        String result for the agent
+    """
+    # Tool logic here
+    result = f"Processed {param1}"
+    
+    return result
+```
+
+### Tool with Files
+
+Tools that return files use a tuple format:
+
+```python
+@weave.op(name="files-create_file")
+def create_file(*, filename: str, content: str) -> Tuple[str, List[Dict[str, Any]]]:
+    """
+    Create a file and return it.
+    
+    Returns:
+        Tuple containing:
+        - Status message
+        - List of file dictionaries
+    """
+    files = [{
+        "filename": filename,
+        "content": base64.b64encode(content.encode()).decode(),
+        "mime_type": "text/plain"
+    }]
+    
+    return f"Created {filename}", files
+```
+
+## Parameter Types
+
+### Basic Types
+
+```python
+"parameters": {
+    "type": "object",
+    "properties": {
+        "text": {
+            "type": "string",
+            "description": "Input text"
+        },
+        "count": {
+            "type": "integer",
+            "description": "Number of items"
+        },
+        "enabled": {
+            "type": "boolean",
+            "description": "Feature flag"
+        },
+        "threshold": {
+            "type": "number",
+            "description": "Decimal threshold"
+        }
+    }
+}
+```
+
+### Enums
+
+```python
+"format": {
+    "type": "string",
+    "description": "Output format",
+    "enum": ["text", "json", "html"],
+    "default": "text"
+}
+```
+
+### Arrays
+
+```python
+"tags": {
+    "type": "array",
+    "items": {
+        "type": "string"
+    },
+    "description": "List of tags"
+}
+```
+
+### Optional Parameters
+
+```python
+"parameters": {
+    "type": "object",
+    "properties": {
+        "required_param": {...},
+        "optional_param": {...}
+    },
+    "required": ["required_param"]  # Only list required params
+}
+```
+
+## Return Formats
+
+### Simple String Return
+
+```python
+def simple_tool(*, input: str) -> str:
+    return f"Processed: {input}"
+```
+
+### Structured Return with Files
+
+```python
+def file_tool(*, data: str) -> Tuple[str, List[Dict[str, Any]]]:
+    # Process data
+    result_content = process_data(data)
+    
+    files = [{
+        "filename": "result.txt",
+        "content": base64.b64encode(result_content.encode()).decode(),
+        "mime_type": "text/plain"
+    }]
+    
+    return "Processing complete", files
+```
+
+### Error Handling
+
+```python
+def safe_tool(*, url: str) -> str:
+    try:
+        # Attempt operation
+        result = fetch_data(url)
+        return f"Success: {result}"
+    except Exception as e:
+        # Return error message for agent
+        return f"Error: {str(e)}"
+```
+
+## Tool Naming Conventions
+
+Lye follows consistent naming patterns:
+
+- **Format**: `category-action_target`
+- **Examples**:
+  - `web-fetch_page`
+  - `files-read_file`
+  - `image-generate_image`
+  - `slack-send_message`
+
+## Using Tools with Agents
+
+### Direct Usage
+
+```python
+from tyler import Agent
+from lye import WEB_TOOLS
+
+agent = Agent(
+    name="web-researcher",
+    tools=WEB_TOOLS
+)
+
+# Agent automatically uses tools based on user requests
+```
+
+### Tool Selection
+
+```python
+from lye import TOOLS
+
+# Filter tools by name pattern
+web_tools = [t for t in TOOLS if t["definition"]["function"]["name"].startswith("web-")]
+
+# Select specific tools
+selected_tools = [
+    t for t in TOOLS 
+    if t["definition"]["function"]["name"] in ["web-search", "files-write_file"]
+]
+
+agent = Agent(
+    name="selective-agent",
+    tools=selected_tools
+)
+```
+
+## Tool Execution Flow
+
+1. **User Request**: User asks agent to perform a task
+2. **Tool Selection**: Agent selects appropriate tool based on description
+3. **Parameter Extraction**: Agent extracts parameters from context
+4. **Validation**: Parameters are validated against schema
+5. **Execution**: Tool function is called with parameters
+6. **Result Processing**: Result is returned to agent
+7. **Response**: Agent incorporates result into response
+
+## Best Practices
+
+### Clear Descriptions
+
+```python
+# Good
+"description": "Search the web using Google and return relevant results with titles, snippets, and URLs"
+
+# Bad
+"description": "Search tool"
+```
+
+### Parameter Descriptions
+
+```python
+# Good
+"url": {
+    "type": "string",
+    "description": "The complete URL to fetch, including protocol (http:// or https://)"
+}
+
+# Bad
+"url": {
+    "type": "string",
+    "description": "URL"
+}
+```
+
+### Error Messages
+
+```python
+# Good
+return "Error: Unable to connect to https://example.com - Connection timeout after 30 seconds"
+
+# Bad
+return "Error"
+```
+
+### File Returns
+
+```python
+# Always include metadata
+files = [{
+    "filename": "report.pdf",
+    "content": base64_content,
+    "mime_type": "application/pdf"
+}]
+
+# Include helpful status message
+return f"Generated PDF report with {page_count} pages", files
+```
+
+## Example: Complete Tool
+
+```python
+import weave
+import requests
+from typing import Tuple, List, Dict, Any
+import base64
+
+# Tool definition
+WEB_DOWNLOAD_TOOL = {
+    "definition": {
+        "type": "function",
+        "function": {
+            "name": "web-download_file",
+            "description": "Download a file from a URL and return it as an attachment",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "description": "The URL of the file to download"
+                    },
+                    "timeout": {
+                        "type": "integer",
+                        "description": "Timeout in seconds",
+                        "default": 30
+                    }
+                },
+                "required": ["url"]
+            }
+        }
+    },
+    "implementation": download_file,
+    "type": "standard"
+}
+
+# Tool implementation
+@weave.op(name="web-download_file")
+def download_file(*, url: str, timeout: int = 30) -> Tuple[str, List[Dict[str, Any]]]:
+    """Download a file from URL."""
+    try:
+        response = requests.get(url, timeout=timeout)
+        response.raise_for_status()
+        
+        # Get filename from URL
+        filename = url.split('/')[-1] or "download"
+        
+        # Encode content
+        content = base64.b64encode(response.content).decode()
+        
+        # Detect MIME type
+        mime_type = response.headers.get('content-type', 'application/octet-stream')
+        
+        files = [{
+            "filename": filename,
+            "content": content,
+            "mime_type": mime_type
+        }]
+        
+        size_mb = len(response.content) / (1024 * 1024)
+        return f"Downloaded {filename} ({size_mb:.2f} MB)", files
+        
+    except requests.exceptions.Timeout:
+        return f"Error: Download timed out after {timeout} seconds", []
+    except requests.exceptions.RequestException as e:
+        return f"Error downloading file: {str(e)}", []
+    except Exception as e:
+        return f"Unexpected error: {str(e)}", []
+```
+
+## Testing Tools
+
+```python
+# Test tool directly
+result = await download_file(url="https://example.com/file.pdf")
+print(result[0])  # Status message
+print(len(result[1]))  # Number of files
+
+# Test with agent
+from tyler import Agent, Thread, Message
+
+agent = Agent(tools=[WEB_DOWNLOAD_TOOL])
+thread = Thread()
+thread.add_message(Message(
+    role="user",
+    content="Download the PDF from https://example.com/report.pdf"
+))
+
+result = await agent.go(thread)
+```

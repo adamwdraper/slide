@@ -74,6 +74,13 @@
             "pages": [
               "api-reference/space-monkey-slackapp"
             ]
+          },
+          {
+            "group": "Lye",
+            "pages": [
+              "api-reference/lye-tool-format",
+              "api-reference/lye-collections"
+            ]
           }
         ]
       },
