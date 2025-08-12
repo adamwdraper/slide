@@ -48,40 +48,21 @@
         ]
       },
       {
+        "group": "API Reference",
+        "pages": [
+          "api-reference/tyler-agent",
+          "api-reference/tyler-agentresult",
+          "api-reference/tyler-executionevent",
+          "api-reference/tyler-eventtype",
+          "api-reference/tyler-executiondetails",
+          "api-reference/tyler-toolcall"
+        ]
+      },
+      {
         "group": "Standalone Packages",
         "pages": [
           "standalone-packages/using-narrator",
           "standalone-packages/using-lye"
-        ]
-      },
-      {
-        "group": "API Reference",
-        "pages": [
-          {
-            "group": "Tyler",
-            "pages": [
-              "packages/tyler/introduction",
-              "packages/tyler/evaluations"
-            ]
-          },
-          {
-            "group": "Lye",
-            "pages": [
-              "packages/lye/introduction"
-            ]
-          },
-          {
-            "group": "Narrator",
-            "pages": [
-              "packages/narrator/introduction"
-            ]
-          },
-          {
-            "group": "Space Monkey",
-            "pages": [
-              "packages/space-monkey/introduction"
-            ]
-          }
         ]
       }
     ]

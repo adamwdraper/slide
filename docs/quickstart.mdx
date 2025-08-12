@@ -105,14 +105,21 @@ In this quickstart, you'll build an AI agent that can search the web and analyze
         
         # Let the agent work
         print("🤖 Agent is working...")
-        processed_thread, new_messages = await agent.go(thread)
+        result = await agent.go(thread)
         
         # Print the results
-        for msg in new_messages:
-            if msg.role == "assistant":
-                print(f"\n💬 Assistant: {msg.content}")
-            elif msg.role == "tool":
-                print(f"\n🔧 Used tool '{msg.name}'")
+        print(f"\n💬 Assistant: {result.output}")
+        
+        # Show execution details
+        print(f"\n📊 Execution Details:")
+        print(f"   • Duration: {result.execution.duration_ms:.0f}ms")
+        print(f"   • Tokens used: {result.execution.total_tokens}")
+        
+        # Show tools used
+        if result.execution.tool_calls:
+            print(f"\n🔧 Tools used:")
+            for tool in result.execution.tool_calls:
+                print(f"   • {tool.tool_name}")
 
     if __name__ == "__main__":
         asyncio.run(main())

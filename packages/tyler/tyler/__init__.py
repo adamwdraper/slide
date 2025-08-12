@@ -9,9 +9,7 @@ from tyler.models.execution import (
     ExecutionEvent,
     EventType,
     ExecutionDetails,
-    ToolCall,
-    # Legacy - kept for backward compatibility
-    StreamUpdate
+    ToolCall
 )
 from narrator import Thread, Message, ThreadStore, FileStore, Attachment
 

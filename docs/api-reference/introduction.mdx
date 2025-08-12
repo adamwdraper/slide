@@ -38,7 +38,16 @@ thread = Thread()
 message = Message(role="user", content="Task")
 thread.add_message(message)
 
-processed_thread, new_messages = await agent.go(thread)
+# Non-streaming execution returns AgentResult
+result = await agent.go(thread)
+print(result.output)  # The agent's response
+print(result.execution.total_tokens)  # Token usage
+
+# Streaming execution yields ExecutionEvents  
+async for event in agent.go(thread, stream=True):
+    if event.type == EventType.LLM_STREAM_CHUNK:
+        print(event.data["content_chunk"], end="")
+
 data = await tool.implementation(params)
 thread_store = await ThreadStore.create()
 ```

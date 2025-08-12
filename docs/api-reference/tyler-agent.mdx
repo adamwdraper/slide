@@ -1,0 +1,276 @@
+---
+title: 'Agent'
+description: 'Core agent class for building AI assistants'
+---
+
+## Overview
+
+The `Agent` class is the central component of Tyler, providing a flexible interface for creating AI agents with tool use, delegation capabilities, and conversation management.
+
+## Creating an Agent
+
+```python
+from tyler import Agent
+
+agent = Agent(
+    name="MyAssistant",
+    model_name="gpt-4o",
+    purpose="To help users with their tasks",
+    temperature=0.7,
+    tools=[...],  # Optional tools
+    agents=[...]  # Optional sub-agents for delegation
+)
+```
+
+## Key Parameters
+
+<ParamField path="name" type="string" default="Tyler">
+  The name of your agent
+</ParamField>
+
+<ParamField path="model_name" type="string" default="gpt-4.1">
+  The LLM model to use (supports any LiteLLM compatible model)
+</ParamField>
+
+<ParamField path="purpose" type="string | Prompt" required>
+  The agent's purpose or system prompt
+</ParamField>
+
+<ParamField path="temperature" type="float" default="0.7">
+  Controls randomness in responses (0.0 - 2.0)
+</ParamField>
+
+<ParamField path="tools" type="List[Tool]" default="[]">
+  List of tools available to the agent
+</ParamField>
+
+<ParamField path="agents" type="List[Agent]" default="[]">
+  Sub-agents for task delegation
+</ParamField>
+
+<ParamField path="max_tool_iterations" type="int" default="10">
+  Maximum number of tool calls per conversation turn
+</ParamField>
+
+## Processing Conversations
+
+The `go()` method is the primary interface for processing conversations:
+
+### Non-Streaming Mode
+
+```python
+from tyler import Thread, Message
+
+# Create a conversation thread
+thread = Thread()
+thread.add_message(Message(role="user", content="Hello!"))
+
+# Process the thread
+result = await agent.go(thread)
+
+# Access the response
+print(result.output)  # The agent's final response
+print(result.thread)  # Updated thread with all messages
+print(result.messages)  # New messages added in this turn
+print(result.execution)  # Detailed execution information
+```
+
+### Streaming Mode
+
+```python
+from tyler import EventType
+
+# Stream responses in real-time
+async for event in agent.go(thread, stream=True):
+    if event.type == EventType.LLM_STREAM_CHUNK:
+        # Content being generated
+        print(event.data["content_chunk"], end="", flush=True)
+    
+    elif event.type == EventType.TOOL_SELECTED:
+        # Tool about to be called
+        print(f"Using tool: {event.data['tool_name']}")
+    
+    elif event.type == EventType.MESSAGE_CREATED:
+        # New message added to thread
+        msg = event.data["message"]
+        print(f"New {msg.role} message")
+```
+
+## Return Values
+
+### AgentResult (Non-Streaming)
+
+```python
+@dataclass
+class AgentResult:
+    thread: Thread  # Updated thread with all messages
+    messages: List[Message]  # New messages from this execution
+    output: Optional[str]  # The final assistant response
+    execution: ExecutionDetails  # Detailed execution information
+    success: bool  # Whether execution completed successfully
+```
+
+### ExecutionEvent (Streaming)
+
+```python
+@dataclass
+class ExecutionEvent:
+    type: EventType  # Type of event
+    timestamp: datetime  # When the event occurred
+    data: Dict[str, Any]  # Event-specific data
+    metadata: Optional[Dict[str, Any]]  # Additional metadata
+```
+
+## Event Types
+
+- `ITERATION_START` - New iteration beginning
+- `LLM_REQUEST` - Request sent to LLM
+- `LLM_RESPONSE` - Complete response received
+- `LLM_STREAM_CHUNK` - Streaming content chunk
+- `TOOL_SELECTED` - Tool about to be called
+- `TOOL_RESULT` - Tool execution completed
+- `TOOL_ERROR` - Tool execution failed
+- `MESSAGE_CREATED` - New message added
+- `EXECUTION_COMPLETE` - All processing done
+- `EXECUTION_ERROR` - Processing failed
+- `ITERATION_LIMIT` - Max iterations reached
+
+## Execution Details
+
+The `ExecutionDetails` object provides comprehensive information:
+
+```python
+execution = result.execution
+
+# Timing information
+print(f"Duration: {execution.duration_ms}ms")
+print(f"Started: {execution.start_time}")
+print(f"Ended: {execution.end_time}")
+
+# Token usage
+print(f"Total tokens: {execution.total_tokens}")
+
+# Tool usage
+for tool_call in execution.tool_calls:
+    print(f"Tool: {tool_call.tool_name}")
+    print(f"Duration: {tool_call.duration_ms}ms")
+    print(f"Success: {tool_call.success}")
+
+# All events
+for event in execution.events:
+    print(f"{event.timestamp}: {event.type}")
+```
+
+## Working with Tools
+
+```python
+from lye import WEB_TOOLS, FILES_TOOLS
+
+agent = Agent(
+    name="ResearchAssistant",
+    model_name="gpt-4o",
+    purpose="To research topics and create reports",
+    tools=[*WEB_TOOLS, *FILES_TOOLS]
+)
+
+# The agent can now browse the web and work with files
+result = await agent.go(thread)
+
+# Check which tools were used
+for tool in result.execution.tool_calls:
+    print(f"Used {tool.tool_name}: {tool.success}")
+```
+
+## Agent Delegation
+
+```python
+researcher = Agent(
+    name="Researcher",
+    purpose="To find information",
+    tools=[*WEB_TOOLS]
+)
+
+writer = Agent(
+    name="Writer",
+    purpose="To create content",
+    tools=[*FILES_TOOLS]
+)
+
+coordinator = Agent(
+    name="Coordinator",
+    purpose="To manage research and writing tasks",
+    agents=[researcher, writer]  # Can delegate to these agents
+)
+
+# The coordinator can now delegate tasks
+result = await coordinator.go(thread)
+```
+
+## Custom Configuration
+
+```python
+# Use a custom API endpoint
+agent = Agent(
+    model_name="gpt-4",
+    api_base="https://your-api.com/v1",
+    extra_headers={"Authorization": "Bearer token"}
+)
+
+# Configure storage
+from narrator import ThreadStore, FileStore
+
+agent = Agent(
+    thread_store=ThreadStore(backend="postgresql"),
+    file_store=FileStore(path="/custom/path")
+)
+```
+
+## Best Practices
+
+1. **Clear Purpose**: Define a specific, focused purpose for each agent
+2. **Tool Selection**: Only include tools the agent actually needs
+3. **Temperature**: Use lower values (0.0-0.3) for consistency, higher (0.7-1.0) for creativity
+4. **Error Handling**: Always handle potential errors in production
+5. **Token Limits**: Monitor token usage to avoid hitting limits
+6. **Streaming**: Use streaming for better user experience in interactive applications
+
+## Example: Complete Application
+
+```python
+import asyncio
+from tyler import Agent, Thread, Message, EventType
+from lye import WEB_TOOLS
+
+async def main():
+    # Create agent
+    agent = Agent(
+        name="WebAssistant",
+        model_name="gpt-4o",
+        purpose="To help users find information online",
+        tools=WEB_TOOLS,
+        temperature=0.3
+    )
+    
+    # Create thread
+    thread = Thread()
+    
+    # Add user message
+    thread.add_message(Message(
+        role="user",
+        content="What's the latest news about AI?"
+    ))
+    
+    # Process with streaming
+    print("Assistant: ", end="", flush=True)
+    
+    async for event in agent.go(thread, stream=True):
+        if event.type == EventType.LLM_STREAM_CHUNK:
+            print(event.data["content_chunk"], end="", flush=True)
+        elif event.type == EventType.TOOL_SELECTED:
+            print(f"\n[Searching: {event.data['tool_name']}...]\n", end="", flush=True)
+    
+    print("\n")
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```

@@ -129,18 +129,3 @@ class AgentResult:
         return not any(e.type == EventType.EXECUTION_ERROR for e in self.execution.events)
 
 
-# Legacy StreamUpdate for backward compatibility during migration
-class StreamUpdate:
-    """Update from streaming response - DEPRECATED, use ExecutionEvent instead"""
-    __slots__ = ('type', 'data')
-    
-    class Type(Enum):
-        CONTENT_CHUNK = "content_chunk"      # Partial content from assistant
-        ASSISTANT_MESSAGE = "assistant_message"  # Complete assistant message with tool calls
-        TOOL_MESSAGE = "tool_message"        # Tool execution result
-        COMPLETE = "complete"                # Final thread state and messages
-        ERROR = "error"                      # Error during processing
-        
-    def __init__(self, type: Type, data: Any):
-        self.type = type
-        self.data = data

@@ -1,0 +1,287 @@
+---
+title: 'ToolCall'
+description: 'Structured information about a tool execution'
+---
+
+## Overview
+
+The `ToolCall` class represents detailed information about a single tool execution during agent processing. It includes the tool name, arguments, result, timing, and success status.
+
+## Class Definition
+
+```python
+@dataclass
+class ToolCall:
+    tool_name: str                    # Name of the tool
+    tool_call_id: str                 # Unique identifier for this call
+    arguments: Dict[str, Any]         # Arguments passed to the tool
+    result: Any                       # Tool execution result
+    duration_ms: float                # Execution time in milliseconds
+    success: bool                     # Whether execution succeeded
+    error: Optional[str] = None       # Error message if failed
+```
+
+## Properties
+
+<ParamField path="tool_name" type="str">
+  The name of the tool that was called
+</ParamField>
+
+<ParamField path="tool_call_id" type="str">
+  Unique identifier for this specific tool call
+</ParamField>
+
+<ParamField path="arguments" type="Dict[str, Any]">
+  Arguments that were passed to the tool
+</ParamField>
+
+<ParamField path="result" type="Any">
+  The result returned by the tool (None if failed)
+</ParamField>
+
+<ParamField path="duration_ms" type="float">
+  Time taken to execute the tool in milliseconds
+</ParamField>
+
+<ParamField path="success" type="bool">
+  Whether the tool execution completed successfully
+</ParamField>
+
+<ParamField path="error" type="Optional[str]">
+  Error message if the tool execution failed
+</ParamField>
+
+## Usage Examples
+
+### Accessing Tool Calls
+
+```python
+from tyler import Agent, Thread
+
+# Execute agent
+result = await agent.go(thread)
+
+# Access all tool calls
+for tool_call in result.execution.tool_calls:
+    print(f"Tool: {tool_call.tool_name}")
+    print(f"  Arguments: {tool_call.arguments}")
+    print(f"  Success: {tool_call.success}")
+    print(f"  Duration: {tool_call.duration_ms:.0f}ms")
+    
+    if tool_call.success:
+        print(f"  Result: {tool_call.result}")
+    else:
+        print(f"  Error: {tool_call.error}")
+```
+
+### Tool Performance Analysis
+
+```python
+def analyze_tool_performance(tool_calls: List[ToolCall]) -> Dict[str, Any]:
+    """Analyze performance metrics for tool calls"""
+    if not tool_calls:
+        return {"total_calls": 0}
+    
+    # Group by tool name
+    by_tool = {}
+    for call in tool_calls:
+        if call.tool_name not in by_tool:
+            by_tool[call.tool_name] = []
+        by_tool[call.tool_name].append(call)
+    
+    # Calculate metrics
+    metrics = {
+        "total_calls": len(tool_calls),
+        "unique_tools": len(by_tool),
+        "total_duration_ms": sum(tc.duration_ms for tc in tool_calls),
+        "success_rate": sum(1 for tc in tool_calls if tc.success) / len(tool_calls),
+        "by_tool": {}
+    }
+    
+    # Per-tool metrics
+    for tool_name, calls in by_tool.items():
+        durations = [c.duration_ms for c in calls]
+        metrics["by_tool"][tool_name] = {
+            "count": len(calls),
+            "avg_duration_ms": sum(durations) / len(durations),
+            "min_duration_ms": min(durations),
+            "max_duration_ms": max(durations),
+            "success_rate": sum(1 for c in calls if c.success) / len(calls)
+        }
+    
+    return metrics
+
+# Usage
+metrics = analyze_tool_performance(result.execution.tool_calls)
+print(f"Total tool calls: {metrics['total_calls']}")
+print(f"Success rate: {metrics['success_rate']:.1%}")
+```
+
+### Error Handling
+
+```python
+# Find failed tool calls
+failed_calls = [
+    tc for tc in result.execution.tool_calls 
+    if not tc.success
+]
+
+if failed_calls:
+    print("Failed tool calls:")
+    for call in failed_calls:
+        print(f"\n{call.tool_name} (ID: {call.tool_call_id})")
+        print(f"  Arguments: {call.arguments}")
+        print(f"  Error: {call.error}")
+```
+
+### Tool Usage Patterns
+
+```python
+def find_tool_patterns(tool_calls: List[ToolCall]) -> Dict[str, Any]:
+    """Identify patterns in tool usage"""
+    patterns = {
+        "sequences": [],
+        "frequent_args": {},
+        "error_patterns": []
+    }
+    
+    # Find tool sequences
+    if len(tool_calls) > 1:
+        sequences = []
+        for i in range(len(tool_calls) - 1):
+            seq = (tool_calls[i].tool_name, tool_calls[i+1].tool_name)
+            sequences.append(seq)
+        
+        # Count sequence occurrences
+        from collections import Counter
+        patterns["sequences"] = Counter(sequences).most_common(3)
+    
+    # Find common arguments by tool
+    for call in tool_calls:
+        tool = call.tool_name
+        if tool not in patterns["frequent_args"]:
+            patterns["frequent_args"][tool] = []
+        patterns["frequent_args"][tool].append(call.arguments)
+    
+    # Identify error patterns
+    for call in tool_calls:
+        if not call.success:
+            patterns["error_patterns"].append({
+                "tool": call.tool_name,
+                "error": call.error,
+                "args": call.arguments
+            })
+    
+    return patterns
+```
+
+### Tool Call Filtering
+
+```python
+def filter_tool_calls(
+    tool_calls: List[ToolCall],
+    tool_names: Optional[List[str]] = None,
+    success_only: bool = False,
+    min_duration_ms: Optional[float] = None
+) -> List[ToolCall]:
+    """Filter tool calls by various criteria"""
+    filtered = tool_calls
+    
+    if tool_names:
+        filtered = [tc for tc in filtered if tc.tool_name in tool_names]
+    
+    if success_only:
+        filtered = [tc for tc in filtered if tc.success]
+    
+    if min_duration_ms is not None:
+        filtered = [tc for tc in filtered if tc.duration_ms >= min_duration_ms]
+    
+    return filtered
+
+# Find slow web searches
+slow_searches = filter_tool_calls(
+    result.execution.tool_calls,
+    tool_names=["web_search"],
+    success_only=True,
+    min_duration_ms=1000  # Over 1 second
+)
+```
+
+### Tool Result Processing
+
+```python
+def process_tool_results(tool_calls: List[ToolCall]) -> Dict[str, List[Any]]:
+    """Group and process tool results by type"""
+    results_by_tool = {}
+    
+    for call in tool_calls:
+        if not call.success:
+            continue
+            
+        if call.tool_name not in results_by_tool:
+            results_by_tool[call.tool_name] = []
+        
+        # Process based on tool type
+        if call.tool_name == "web_search":
+            # Extract URLs from search results
+            if isinstance(call.result, dict) and "results" in call.result:
+                urls = [r.get("url") for r in call.result["results"]]
+                results_by_tool[call.tool_name].extend(urls)
+        
+        elif call.tool_name == "read_file":
+            # Store file contents
+            results_by_tool[call.tool_name].append({
+                "path": call.arguments.get("path"),
+                "content": call.result
+            })
+        
+        else:
+            # Store raw results
+            results_by_tool[call.tool_name].append(call.result)
+    
+    return results_by_tool
+```
+
+### Monitoring Tool Costs
+
+```python
+# Hypothetical tool cost calculation
+TOOL_COSTS = {
+    "web_search": 0.001,      # $0.001 per search
+    "image_generate": 0.02,   # $0.02 per image
+    "pdf_extract": 0.005,     # $0.005 per PDF
+}
+
+def calculate_tool_costs(tool_calls: List[ToolCall]) -> float:
+    """Calculate estimated cost of tool usage"""
+    total_cost = 0.0
+    
+    for call in tool_calls:
+        if call.success and call.tool_name in TOOL_COSTS:
+            total_cost += TOOL_COSTS[call.tool_name]
+    
+    return total_cost
+
+# Usage
+cost = calculate_tool_costs(result.execution.tool_calls)
+print(f"Estimated tool cost: ${cost:.3f}")
+```
+
+## Integration with Events
+
+Tool calls are reconstructed from execution events:
+
+```python
+# Events that create a ToolCall:
+# 1. TOOL_SELECTED - provides tool_name, arguments, tool_call_id
+# 2. TOOL_RESULT or TOOL_ERROR - provides result/error, timing
+
+# The ExecutionDetails class automatically pairs these events
+# to create complete ToolCall objects
+```
+
+## See Also
+
+- [ExecutionDetails](/api-reference/tyler-executiondetails) - Contains tool calls
+- [EventType](/api-reference/tyler-eventtype) - Tool-related events
+- [Agent](/api-reference/tyler-agent) - Tool configuration

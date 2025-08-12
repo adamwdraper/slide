@@ -39,34 +39,40 @@ async def stream_response():
     
     print("🤖 Assistant: ", end="", flush=True)
     
-    async for update in agent.go_stream(thread):
-        if update.type == StreamUpdate.Type.CONTENT_CHUNK:
-            print(update.data, end="", flush=True)
+    async for event in agent.go(thread, stream=True):
+        if event.type == EventType.LLM_STREAM_CHUNK:
+            print(event.data.get("content_chunk", ""), end="", flush=True)
     
     print()  # New line at the end
 
 asyncio.run(stream_response())
 ```
 
-## Understanding Stream Updates
+## Understanding Execution Events
 
-StreamUpdate objects contain different types of information:
+ExecutionEvent objects provide detailed information about the agent's execution:
 
 ```python
-async for update in agent.go_stream(thread):
-    if update.type == StreamUpdate.Type.CONTENT_CHUNK:
+from tyler import EventType
+
+async for event in agent.go(thread, stream=True):
+    if event.type == EventType.LLM_STREAM_CHUNK:
         # Text being generated
-        print(update.data, end="", flush=True)
+        print(event.data.get("content_chunk", ""), end="", flush=True)
     
-    elif update.type == StreamUpdate.Type.TOOL_MESSAGE:
-        # Tool was called
-        tool_msg = update.data
-        print(f"\n🔧 Using tool: {tool_msg.name}")
+    elif event.type == EventType.TOOL_SELECTED:
+        # Tool is about to be called
+        print(f"\n🔧 Calling tool: {event.data['tool_name']}")
     
-    elif update.type == StreamUpdate.Type.COMPLETE:
-        # Streaming finished
-        final_thread = update.data
-        print("\n✅ Complete!")
+    elif event.type == EventType.MESSAGE_CREATED:
+        # New message added to thread
+        msg = event.data["message"]
+        if msg.role == "tool":
+            print(f"\n✅ Tool {msg.name} completed")
+    
+    elif event.type == EventType.EXECUTION_COMPLETE:
+        # All processing complete
+        print(f"\n✅ Complete in {event.data['duration_ms']:.0f}ms!")
 ```
 
 ## Streaming with Tools
@@ -91,19 +97,21 @@ async def research_with_streaming(topic: str):
     )
     thread.add_message(message)
     
-    async for update in agent.go_stream(thread):
-        if update.type == StreamUpdate.Type.CONTENT_CHUNK:
-            print(update.data, end="", flush=True)
+    async for event in agent.go(thread, stream=True):
+        if event.type == EventType.LLM_STREAM_CHUNK:
+            print(event.data.get("content_chunk", ""), end="", flush=True)
         
-        elif update.type == StreamUpdate.Type.TOOL_MESSAGE:
-            tool_msg = update.data
-            print(f"\n\n🔧 [{tool_msg.name}] ", end="")
-            
+        elif event.type == EventType.TOOL_SELECTED:
+            tool_name = event.data["tool_name"]
+            print(f"\n\n🔧 Using {tool_name}...", flush=True)
+        
+        elif event.type == EventType.TOOL_RESULT:
+            result = event.data["result"]
             # Show abbreviated tool results
-            if len(tool_msg.content) > 100:
-                print(f"{tool_msg.content[:100]}...")
+            if len(result) > 100:
+                print(f"   Result: {result[:100]}...")
             else:
-                print(tool_msg.content)
+                print(f"   Result: {result}")
             
             print("\n🤖 ", end="", flush=True)
 ```

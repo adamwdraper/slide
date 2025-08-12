@@ -32,10 +32,14 @@ message = Message(
 thread.add_message(message)
 
 # The agent will visit the page and provide a summary
-processed_thread, new_messages = asyncio.run(agent.go(thread))
+result = asyncio.run(agent.go(thread))
 
-# Print all messages in the conversation
-for msg in processed_thread.messages:
+# Print the agent's response
+print(f"ASSISTANT: {result.output}")
+print("-" * 80)
+
+# You can also access the full conversation
+for msg in result.thread.messages:
     print(f"{msg.role.upper()}: {msg.content}")
     print("-" * 80)
 ```

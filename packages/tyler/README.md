@@ -288,12 +288,14 @@ async def main():
     thread.add_message(message)
 
     # Process the thread
-    processed_thread, new_messages = await agent.go(thread)
+    result = await agent.go(thread)
 
     # Print the assistant's response
-    for message in new_messages:
-        if message.role == "assistant":
-            print(f"Assistant: {message.content}")
+    print(f"Assistant: {result.output}")
+    
+    # Access additional information if needed
+    print(f"Execution time: {result.execution.duration_ms}ms")
+    print(f"Tokens used: {result.execution.total_tokens}")
 
 if __name__ == "__main__":
     asyncio.run(main())

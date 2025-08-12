@@ -1,0 +1,243 @@
+---
+title: 'EventType'
+description: 'Enumeration of all event types emitted during agent execution'
+---
+
+## Overview
+
+The `EventType` enum defines all possible events that can be emitted during agent execution. These events provide granular visibility into the agent's processing, enabling real-time streaming, debugging, and monitoring.
+
+## Event Categories
+
+### LLM Interaction Events
+
+<ParamField path="LLM_REQUEST" type="str" value="llm_request">
+  Emitted when a request is sent to the language model.
+  
+  **Event Data:**
+  - `message_count` (int): Number of messages in the context
+  - `model` (str): The model being used
+  - `temperature` (float): Temperature setting for the request
+</ParamField>
+
+<ParamField path="LLM_RESPONSE" type="str" value="llm_response">
+  Emitted when a complete response is received from the language model.
+  
+  **Event Data:**
+  - `content` (str): The response content
+  - `tool_calls` (List[Dict]): Any tool calls in the response
+  - `tokens` (Dict): Token usage with `prompt_tokens`, `completion_tokens`, `total_tokens`
+  - `latency_ms` (float): Response time in milliseconds
+</ParamField>
+
+<ParamField path="LLM_STREAM_CHUNK" type="str" value="llm_stream_chunk">
+  Emitted for each chunk of content during streaming responses.
+  
+  **Event Data:**
+  - `content_chunk` (str): The partial content chunk
+</ParamField>
+
+### Tool Execution Events
+
+<ParamField path="TOOL_SELECTED" type="str" value="tool_selected">
+  Emitted when a tool is selected for execution.
+  
+  **Event Data:**
+  - `tool_name` (str): Name of the selected tool
+  - `arguments` (Dict): Arguments passed to the tool
+  - `tool_call_id` (str): Unique identifier for this tool call
+</ParamField>
+
+<ParamField path="TOOL_EXECUTING" type="str" value="tool_executing">
+  Emitted when tool execution begins.
+  
+  **Event Data:**
+  - `tool_name` (str): Name of the executing tool
+  - `tool_call_id` (str): Tool call identifier
+</ParamField>
+
+<ParamField path="TOOL_RESULT" type="str" value="tool_result">
+  Emitted when a tool execution completes successfully.
+  
+  **Event Data:**
+  - `tool_name` (str): Name of the tool
+  - `result` (Any): The tool's return value
+  - `duration_ms` (float): Execution time in milliseconds
+  - `tool_call_id` (str): Tool call identifier
+</ParamField>
+
+<ParamField path="TOOL_ERROR" type="str" value="tool_error">
+  Emitted when a tool execution fails.
+  
+  **Event Data:**
+  - `tool_name` (str): Name of the tool
+  - `error` (str): Error message
+  - `tool_call_id` (str): Tool call identifier
+</ParamField>
+
+### Message Management Events
+
+<ParamField path="MESSAGE_CREATED" type="str" value="message_created">
+  Emitted when a new message is added to the thread.
+  
+  **Event Data:**
+  - `message` (Message): The complete message object
+</ParamField>
+
+### Control Flow Events
+
+<ParamField path="ITERATION_START" type="str" value="iteration_start">
+  Emitted at the beginning of each agent iteration.
+  
+  **Event Data:**
+  - `iteration_number` (int): Current iteration number (0-based)
+  - `max_iterations` (int): Maximum allowed iterations
+</ParamField>
+
+<ParamField path="ITERATION_LIMIT" type="str" value="iteration_limit">
+  Emitted when the maximum iteration limit is reached.
+  
+  **Event Data:**
+  - `iterations_used` (int): Total number of iterations used
+</ParamField>
+
+<ParamField path="EXECUTION_ERROR" type="str" value="execution_error">
+  Emitted when an error occurs during execution.
+  
+  **Event Data:**
+  - `error_type` (str): Type of error (e.g., exception class name)
+  - `message` (str): Error message
+  - `traceback` (Optional[str]): Stack trace if available
+</ParamField>
+
+<ParamField path="EXECUTION_COMPLETE" type="str" value="execution_complete">
+  Emitted when agent execution completes.
+  
+  **Event Data:**
+  - `duration_ms` (float): Total execution time in milliseconds
+  - `total_tokens` (int): Total tokens used across all LLM calls
+</ParamField>
+
+## Usage Examples
+
+### Basic Event Handling
+
+```python
+from tyler import Agent, Thread, EventType
+
+async def handle_events(agent: Agent, thread: Thread):
+    async for event in agent.go(thread, stream=True):
+        match event.type:
+            case EventType.LLM_STREAM_CHUNK:
+                print(event.data["content_chunk"], end="")
+            
+            case EventType.TOOL_SELECTED:
+                print(f"\nUsing tool: {event.data['tool_name']}")
+            
+            case EventType.EXECUTION_ERROR:
+                print(f"\nError: {event.data['message']}")
+```
+
+### Event Counting
+
+```python
+from collections import Counter
+
+async def count_events(agent: Agent, thread: Thread) -> Counter:
+    event_counts = Counter()
+    
+    async for event in agent.go(thread, stream=True):
+        event_counts[event.type] += 1
+    
+    return event_counts
+
+# Usage
+counts = await count_events(agent, thread)
+print(f"LLM requests: {counts[EventType.LLM_REQUEST]}")
+print(f"Tool calls: {counts[EventType.TOOL_SELECTED]}")
+```
+
+### Performance Monitoring
+
+```python
+async def monitor_performance(agent: Agent, thread: Thread):
+    metrics = {
+        "llm_requests": 0,
+        "tool_calls": 0,
+        "errors": 0,
+        "total_latency_ms": 0
+    }
+    
+    async for event in agent.go(thread, stream=True):
+        if event.type == EventType.LLM_REQUEST:
+            metrics["llm_requests"] += 1
+        
+        elif event.type == EventType.LLM_RESPONSE:
+            metrics["total_latency_ms"] += event.data["latency_ms"]
+        
+        elif event.type == EventType.TOOL_SELECTED:
+            metrics["tool_calls"] += 1
+        
+        elif event.type == EventType.EXECUTION_ERROR:
+            metrics["errors"] += 1
+    
+    return metrics
+```
+
+### Custom Event Handlers
+
+```python
+class EventHandler:
+    def __init__(self):
+        self.handlers = {
+            EventType.LLM_REQUEST: self.on_llm_request,
+            EventType.TOOL_SELECTED: self.on_tool_selected,
+            EventType.EXECUTION_ERROR: self.on_error,
+            EventType.EXECUTION_COMPLETE: self.on_complete
+        }
+    
+    async def handle(self, event: ExecutionEvent):
+        handler = self.handlers.get(event.type)
+        if handler:
+            await handler(event)
+    
+    async def on_llm_request(self, event: ExecutionEvent):
+        print(f"🤖 Thinking with {event.data['model']}...")
+    
+    async def on_tool_selected(self, event: ExecutionEvent):
+        print(f"🔧 Using {event.data['tool_name']}")
+    
+    async def on_error(self, event: ExecutionEvent):
+        print(f"❌ Error: {event.data['message']}")
+    
+    async def on_complete(self, event: ExecutionEvent):
+        print(f"✅ Done in {event.data['duration_ms']:.0f}ms")
+
+# Usage
+handler = EventHandler()
+async for event in agent.go(thread, stream=True):
+    await handler.handle(event)
+```
+
+## Event Flow
+
+The typical sequence of events during agent execution:
+
+1. `ITERATION_START` - Processing begins
+2. `LLM_REQUEST` - Request sent to language model
+3. `LLM_STREAM_CHUNK` (multiple) - If streaming, content chunks arrive
+4. `LLM_RESPONSE` - Complete response received
+5. `MESSAGE_CREATED` - Assistant message added to thread
+6. If tool calls:
+   - `TOOL_SELECTED` - For each tool to be called
+   - `TOOL_EXECUTING` - Tool execution begins
+   - `TOOL_RESULT` or `TOOL_ERROR` - Tool completes
+   - `MESSAGE_CREATED` - Tool message added
+7. Repeat from step 2 if more iterations needed
+8. `EXECUTION_COMPLETE` - All processing finished
+
+## See Also
+
+- [ExecutionEvent](/api-reference/tyler-executionevent) - The event object structure
+- [Agent](/api-reference/tyler-agent) - Agent streaming documentation
+- [ExecutionDetails](/api-reference/tyler-executiondetails) - Aggregated execution information

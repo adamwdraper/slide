@@ -16,7 +16,7 @@ from tyler.utils.tool_runner import tool_runner
 from tyler.utils.logging import get_logger
 from tyler.models.execution import (
     EventType, ExecutionEvent, ToolCall, ExecutionDetails, 
-    AgentResult, StreamUpdate
+    AgentResult
 )
 import asyncio
 from functools import partial
@@ -1426,8 +1426,7 @@ class Agent(Model):
                 await self.thread_store.save(thread)
             raise
 
-    @weave.op()
-    async def go_stream_legacy(self, thread: Thread) -> AsyncGenerator[StreamUpdate, None]:
+
         """DEPRECATED: Use go(thread, stream=True) instead. Process the thread with streaming updates.
         
         Yields:

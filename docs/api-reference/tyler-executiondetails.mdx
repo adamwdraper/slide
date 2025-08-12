@@ -1,0 +1,274 @@
+---
+title: 'ExecutionDetails'
+description: 'Complete execution telemetry for agent processing'
+---
+
+## Overview
+
+The `ExecutionDetails` class provides comprehensive telemetry about an agent's execution, including all events, timing information, token usage, and tool calls. It's included in the `AgentResult` for non-streaming execution and can be reconstructed from streaming events.
+
+## Class Definition
+
+```python
+@dataclass
+class ExecutionDetails:
+    events: List[ExecutionEvent]    # All events that occurred
+    start_time: datetime            # When execution began
+    end_time: datetime              # When execution completed
+    total_iterations: int           # Number of iterations performed
+```
+
+## Properties
+
+<ParamField path="events" type="List[ExecutionEvent]">
+  Complete list of all events emitted during execution
+</ParamField>
+
+<ParamField path="start_time" type="datetime">
+  UTC timestamp when execution began
+</ParamField>
+
+<ParamField path="end_time" type="datetime">
+  UTC timestamp when execution completed
+</ParamField>
+
+<ParamField path="total_iterations" type="int">
+  Number of agent iterations performed (tool call cycles)
+</ParamField>
+
+<ParamField path="duration_ms" type="float">
+  Computed property: Total execution time in milliseconds
+</ParamField>
+
+<ParamField path="total_tokens" type="int">
+  Computed property: Sum of all tokens used across all LLM calls
+</ParamField>
+
+<ParamField path="tool_calls" type="List[ToolCall]">
+  Computed property: List of all tool calls made during execution
+</ParamField>
+
+## Usage Examples
+
+### Basic Metrics
+
+```python
+from tyler import Agent, Thread, Message
+
+# Execute agent
+result = await agent.go(thread)
+
+# Access execution details
+execution = result.execution
+
+print(f"Duration: {execution.duration_ms:.0f}ms")
+print(f"Tokens used: {execution.total_tokens}")
+print(f"Iterations: {execution.total_iterations}")
+print(f"Events: {len(execution.events)}")
+```
+
+### Tool Call Analysis
+
+```python
+# Analyze tool usage
+execution = result.execution
+
+for tool_call in execution.tool_calls:
+    print(f"\nTool: {tool_call.tool_name}")
+    print(f"  ID: {tool_call.tool_call_id}")
+    print(f"  Arguments: {tool_call.arguments}")
+    print(f"  Success: {tool_call.success}")
+    print(f"  Duration: {tool_call.duration_ms:.0f}ms")
+    
+    if not tool_call.success:
+        print(f"  Error: {tool_call.error}")
+
+# Summary statistics
+if execution.tool_calls:
+    total_tool_time = sum(tc.duration_ms for tc in execution.tool_calls)
+    avg_tool_time = total_tool_time / len(execution.tool_calls)
+    success_rate = sum(1 for tc in execution.tool_calls if tc.success) / len(execution.tool_calls)
+    
+    print(f"\nTool Statistics:")
+    print(f"  Total calls: {len(execution.tool_calls)}")
+    print(f"  Total time: {total_tool_time:.0f}ms")
+    print(f"  Average time: {avg_tool_time:.0f}ms")
+    print(f"  Success rate: {success_rate:.1%}")
+```
+
+### Event Timeline
+
+```python
+def print_event_timeline(execution: ExecutionDetails):
+    """Print a timeline of execution events"""
+    start = execution.start_time
+    
+    for event in execution.events:
+        elapsed_ms = (event.timestamp - start).total_seconds() * 1000
+        
+        print(f"{elapsed_ms:7.0f}ms: {event.type.value}")
+        
+        # Add details for specific events
+        if event.type == EventType.TOOL_SELECTED:
+            print(f"            → {event.data['tool_name']}")
+        elif event.type == EventType.LLM_RESPONSE:
+            tokens = event.data.get('tokens', {})
+            print(f"            → {tokens.get('total_tokens', 0)} tokens")
+
+# Usage
+print_event_timeline(result.execution)
+```
+
+### Token Usage Breakdown
+
+```python
+def analyze_token_usage(execution: ExecutionDetails) -> Dict[str, int]:
+    """Break down token usage by type"""
+    usage = {
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "total_tokens": 0,
+        "llm_calls": 0
+    }
+    
+    for event in execution.events:
+        if event.type == EventType.LLM_RESPONSE:
+            tokens = event.data.get("tokens", {})
+            usage["prompt_tokens"] += tokens.get("prompt_tokens", 0)
+            usage["completion_tokens"] += tokens.get("completion_tokens", 0)
+            usage["total_tokens"] += tokens.get("total_tokens", 0)
+            usage["llm_calls"] += 1
+    
+    if usage["llm_calls"] > 0:
+        usage["avg_tokens_per_call"] = usage["total_tokens"] / usage["llm_calls"]
+    
+    return usage
+
+# Usage
+tokens = analyze_token_usage(result.execution)
+print(f"Total tokens: {tokens['total_tokens']}")
+print(f"Average per call: {tokens.get('avg_tokens_per_call', 0):.0f}")
+```
+
+### Error Analysis
+
+```python
+def get_errors(execution: ExecutionDetails) -> List[ExecutionEvent]:
+    """Extract all error events"""
+    return [
+        event for event in execution.events
+        if event.type in (EventType.EXECUTION_ERROR, EventType.TOOL_ERROR)
+    ]
+
+# Check for errors
+errors = get_errors(result.execution)
+if errors:
+    print("Errors occurred during execution:")
+    for error in errors:
+        print(f"  - {error.data.get('error_type', 'Unknown')}: {error.data['message']}")
+        if error.type == EventType.TOOL_ERROR:
+            print(f"    Tool: {error.data['tool_name']}")
+```
+
+### Performance Monitoring
+
+```python
+class PerformanceMonitor:
+    def __init__(self):
+        self.executions = []
+    
+    def record(self, execution: ExecutionDetails):
+        """Record execution metrics"""
+        self.executions.append({
+            "timestamp": execution.start_time,
+            "duration_ms": execution.duration_ms,
+            "tokens": execution.total_tokens,
+            "tool_calls": len(execution.tool_calls),
+            "iterations": execution.total_iterations,
+            "success": not any(e.type == EventType.EXECUTION_ERROR for e in execution.events)
+        })
+    
+    def get_stats(self) -> Dict[str, float]:
+        """Get performance statistics"""
+        if not self.executions:
+            return {}
+        
+        durations = [e["duration_ms"] for e in self.executions]
+        tokens = [e["tokens"] for e in self.executions]
+        
+        return {
+            "avg_duration_ms": sum(durations) / len(durations),
+            "min_duration_ms": min(durations),
+            "max_duration_ms": max(durations),
+            "avg_tokens": sum(tokens) / len(tokens),
+            "success_rate": sum(1 for e in self.executions if e["success"]) / len(self.executions)
+        }
+
+# Usage
+monitor = PerformanceMonitor()
+result = await agent.go(thread)
+monitor.record(result.execution)
+```
+
+### Custom Metrics
+
+```python
+def calculate_custom_metrics(execution: ExecutionDetails) -> Dict[str, Any]:
+    """Calculate custom metrics from execution details"""
+    metrics = {}
+    
+    # Response time metrics
+    llm_latencies = []
+    for event in execution.events:
+        if event.type == EventType.LLM_RESPONSE:
+            llm_latencies.append(event.data["latency_ms"])
+    
+    if llm_latencies:
+        metrics["llm_p50_ms"] = sorted(llm_latencies)[len(llm_latencies) // 2]
+        metrics["llm_p95_ms"] = sorted(llm_latencies)[int(len(llm_latencies) * 0.95)]
+    
+    # Tool metrics
+    tool_events = [e for e in execution.events if e.type == EventType.TOOL_SELECTED]
+    metrics["unique_tools"] = len(set(e.data["tool_name"] for e in tool_events))
+    
+    # Streaming metrics
+    chunk_count = sum(1 for e in execution.events if e.type == EventType.LLM_STREAM_CHUNK)
+    metrics["stream_chunks"] = chunk_count
+    
+    return metrics
+```
+
+## Reconstructing from Streaming
+
+```python
+async def build_execution_details(agent: Agent, thread: Thread) -> ExecutionDetails:
+    """Build ExecutionDetails from streaming events"""
+    events = []
+    start_time = None
+    iterations = 0
+    
+    async for event in agent.go(thread, stream=True):
+        if start_time is None:
+            start_time = event.timestamp
+        
+        events.append(event)
+        
+        if event.type == EventType.ITERATION_START:
+            iterations = max(iterations, event.data["iteration_number"] + 1)
+    
+    end_time = events[-1].timestamp if events else start_time
+    
+    return ExecutionDetails(
+        events=events,
+        start_time=start_time,
+        end_time=end_time,
+        total_iterations=iterations
+    )
+```
+
+## See Also
+
+- [AgentResult](/api-reference/tyler-agentresult) - Contains ExecutionDetails
+- [ExecutionEvent](/api-reference/tyler-executionevent) - Individual events
+- [ToolCall](/api-reference/tyler-toolcall) - Tool execution information
+- [EventType](/api-reference/tyler-eventtype) - All event types
