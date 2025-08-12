@@ -168,6 +168,8 @@ When you install Tyler, all required runtime dependencies will be installed auto
 Create a `.env` file in your project directory with the following configuration:
 ```bash
 # Database Configuration (used by Narrator)
+# For local development with Docker: cd packages/narrator && docker-compose up -d
+# Then use: NARRATOR_DATABASE_URL=postgresql+asyncpg://narrator:narrator_dev@localhost:5432/narrator
 NARRATOR_DATABASE_URL=postgresql+asyncpg://user:password@localhost/dbname
 # Or for SQLite:
 # NARRATOR_DATABASE_URL=sqlite+aiosqlite:///path/to/database.db

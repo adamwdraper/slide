@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: narrator-postgres
+    environment:
+      POSTGRES_DB: ${NARRATOR_DB_NAME:-narrator}
+      POSTGRES_USER: ${NARRATOR_DB_USER:-narrator}
+      POSTGRES_PASSWORD: ${NARRATOR_DB_PASSWORD:-narrator_dev}
+    ports:
+      - "${NARRATOR_DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${NARRATOR_DB_USER:-narrator}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
