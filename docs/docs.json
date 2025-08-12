@@ -42,8 +42,9 @@
         "pages": [
           "concepts/how-agents-work",
           "concepts/architecture",
+          "concepts/tools",
           "concepts/mcp",
-          "concepts/a2a",
+          "concepts/a2a"
         ]
       },
       {
@@ -55,9 +56,7 @@
               "api-reference/tyler-agent",
               "api-reference/tyler-agentresult",
               "api-reference/tyler-executionevent",
-              "api-reference/tyler-eventtype",
-              "api-reference/tyler-executiondetails",
-              "api-reference/tyler-toolcall"
+              "api-reference/tyler-eventtype"
             ]
           }
         ]

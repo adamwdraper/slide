@@ -104,10 +104,8 @@ async for event in agent.go(thread, stream=True):
 @dataclass
 class AgentResult:
     thread: Thread  # Updated thread with all messages
-    messages: List[Message]  # New messages from this execution
-    output: Optional[str]  # The final assistant response
-    execution: ExecutionDetails  # Detailed execution information
-    success: bool  # Whether execution completed successfully
+    new_messages: List[Message]  # New messages from this execution
+    content: Optional[str]  # The final assistant response
 ```
 
 ### ExecutionEvent (Streaming)
