@@ -336,7 +336,7 @@ uv pip install dist/*.whl --python /tmp/test-env
 
 ## License
 
-- Tyler: CC BY-NC 4.0
+- Tyler: MIT
 - The Narrator: MIT
 - Lye: MIT
 - Space Monkey: MIT

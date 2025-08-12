@@ -8,7 +8,7 @@ version = "2.0.0"
 description = "Tyler: A development kit for manifesting AI agents with a complete lack of conventional limitations"
 readme = "README.md"
 requires-python = ">=3.12"
-license = {text = "CC BY-NC 4.0"}
+license = {text = "MIT"}
 authors = [
     {name = "adamwdraper"}
 ]
@@ -18,7 +18,7 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
     "Operating System :: OS Independent",
-    "License :: Free for non-commercial use",
+    "License :: OSI Approved :: MIT License",
 ]
 dependencies = [
     "litellm>=1.60.2",
