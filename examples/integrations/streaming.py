@@ -14,7 +14,7 @@ import os
 import asyncio
 import weave
 import sys
-from tyler import Agent, Thread, Message, StreamUpdate
+from tyler import Agent, Thread, Message, EventType, ExecutionEvent
 
 try:
     if os.getenv("WANDB_API_KEY"):
@@ -44,16 +44,22 @@ async def main():
     logger.info("User: %s", message.content)
 
     # Process the thread with streaming
-    async for update in agent.go_stream(thread):
-        if update.type == StreamUpdate.Type.CONTENT_CHUNK:
-            logger.info("Content chunk: %s", update.data)
-        elif update.type == StreamUpdate.Type.ASSISTANT_MESSAGE:
-            logger.info("Complete assistant message: %s", update.data.content)
-        elif update.type == StreamUpdate.Type.TOOL_MESSAGE:
-            logger.info("Tool message: %s", update.data.content)
-        elif update.type == StreamUpdate.Type.ERROR:
-            logger.error("Error: %s", update.data)
-        elif update.type == StreamUpdate.Type.COMPLETE:
+    content_buffer = []
+    
+    async for event in agent.go(thread, stream=True):
+        if event.type == EventType.LLM_STREAM_CHUNK:
+            chunk = event.data.get("content_chunk", "")
+            content_buffer.append(chunk)
+            logger.info("Content chunk: %s", chunk)
+        elif event.type == EventType.MESSAGE_CREATED:
+            msg = event.data.get("message")
+            if msg and msg.role == "assistant":
+                logger.info("Complete assistant message: %s", msg.content)
+            elif msg and msg.role == "tool":
+                logger.info("Tool message: %s", msg.content)
+        elif event.type == EventType.EXECUTION_ERROR:
+            logger.error("Error: %s", event.data.get("message"))
+        elif event.type == EventType.EXECUTION_COMPLETE:
             logger.info("Processing complete")
 
 if __name__ == "__main__":
