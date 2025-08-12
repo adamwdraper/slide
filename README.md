@@ -56,12 +56,10 @@ async def main():
     thread.add_message(Message(role="user", content="Hello, how are you?"))
 
     # Process the thread
-    updated_thread, new_messages = await agent.go(thread)
+    result = await agent.go(thread)
     
     # Print the assistant's response
-    for message in new_messages:
-        if message.role == "assistant":
-            print(f"Assistant: {message.content}")
+    print(f"Assistant: {result.content}")
 
 asyncio.run(main())
 ```
@@ -115,18 +113,16 @@ async def main():
     thread.add_message(Message(role="user", content="Remember this: my name is John"))
     
     # Process the first message
-    updated_thread, new_messages = await agent.go(thread)
+    result = await agent.go(thread)
     
     # Add another message to the same thread
     thread.add_message(Message(role="user", content="What's my name?"))
     
     # Process the second message (will remember "John")
-    final_thread, final_messages = await agent.go(thread)
+    final_result = await agent.go(thread)
     
     # Print the assistant's response
-    for message in final_messages:
-        if message.role == "assistant":
-            print(f"Assistant: {message.content}")
+    print(f"Assistant: {final_result.content}")
 
 asyncio.run(main())
 ```
