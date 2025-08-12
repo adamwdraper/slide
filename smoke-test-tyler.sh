@@ -9,4 +9,4 @@ echo ""
 export PYTHONWARNINGS="ignore"
 
 # Use uv to run the smoke test script with warning suppression
-uv run python -W ignore packages/tyler/examples/smoke_test_examples.py "$@"
+uv run python -W ignore scripts/tyler_smoke_test.py "$@"

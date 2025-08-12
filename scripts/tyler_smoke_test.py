@@ -79,8 +79,8 @@ def run_example(example_file: str) -> Tuple[bool, str]:
     
     try:
         # Run the example using uv from the workspace root
-        # Going up 3 levels from examples/ to reach the workspace root
-        workspace_root = Path(__file__).parent.parent.parent.parent
+        # Going up 1 level from scripts/ to reach the workspace root
+        workspace_root = Path(__file__).parent.parent
         cmd = ["uv", "run", f"packages/tyler/examples/{example_file}"]
         
         # Prepare environment with LiteLLM and Weave suppression
