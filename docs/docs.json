@@ -50,12 +50,17 @@
       {
         "group": "API Reference",
         "pages": [
-          "api-reference/tyler-agent",
-          "api-reference/tyler-agentresult",
-          "api-reference/tyler-executionevent",
-          "api-reference/tyler-eventtype",
-          "api-reference/tyler-executiondetails",
-          "api-reference/tyler-toolcall"
+          {
+            "group": "Tyler",
+            "pages": [
+              "api-reference/tyler-agent",
+              "api-reference/tyler-agentresult",
+              "api-reference/tyler-executionevent",
+              "api-reference/tyler-eventtype",
+              "api-reference/tyler-executiondetails",
+              "api-reference/tyler-toolcall"
+            ]
+          }
         ]
       },
       {
