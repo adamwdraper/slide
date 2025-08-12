@@ -134,10 +134,6 @@ async def main():
         logger.info("Assistant: %s", result.content)
         
         # Show tool usage
-        if result.execution.tool_calls:
-            logger.info("Tools used:")
-            for tc in result.execution.tool_calls:
-                logger.info("  - %s: %.2fms", tc.tool_name, tc.duration_ms)
         
         # Show detailed message info
         for message in result.new_messages:

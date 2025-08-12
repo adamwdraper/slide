@@ -71,14 +71,8 @@ async def main():
     # Process the generation thread with the new API
     result = await agent.go(generation_thread)
 
-    # Log response and execution details
+    # Log response
     logger.info("Assistant: %s", result.content)
-    
-    # Show tool usage
-    if result.execution.tool_calls:
-        logger.info("Tools used:")
-        for tc in result.execution.tool_calls:
-            logger.info("  - %s: %.2fms", tc.tool_name, tc.duration_ms)
     
     # Track generated image from new messages
     new_messages = result.new_messages
@@ -152,7 +146,6 @@ async def main():
         
         # Log response
         logger.info("Assistant: %s", result.content)
-        logger.info("Execution time: %.2fms", result.execution.duration_ms)
         if message.tool_calls:
                 tool_calls_info = [{
                     "name": tc.get('function', {}).get('name'),

@@ -119,12 +119,6 @@ async def main():
             logger.info("Assistant: %s", result.content)
             print(f"🤖 Agent: {result.content}")
             
-            if result.execution.tool_calls:
-                logger.info("Tools used:")
-                for tc in result.execution.tool_calls:
-                    logger.info("  - %s: %.2fms", tc.tool_name, tc.duration_ms)
-                    print(f"🔧 Tool ({tc.tool_name}): {'Success' if tc.success else 'Failed'}")
-            
         except Exception as e:
             logger.error(f"Error in example {i}: {e}")
             print(f"❌ Error: {e}")
@@ -174,11 +168,6 @@ async def interactive_demo():
         
         # Show execution details
         print(f"\n📊 Execution stats:")
-        print(f"  - Duration: {result.execution.duration_ms:.2f}ms")
-        print(f"  - Total tokens: {result.execution.total_tokens}")
-        
-        if result.execution.tool_calls:
-            print(f"  - Tools used: {len(result.execution.tool_calls)}")
         
     except KeyboardInterrupt:
         print("\n👋 Interactive demo cancelled")

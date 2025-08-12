@@ -33,13 +33,7 @@ result = asyncio.run(agent.go(thread))
 print(f"ASSISTANT: {result.content}")
 print("-" * 80)
 
-# Show execution metrics
-print(f"Execution time: {result.execution.duration_ms:.2f}ms")
-print(f"Total tokens: {result.execution.total_tokens}")
-
-# Show tool usage if any
-if result.execution.tool_calls:
-    print(f"\nTools used:")
-    for tool_call in result.execution.tool_calls:
-        print(f"  - {tool_call.tool_name}")
+# Show result details
+print(f"New messages: {len(result.new_messages)}")
+print(f"Thread messages: {len(result.thread.messages)}")
 print("-" * 80)

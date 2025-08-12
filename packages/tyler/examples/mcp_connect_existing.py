@@ -147,9 +147,6 @@ async def main():
         print(result.content)
         
         # Show execution details
-        print(f"\nExecution time: {result.execution.duration_ms:.2f}ms")
-        if result.execution.tool_calls:
-            print(f"Tools used: {len(result.execution.tool_calls)}")
         
         await mcp.disconnect_all()
     

@@ -85,15 +85,16 @@ Please help me with these tasks.
     
     # Show execution details
     print(f"\n=== EXECUTION DETAILS ===")
-    print(f"Duration: {result.execution.duration_ms:.2f}ms")
-    print(f"Total tokens: {result.execution.total_tokens}")
+    print(f"New messages: {len(result.new_messages)}")
     
-    # Show delegation details
-    delegation_calls = [tc for tc in result.execution.tool_calls if 'delegate_to_' in tc.tool_name]
-    if delegation_calls:
-        print(f"\nDelegated to {len(delegation_calls)} agents:")
-        for dc in delegation_calls:
-            print(f"  - {dc.tool_name.replace('delegate_to_', '')}: {dc.duration_ms:.2f}ms")
+    # Show delegation details from messages
+    for msg in result.new_messages:
+        if msg.tool_calls:
+            for tc in msg.tool_calls:
+                tool_name = tc.get('function', {}).get('name', '')
+                if 'delegate_to_' in tool_name:
+                    delegated_agent = tool_name.replace('delegate_to_', '')
+                    print(f"\nDelegated to agent: {delegated_agent}")
     
     # Show all messages for debugging
     print("\n=== FULL CONVERSATION TRACE ===\n")

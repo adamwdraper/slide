@@ -24,6 +24,7 @@ import asyncio
 import json
 from unittest.mock import patch, MagicMock, AsyncMock, call
 from datetime import datetime, timezone
+from tyler import AgentResult
 
 # Mock environment variables before imports
 @pytest.fixture(autouse=True)
@@ -301,7 +302,11 @@ class TestMessageClassification:
                 "reasoning": "Not relevant to agent"
             })
         )
-        app.message_classifier_agent.go.return_value = (None, [classify_message])
+
+        mock_result = MagicMock(spec=AgentResult)
+        mock_result.new_messages = [classify_message]
+        mock_result.content = classify_message.content
+        app.message_classifier_agent.go = AsyncMock(return_value=mock_result)
         
         # Mock thread creation
         thread = Thread()
@@ -335,7 +340,14 @@ class TestMessageClassification:
                 "reasoning": "Simple acknowledgment"
             })
         )
-        app.message_classifier_agent.go.return_value = (None, [classify_message])
+        
+        mock_result = MagicMock(spec=AgentResult)
+
+        mock_result.new_messages = [classify_message]
+
+        mock_result.content = classify_message.content
+
+        app.message_classifier_agent.go = AsyncMock(return_value=mock_result)
         
         # Mock thread creation
         thread = Thread()
@@ -370,7 +382,14 @@ class TestMessageClassification:
                 "reasoning": "Requires detailed response"
             })
         )
-        app.message_classifier_agent.go.return_value = (None, [classify_message])
+        
+        mock_result = MagicMock(spec=AgentResult)
+
+        mock_result.new_messages = [classify_message]
+
+        mock_result.content = classify_message.content
+
+        app.message_classifier_agent.go = AsyncMock(return_value=mock_result)
         
         # Mock agent response
         assistant_message = Message(
@@ -378,7 +397,16 @@ class TestMessageClassification:
             content="Here's my detailed response.",
             metrics={"model": "gpt-4.1", "completion_tokens": 10}
         )
-        app.agent.go.return_value = (None, [assistant_message])
+        
+        mock_result = MagicMock(spec=AgentResult)
+
+        messages = [assistant_message]
+
+        mock_result.new_messages = messages
+
+        mock_result.content = messages[-1].content if messages else None
+
+        app.agent.go = AsyncMock(return_value=mock_result)
         
         # Mock thread creation
         thread = Thread()
@@ -454,14 +482,30 @@ class TestFileHandling:
         )
         
         # Mock agent response
-        app.agent.go.return_value = (None, [tool_message, assistant_message])
+        
+        mock_result = MagicMock(spec=AgentResult)
+
+        messages = [tool_message, assistant_message]
+
+        mock_result.new_messages = messages
+
+        mock_result.content = messages[-1].content if messages else None
+
+        app.agent.go = AsyncMock(return_value=mock_result)
         
         # Mock classifier
         classify_message = Message(
             role="assistant",
             content=json.dumps({"response_type": "full_response"})
         )
-        app.message_classifier_agent.go.return_value = (None, [classify_message])
+        
+        mock_result = MagicMock(spec=AgentResult)
+
+        mock_result.new_messages = [classify_message]
+
+        mock_result.content = classify_message.content
+
+        app.message_classifier_agent.go = AsyncMock(return_value=mock_result)
         
         # Mock Slack file upload
         app.slack_app.client.files_getUploadURLExternal.return_value = {
@@ -624,7 +668,14 @@ class TestErrorHandling:
             role="assistant",
             content=json.dumps({"response_type": "full_response"})
         )
-        app.message_classifier_agent.go.return_value = (None, [classify_message])
+        
+        mock_result = MagicMock(spec=AgentResult)
+
+        mock_result.new_messages = [classify_message]
+
+        mock_result.content = classify_message.content
+
+        app.message_classifier_agent.go = AsyncMock(return_value=mock_result)
         
         # Mock agent to raise error
         app.agent.go.side_effect = Exception("Agent processing error")
@@ -657,7 +708,14 @@ class TestErrorHandling:
             role="assistant",
             content=json.dumps({"response_type": "full_response"})
         )
-        app.message_classifier_agent.go.return_value = (None, [classify_message])
+        
+        mock_result = MagicMock(spec=AgentResult)
+
+        mock_result.new_messages = [classify_message]
+
+        mock_result.content = classify_message.content
+
+        app.message_classifier_agent.go = AsyncMock(return_value=mock_result)
         
         # Mock agent to raise thread not found error
         app.agent.go.side_effect = ValueError("Thread with ID abc123 not found")

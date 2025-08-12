@@ -59,21 +59,7 @@ async def test_go_non_streaming_returns_agent_result(mock_completion):
     assert result.thread == thread
     assert len(result.new_messages) > 0
     assert result.content == "Test response"
-    assert hasattr(result, 'execution')
-    assert result.success is True
-    
-    # Verify execution details
-    assert result.execution.total_tokens == 30
-    assert result.execution.duration_ms > 0
-    assert len(result.execution.events) > 0
-    
-    # Check event types
-    event_types = [e.type for e in result.execution.events]
-    assert EventType.ITERATION_START in event_types
-    assert EventType.LLM_REQUEST in event_types
-    assert EventType.LLM_RESPONSE in event_types
-    assert EventType.MESSAGE_CREATED in event_types
-    assert EventType.EXECUTION_COMPLETE in event_types
+    # AgentResult no longer has execution or success attributes
 
 
 @pytest.mark.asyncio
@@ -172,17 +158,9 @@ async def test_execution_with_tool_calls(mock_completion):
         
         result = await agent.go(thread)
         
-        # Check tool calls in execution
-        assert len(result.execution.tool_calls) == 1
-        tool_call_detail = result.execution.tool_calls[0]
-        assert tool_call_detail.tool_name == "calculate"
-        assert tool_call_detail.arguments == {"x": 5, "y": 3}
-        assert tool_call_detail.success is True
-        
-        # Check events include tool execution
-        event_types = [e.type for e in result.execution.events]
-        assert EventType.TOOL_SELECTED in event_types
-        assert EventType.TOOL_RESULT in event_types
+        # Verify the result contains the expected content
+        assert result.content == "The result is 8"
+        assert len(result.new_messages) > 0
 
 
 @pytest.mark.asyncio
@@ -199,16 +177,9 @@ async def test_execution_error_handling(mock_completion):
     
     # Should still get a result, but with error
     assert isinstance(result, AgentResult)
-    assert result.success is False
     # Error message is set as output
     assert result.content is not None
     assert "error" in result.content.lower()
-    
-    # Check error event
-    error_events = [e for e in result.execution.events if e.type == EventType.EXECUTION_ERROR]
-    assert len(error_events) > 0
-    # There's a known issue with StringPrompt serialization
-    assert any(phrase in error_events[0].data["message"] for phrase in ["API Error", "StringPrompt", "JSON serializable"])
 
 
 @pytest.mark.asyncio

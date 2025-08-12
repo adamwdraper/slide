@@ -98,7 +98,6 @@ async def example_tool_generated_attachment(thread_store, agent, file_store):
     
     # The thread is automatically saved by the agent, which processes any attachments
     logger.info(f"Agent response: {result.content}")
-    logger.info(f"Execution time: {result.execution.duration_ms:.2f}ms")
     
     # Log information about generated attachments
     for msg in result.new_messages:
@@ -108,12 +107,6 @@ async def example_tool_generated_attachment(thread_store, agent, file_store):
                 logger.info(f"- {att.filename} ({att.mime_type})")
                 logger.info(f"  Status: {att.status}")
                 logger.info(f"  Storage path: {att.storage_path}")
-    
-    # Show which tools were used
-    if result.execution.tool_calls:
-        logger.info(f"Tools used:")
-        for tc in result.execution.tool_calls:
-            logger.info(f"  - {tc.tool_name}: {tc.duration_ms:.2f}ms")
     
     return thread  # Return the updated thread
 

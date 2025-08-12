@@ -72,10 +72,6 @@ async def text_to_speech_example():
 
     # Log response and tool usage
     logger.info("Assistant: %s", result.content)
-    if result.execution.tool_calls:
-        logger.info("Tools used:")
-        for tc in result.execution.tool_calls:
-            logger.info("  - %s: %.2fms", tc.tool_name, tc.duration_ms)
     
     # Check messages for generated audio files
     new_messages = result.new_messages
@@ -130,8 +126,7 @@ async def speech_to_text_example(audio_attachment):
 
     # Log response
     logger.info("Assistant: %s", result.content)
-    logger.info("Execution time: %.2fms", result.execution.duration_ms)
-    
+        
     # Log message details
     for message in result.new_messages:
         if message.tool_calls:

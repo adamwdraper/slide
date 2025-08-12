@@ -60,14 +60,8 @@ async def main():
 
     # Log response and execution details
     logger.info("Assistant: %s", result.content)
-    logger.info("Execution time: %.2fms", result.execution.duration_ms)
-    logger.info("Total tokens: %d", result.execution.total_tokens)
-    
+            
     # Show which tools were considered
-    if result.execution.tool_calls:
-        logger.info("Tools used:")
-        for tc in result.execution.tool_calls:
-            logger.info("  - %s", tc.tool_name)
     
     logger.info("-" * 50)
 

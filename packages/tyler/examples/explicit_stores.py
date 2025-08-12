@@ -42,9 +42,7 @@ async def main():
 
     # 6. Print the assistant's response and execution details
     print(f"Assistant Response: {result.content}")
-    print(f"Execution time: {result.execution.duration_ms:.2f}ms")
-    print(f"Total tokens used: {result.execution.total_tokens}")
-    
+            
     # The thread is automatically saved to the store during execution
     print(f"Thread saved to store with ID: {thread.id}")
 
