@@ -235,7 +235,7 @@ async def run_interactive_session(coordinator: Agent, adapter: A2AAdapter):
                     else:
                         print(f"\n\n[🔧 Using tool: {tool_name}]")
                     print()
-                elif update.type.name == "COMPLETE":
+                elif event.type == EventType.EXECUTION_COMPLETE:
                     print(f"\n\n{'='*60}")
                     print("Response complete!")
                     print('='*60)

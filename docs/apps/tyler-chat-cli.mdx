@@ -1,0 +1,290 @@
+---
+title: 'Tyler chat CLI'
+description: 'Interactive command-line interface for chatting with Tyler agents'
+---
+
+The Tyler Chat CLI provides an interactive terminal interface for conversing with your Tyler agents. It offers a clean, distraction-free chat experience with streaming responses, conversation persistence, and easy thread management.
+
+## Installation
+
+Tyler Chat CLI is automatically installed when you install the Tyler package:
+
+<Tabs>
+  <Tab title="uv (recommended)">
+    ```bash
+    uv add slide-tyler
+    ```
+  </Tab>
+  <Tab title="pip">
+    ```bash
+    pip install slide-tyler
+    ```
+  </Tab>
+</Tabs>
+
+After installation, the `tyler-chat` command will be available in your terminal.
+
+## Basic usage
+
+To start a chat session:
+
+```bash
+tyler-chat
+```
+
+This launches an interactive chat where you can:
+- Type messages and see streaming responses
+- Use commands to manage your conversation
+- Switch between different conversation threads
+
+## Configuration
+
+Tyler Chat can be configured using a YAML or JSON file to customize the agent's behavior, tools, and parameters.
+
+### Using a configuration file
+
+```bash
+tyler-chat --config my-agent-config.yaml
+# or
+tyler-chat -c config.json
+```
+
+### Configuration file format
+
+Create a `tyler-chat-config.yaml` file:
+
+```yaml
+# Agent Identity
+name: "Tyler"
+purpose: "To be a helpful AI assistant with access to various tools and capabilities."
+notes: |
+  - Prefer clear, concise communication
+  - Use tools when appropriate to enhance responses
+  - Maintain context across conversations
+
+# Model Configuration
+model_name: "gpt-4o"  # or any LiteLLM-compatible model
+temperature: 0.7
+max_tool_iterations: 10
+
+# Tool Configuration
+tools:
+  # Built-in tool modules
+  - "web"           # Web search and browsing
+  - "files"         # File operations
+  - "slack"         # Slack integration
+  - "notion"        # Notion integration
+  - "command_line"  # System commands
+  - "image"         # Image processing
+  - "audio"         # Audio processing
+  
+  # Custom tool files
+  - "./my_custom_tools.py"
+  - "~/tools/special_tool.py"
+```
+
+### Command line options
+
+```bash
+# Specify a configuration file
+tyler-chat --config path/to/config.yaml
+
+# Set an initial thread title
+tyler-chat --title "Research Session"
+
+# Combine options
+tyler-chat -c my-config.yaml -t "Project Discussion"
+```
+
+## Chat commands
+
+During a chat session, you can use these special commands:
+
+| Command | Description |
+|---------|-------------|
+| `/help` | Show available commands |
+| `/quit` or `/exit` | Exit the chat |
+| `/new` | Create a new conversation thread |
+| `/threads` | List all conversation threads |
+| `/switch <id>` | Switch to a different thread |
+| `/save` | Save the current thread |
+| `/clear` | Clear the screen |
+
+### Command examples
+
+```
+You: /threads
+╭─────────────── Threads ───────────────╮
+│ 1. Research Session (2 messages)      │
+│ 2. Code Review (5 messages)           │
+│ 3. Project Planning (3 messages)      │
+╰──────────────────────────────────────╯
+
+You: /switch 2
+Switched to thread: Code Review
+
+You: /new
+Created new thread: Untitled Thread
+```
+
+## Features
+
+### Streaming responses
+
+Tyler Chat displays responses in real-time as they're generated, providing immediate feedback and a more interactive experience.
+
+### Thread persistence
+
+Conversations are automatically saved and can be resumed later. By default, threads are stored in memory during the session.
+
+### Rich formatting
+
+- **Markdown support**: Responses are rendered with proper formatting
+- **Syntax highlighting**: Code blocks are displayed with syntax colors
+- **Structured output**: Tables, lists, and other elements are properly formatted
+
+### Tool integration
+
+When your agent uses tools, you'll see real-time updates:
+
+```
+You: Search for the latest AI news
+
+Agent: Let me search for the latest AI news for you.
+
+[🔧 Using tool: web-search]
+
+Here's what I found about the latest AI developments...
+```
+
+## Advanced usage
+
+### Persistent storage
+
+To enable persistent storage across sessions, set up a database:
+
+```bash
+# Set environment variable
+export NARRATOR_DATABASE_URL="sqlite:///tyler_chat.db"
+
+# Then run tyler-chat
+tyler-chat
+```
+
+### Custom tools
+
+Create a Python file with your custom tools:
+
+```python
+# my_tools.py
+from lye import tool
+
+@tool
+def calculate_compound_interest(
+    principal: float,
+    rate: float,
+    time: int,
+    compounds_per_year: int = 12
+) -> float:
+    """Calculate compound interest"""
+    amount = principal * (1 + rate/compounds_per_year) ** (compounds_per_year * time)
+    return round(amount, 2)
+
+# Export tools
+TOOLS = [calculate_compound_interest]
+```
+
+Then reference it in your config:
+
+```yaml
+tools:
+  - "./my_tools.py"
+```
+
+### Environment variables
+
+Tyler Chat respects these environment variables:
+
+| Variable | Description |
+|----------|-------------|
+| `OPENAI_API_KEY` | API key for OpenAI models |
+| `ANTHROPIC_API_KEY` | API key for Anthropic models |
+| `NARRATOR_DATABASE_URL` | Database URL for thread persistence |
+| `WEAVE_PROJECT` | W&B project for tracking |
+
+## Troubleshooting
+
+### Clean output mode
+
+Tyler Chat automatically suppresses noisy output from third-party libraries. If you need to see debug information:
+
+```bash
+# Enable debug mode
+TYLER_DEBUG=1 tyler-chat
+```
+
+### Common issues
+
+**"Module not found" errors**: Make sure all dependencies are installed:
+```bash
+uv add slide-tyler[all]
+```
+
+**API key errors**: Ensure your API keys are set in environment variables or `.env` file
+
+**Database errors**: Check your `NARRATOR_DATABASE_URL` is correctly formatted
+
+## Examples
+
+### Research assistant
+
+```yaml
+# research-assistant-config.yaml
+name: "Research Assistant"
+purpose: "To help with in-depth research and analysis"
+model_name: "gpt-4o"
+tools:
+  - "web"
+  - "files"
+notes: |
+  - Always cite sources
+  - Create organized reports
+  - Fact-check information
+```
+
+```bash
+tyler-chat -c research-assistant-config.yaml -t "Climate Research"
+```
+
+### Code helper
+
+```yaml
+# code-helper-config.yaml
+name: "Code Helper"
+purpose: "To assist with programming tasks"
+temperature: 0.3  # Lower temperature for more consistent code
+tools:
+  - "files"
+  - "command_line"
+notes: |
+  - Write clean, well-commented code
+  - Follow best practices
+  - Include error handling
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Build custom agents" icon="robot" href="/guides/your-first-agent">
+    Learn to create agents programmatically
+  </Card>
+  <Card title="Add custom tools" icon="wrench" href="/guides/adding-tools">
+    Extend agent capabilities with custom tools
+  </Card>
+  <Card title="Deploy to Slack" icon="slack" href="/apps/slack-agent">
+    Run your agent as a Slack bot
+  </Card>
+  <Card title="Advanced patterns" icon="code" href="/guides/patterns">
+    Explore advanced agent patterns
+  </Card>
+</CardGroup>

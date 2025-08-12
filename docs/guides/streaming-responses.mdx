@@ -24,7 +24,8 @@ The simplest way to stream responses:
 
 ```python
 import asyncio
-from tyler import Agent, Thread, Message, StreamUpdate
+from tyler import Agent, Thread, Message
+from tyler.models.execution import ExecutionEvent, EventType
 
 agent = Agent(
     name="streaming-assistant",
@@ -122,7 +123,8 @@ async def research_with_streaming(topic: str):
 
 ```python
 import asyncio
-from tyler import Agent, Thread, Message, StreamUpdate, ThreadStore
+from tyler import Agent, Thread, Message, ThreadStore
+from tyler.models.execution import ExecutionEvent, EventType
 
 class StreamingChat:
     def __init__(self):
@@ -153,11 +155,11 @@ class StreamingChat:
         
         print("\n🤖 ", end="", flush=True)
         
-        async for update in self.agent.go_stream(self.thread):
-            if update.type == StreamUpdate.Type.CONTENT_CHUNK:
-                print(update.data, end="", flush=True)
-            elif update.type == StreamUpdate.Type.COMPLETE:
-                self.thread = update.data
+        async for update in self.agent.go(self.thread, stream=True):
+            if update.type == EventType.LLM_STREAM_CHUNK:
+                print(update.data.get("content_chunk", ""), end="", flush=True)
+            elif update.type == EventType.EXECUTION_COMPLETE:
+                # Thread is already updated in place
                 await self.thread_store.save_thread(self.thread)
         
         print("\n")
@@ -211,22 +213,22 @@ async def websocket_endpoint(websocket: WebSocket):
         thread.add_message(message)
         
         # Stream response
-        async for update in agent.go_stream(thread):
-            if update.type == StreamUpdate.Type.CONTENT_CHUNK:
+        async for update in agent.go(thread, stream=True):
+            if update.type == EventType.LLM_STREAM_CHUNK:
                 await websocket.send_json({
                     "type": "content",
                     "data": update.data
                 })
             
-            elif update.type == StreamUpdate.Type.TOOL_MESSAGE:
+            elif update.type == EventType.TOOL_SELECTED:
                 await websocket.send_json({
                     "type": "tool",
-                    "name": update.data.name,
-                    "content": update.data.content[:100] + "..."
+                    "name": update.data.get("tool_name", ""),
+                    "content": str(update.data.get("arguments", ""))[:100] + "..."
                 })
             
-            elif update.type == StreamUpdate.Type.COMPLETE:
-                thread = update.data
+            elif update.type == EventType.EXECUTION_COMPLETE:
+                # Thread is already updated in place
                 await websocket.send_json({"type": "complete"})
 ```
 
@@ -248,15 +250,15 @@ async def stream_with_progress():
     tool_count = 0
     content_buffer = []
     
-    async for update in agent.go_stream(thread):
-        if update.type == StreamUpdate.Type.TOOL_MESSAGE:
+    async for update in agent.go(thread, stream=True):
+        if update.type == EventType.TOOL_SELECTED:
             tool_count += 1
             print(f"\r⏳ Processing... ({tool_count} tools used)", end="", flush=True)
         
-        elif update.type == StreamUpdate.Type.CONTENT_CHUNK:
-            content_buffer.append(update.data)
+        elif update.type == EventType.LLM_STREAM_CHUNK:
+            content_buffer.append(update.data.get("content_chunk", ""))
         
-        elif update.type == StreamUpdate.Type.COMPLETE:
+        elif update.type == EventType.EXECUTION_COMPLETE:
             print("\r✅ Complete!" + " " * 30)  # Clear progress
             print("\n🤖 " + "".join(content_buffer))
 ```
@@ -272,15 +274,15 @@ class BufferedStreamer:
         self.buffer_size = buffer_size
     
     async def stream(self, agent, thread):
-        async for update in agent.go_stream(thread):
-            if update.type == StreamUpdate.Type.CONTENT_CHUNK:
-                self.buffer.append(update.data)
+        async for update in agent.go(thread, stream=True):
+            if update.type == EventType.LLM_STREAM_CHUNK:
+                self.buffer.append(update.data.get("content_chunk", ""))
                 
                 if len(self.buffer) >= self.buffer_size:
                     yield "".join(self.buffer)
                     self.buffer = []
             
-            elif update.type == StreamUpdate.Type.COMPLETE:
+            elif update.type == EventType.EXECUTION_COMPLETE:
                 if self.buffer:
                     yield "".join(self.buffer)
                 yield {"type": "complete", "thread": update.data}
@@ -308,13 +310,13 @@ class CancellableStream:
     
     async def stream_with_cancel(self, agent, thread):
         try:
-            async for update in agent.go_stream(thread):
+            async for update in agent.go(thread, stream=True):
                 if self.cancelled:
                     print("\n\n⚠️  Generation cancelled by user")
                     break
                 
-                if update.type == StreamUpdate.Type.CONTENT_CHUNK:
-                    print(update.data, end="", flush=True)
+                if update.type == EventType.LLM_STREAM_CHUNK:
+                    print(update.data.get("content_chunk", ""), end="", flush=True)
         except asyncio.CancelledError:
             print("\n\n⚠️  Stream interrupted")
     
@@ -354,14 +356,14 @@ async def rich_streaming():
     content = ""
     
     with Live(Panel("", title="🤖 Assistant"), refresh_per_second=10) as live:
-        async for update in agent.go_stream(thread):
-            if update.type == StreamUpdate.Type.CONTENT_CHUNK:
-                content += update.data
+        async for update in agent.go(thread, stream=True):
+            if update.type == EventType.LLM_STREAM_CHUNK:
+                content += update.data.get("content_chunk", "")
                 live.update(Panel(Markdown(content), title="🤖 Assistant"))
             
-            elif update.type == StreamUpdate.Type.TOOL_MESSAGE:
+            elif update.type == EventType.TOOL_SELECTED:
                 tool_panel = Panel(
-                    f"Using: {update.data.name}",
+                    f"Using: {update.data.get('tool_name', '')}",
                     title="🔧 Tool",
                     style="yellow"
                 )
@@ -379,9 +381,9 @@ class TokenCounter:
         self.chunks = []
     
     async def count_stream(self, agent, thread):
-        async for update in agent.go_stream(thread):
-            if update.type == StreamUpdate.Type.CONTENT_CHUNK:
-                self.chunks.append(update.data)
+        async for update in agent.go(thread, stream=True):
+            if update.type == EventType.LLM_STREAM_CHUNK:
+                self.chunks.append(update.data.get("content_chunk", ""))
                 # Rough estimate: 1 token ≈ 4 characters
                 self.total_tokens += len(update.data) // 4
                 
@@ -423,28 +425,32 @@ async def process_multiple_streams():
 
 async def collect_stream(agent, thread):
     content = []
-    async for update in agent.go_stream(thread):
-        if update.type == StreamUpdate.Type.CONTENT_CHUNK:
-            content.append(update.data)
+    async for update in agent.go(thread, stream=True):
+        if update.type == EventType.LLM_STREAM_CHUNK:
+            content.append(update.data.get("content_chunk", ""))
     return "".join(content)
 ```
 
 ### 3. Error Handling in Streams
 
 ```python
+from datetime import datetime
+
 async def safe_stream(agent, thread):
     try:
-        async for update in agent.go_stream(thread):
+        async for update in agent.go(thread, stream=True):
             yield update
     except asyncio.TimeoutError:
-        yield StreamUpdate(
-            type=StreamUpdate.Type.ERROR,
-            data="Stream timed out"
+        yield ExecutionEvent(
+            type=EventType.EXECUTION_ERROR,
+            timestamp=datetime.now(),
+            data={"message": "Stream timed out"}
         )
     except Exception as e:
-        yield StreamUpdate(
-            type=StreamUpdate.Type.ERROR,
-            data=f"Stream error: {str(e)}"
+        yield ExecutionEvent(
+            type=EventType.EXECUTION_ERROR,
+            timestamp=datetime.now(),
+            data={"message": f"Stream error: {str(e)}"}
         )
 ```
 
@@ -453,7 +459,8 @@ async def safe_stream(agent, thread):
 ```python
 import asyncio
 from datetime import datetime
-from tyler import Agent, Thread, Message, StreamUpdate
+from tyler import Agent, Thread, Message
+from tyler.models.execution import ExecutionEvent, EventType
 from lye import WEB_TOOLS, FILES_TOOLS
 
 class LiveResearchAssistant:
@@ -487,25 +494,25 @@ class LiveResearchAssistant:
         content_buffer = []
         tool_uses = []
         
-        async for update in self.agent.go_stream(thread):
-            if update.type == StreamUpdate.Type.CONTENT_CHUNK:
-                chunk = update.data
+        async for update in self.agent.go(thread, stream=True):
+            if update.type == EventType.LLM_STREAM_CHUNK:
+                chunk = update.data.get("content_chunk", "")
                 content_buffer.append(chunk)
                 print(chunk, end="", flush=True)
             
-            elif update.type == StreamUpdate.Type.TOOL_MESSAGE:
-                tool_msg = update.data
-                tool_uses.append(tool_msg.name)
+            elif update.type == EventType.TOOL_SELECTED:
+                tool_name = update.data.get("tool_name", "")
+                tool_uses.append(tool_name)
                 
                 # Show tool use inline
-                print(f"\n\n[🔧 {tool_msg.name}]", end="")
-                if tool_msg.name == "web-search":
+                print(f"\n\n[🔧 {tool_name}]", end="")
+                if tool_name == "web-search":
                     print(f" Searching for information...")
-                elif tool_msg.name == "files-write":
+                elif tool_name == "files-write":
                     print(f" Saving report...")
                 print("\n", end="")
             
-            elif update.type == StreamUpdate.Type.COMPLETE:
+            elif update.type == EventType.EXECUTION_COMPLETE:
                 print(f"\n\n{'='*50}")
                 print(f"✅ Research Complete!")
                 print(f"📊 Tools used: {', '.join(set(tool_uses))}")

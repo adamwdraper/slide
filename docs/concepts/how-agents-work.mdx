@@ -21,7 +21,7 @@ graph LR
 
 ### Processing Flow
 
-When you call `agent.go()` or `go_stream()`, Tyler follows these steps:
+When you call `agent.go()` (with or without streaming), Tyler follows these steps:
 
 1. **Message Processing**
    - Loads the conversation thread
@@ -31,7 +31,7 @@ When you call `agent.go()` or `go_stream()`, Tyler follows these steps:
 2. **Step Execution** 
    - Makes an LLM call with the current context
    - Processes the response for content and tool calls
-   - Streams responses in real-time (if using `go_stream`)
+   - Streams responses in real-time (if using `stream=True`)
 
 3. **Tool Execution**
    - If tool calls are present, executes them in parallel
@@ -47,7 +47,7 @@ When you call `agent.go()` or `go_stream()`, Tyler follows these steps:
 - **ToolRunner**: Manages the registry of available tools and handles execution
 - **Thread**: Maintains conversation history and context
 - **Message**: Represents user, assistant, and tool messages
-- **StreamUpdate**: Provides real-time updates during streaming
+- **ExecutionEvent**: Provides detailed execution telemetry and streaming updates
 
 ### Error Handling & Limits
 
@@ -193,18 +193,18 @@ final_result = await agent.go(result.thread)
 For long-running tasks or real-time interaction:
 
 ```python
-from tyler import Agent, Thread, Message, StreamUpdate
+from tyler import Agent, Thread, Message
+from tyler.models.execution import ExecutionEvent, EventType
 
 thread = Thread()
 message = Message(role="user", content="Write a detailed analysis of...")
 thread.add_message(message)
 
-async for update in agent.stream(thread):
-    if isinstance(update, StreamUpdate):
-        if update.type == "content":
-            print(update.content, end="", flush=True)
-        elif update.type == "tool_call":
-            print(f"\n[Using tool: {update.tool_name}]")
+async for event in agent.go(thread, stream=True):
+    if event.type == EventType.LLM_STREAM_CHUNK:
+        print(event.data.get("content_chunk", ""), end="", flush=True)
+    elif event.type == EventType.TOOL_SELECTED:
+        print(f"\n[Using tool: {event.data.get('tool_name', '')}]")
 ```
 
 ### Custom System Prompts

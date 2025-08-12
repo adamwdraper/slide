@@ -3,6 +3,63 @@ from dotenv import load_dotenv
 load_dotenv()  # Load environment variables from .env file
 
 import os
+import sys
+import warnings
+from contextlib import contextmanager, redirect_stderr
+import io
+
+# Suppress all Python warnings
+warnings.filterwarnings('ignore')
+
+# Set environment variables to suppress various library outputs
+os.environ['WANDB_SILENT'] = 'true'
+os.environ['WANDB_MODE'] = 'disabled'
+os.environ['WEAVE_SILENCE_WARNINGS'] = 'true'
+os.environ['LITELLM_LOG'] = 'ERROR'
+os.environ['HTTPX_LOG_LEVEL'] = 'ERROR'
+
+@contextmanager
+def suppress_output():
+    """Suppress stdout and stderr, filtering out library messages"""
+    old_stdout = sys.stdout
+    old_stderr = sys.stderr
+    
+    class FilteredOutput:
+        def __init__(self, original_stream):
+            self.original = original_stream
+            self.suppressed_prefixes = ['weave:', 'LiteLLM:', 'wandb:', 'ERROR:', 'WARNING:']
+            self.suppressed_patterns = [
+                'weave.trace.op -',  # Weave trace messages
+                'litellm_logging.py',  # LiteLLM logging messages
+                'Traceback (most recent',  # Python tracebacks
+                'ModuleNotFoundError:',  # Module errors
+                'ImportError:',  # Import errors
+                'narrator.database',  # Narrator database messages
+                'tyler.models.agent -',  # Tyler agent logs
+                'weave.trace.init_message -',  # Weave init messages
+            ]
+            
+        def write(self, text):
+            # Only write if it's not from a suppressed source
+            stripped = text.strip()
+            if stripped and not any(prefix in stripped for prefix in self.suppressed_prefixes + self.suppressed_patterns):
+                # Also filter lines that look like timestamps (e.g., "11:27:20 -")
+                if not (len(stripped) > 10 and stripped[2] == ':' and stripped[5] == ':' and ' - ' in stripped[:15]):
+                    self.original.write(text)
+                
+        def flush(self):
+            self.original.flush()
+            
+        def __getattr__(self, attr):
+            return getattr(self.original, attr)
+    
+    try:
+        sys.stdout = FilteredOutput(old_stdout)
+        sys.stderr = FilteredOutput(old_stderr)
+        yield
+    finally:
+        sys.stdout = old_stdout
+        sys.stderr = old_stderr
 import click
 import asyncio
 from typing import Optional, Dict, Any, Union, List
@@ -26,32 +83,45 @@ import logging
 pool = urllib3.PoolManager(maxsize=100)
 urllib3.disable_warnings()
 
-import weave
+# Suppress errors during imports
+with suppress_output():
+    import weave
 import importlib.util
-import sys
 
-# Configure basic logging
+# Configure logging - suppress all warnings/errors from external packages
 logging.basicConfig(
-    level=logging.WARNING,
+    level=logging.ERROR,
     format='%(levelname)s: %(message)s'
 )
 
-# Configure logging for all libraries
-for logger_name in [
-    'gql',
-    'urllib3',
-    'httpx',
-    'httpcore',
-    'wandb',
-    'litellm',
-    'litellm.utils',
-    'litellm.llms',
-    'LiteLLM',  # Add the uppercase version as well
-]:
-    logging.getLogger(logger_name).setLevel(logging.WARNING)
-    logging.getLogger(logger_name).propagate = False
+# Get root logger and set to ERROR level
+root_logger = logging.getLogger()
+root_logger.setLevel(logging.ERROR)
 
-from tyler import Agent, StreamUpdate, Thread, Message, ThreadStore
+# Suppress all third-party package loggers
+for name in logging.root.manager.loggerDict:
+    if not name.startswith('tyler'):
+        logging.getLogger(name).setLevel(logging.CRITICAL)
+        logging.getLogger(name).propagate = False
+
+# Specifically silence known noisy libraries
+noisy_libraries = [
+    'gql', 'urllib3', 'httpx', 'httpcore', 'wandb', 'weave',
+    'litellm', 'litellm.utils', 'litellm.llms', 'litellm.litellm_core_utils',
+    'litellm.proxy', 'litellm.litellm_logging', 'LiteLLM',
+    'openai', 'asyncio', 'filelock', 'pydantic', 'httpx._client'
+]
+
+for logger_name in noisy_libraries:
+    logger = logging.getLogger(logger_name)
+    logger.setLevel(logging.CRITICAL + 1)  # Higher than CRITICAL to suppress everything
+    logger.propagate = False
+    logger.handlers = []  # Remove all handlers
+
+# Import Tyler modules with suppressed output
+with suppress_output():
+    from tyler import Agent, Thread, Message, ThreadStore
+    from tyler.models.execution import ExecutionEvent, EventType
 
 # Initialize rich console
 console = Console()
@@ -62,15 +132,18 @@ class ChatManager:
         self.current_thread = None
         self.thread_store = ThreadStore()
         self.thread_count = 0  # Track number of threads created
-        weave.init("tyler-cli")  # Initialize Weave
+        # Initialize Weave with suppressed output
+        with suppress_output():
+            weave.init("tyler-cli")
         
     def initialize_agent(self, config: Dict[str, Any] = None) -> None:
         """Initialize the agent with optional configuration"""
         if config is None:
             config = {}
         
-        # Create agent with provided config
-        self.agent = Agent(**config)
+        # Create agent with provided config, suppressing initialization errors
+        with suppress_output():
+            self.agent = Agent(**config)
         
     async def create_thread(self, 
                           title: Optional[str] = None,
@@ -90,14 +163,19 @@ class ChatManager:
             source=source
         )
         
-        # Ensure the thread has the agent's system prompt
+        # Add the agent's system prompt as the first message
         if self.agent:
             system_prompt = self.agent._prompt.system_prompt(
                 self.agent.purpose,
                 self.agent.name,
-                self.agent.notes
+                self.agent.model_name,
+                tools=self.agent._processed_tools,
+                notes=self.agent.notes
             )
-            thread.ensure_system_prompt(system_prompt)
+            # Add system message if thread is empty
+            if not thread.messages:
+                system_message = Message(role="system", content=system_prompt)
+                thread.add_message(system_message)
             
         await self.thread_store.save(thread)
         self.current_thread = thread
@@ -286,9 +364,9 @@ shown in the /threads list. For example:
 """
         console.print(Panel(help_text, title="Help", border_style="blue"))
 
-async def handle_stream_update(update: StreamUpdate, chat_manager: ChatManager):
+async def handle_stream_update(event: ExecutionEvent, chat_manager: ChatManager):
     """Handle streaming updates from the agent"""
-    if update.type == StreamUpdate.Type.CONTENT_CHUNK:
+    if event.type == EventType.LLM_STREAM_CHUNK:
         # Create/update the panel with the streaming content
         if not hasattr(handle_stream_update, 'live'):
             handle_stream_update.content = []
@@ -304,35 +382,36 @@ async def handle_stream_update(update: StreamUpdate, chat_manager: ChatManager):
             )
             handle_stream_update.live.start()
         
-        handle_stream_update.content.append(update.data)
+        handle_stream_update.content.append(event.data.get("content_chunk", ""))
         handle_stream_update.live.update(Panel(
             Markdown(''.join(handle_stream_update.content)),
             title="[blue]Agent[/]",
             border_style="blue",
             box=box.ROUNDED
         ))
-    elif update.type == StreamUpdate.Type.ASSISTANT_MESSAGE:
+    elif event.type == EventType.MESSAGE_CREATED and event.data.get("message", {}).role == "assistant":
         # Stop the live display if it exists
         if hasattr(handle_stream_update, 'live'):
             handle_stream_update.live.stop()
             delattr(handle_stream_update, 'live')
             delattr(handle_stream_update, 'content')
             
+        message = event.data.get("message")
         # Only print tool calls if present
-        if update.data.tool_calls:
+        if message and message.tool_calls:
             console.print()  # New line after content chunks
-            panels = chat_manager.format_message(update.data)
+            panels = chat_manager.format_message(message)
             if isinstance(panels, list):
                 for panel in panels:
                     console.print(panel)
             elif panels:  # Single panel
                 console.print(panels)
-    elif update.type == StreamUpdate.Type.TOOL_MESSAGE:
-        panel = chat_manager.format_message(update.data)
+    elif event.type == EventType.MESSAGE_CREATED and event.data.get("message", {}).role == "tool":
+        panel = chat_manager.format_message(event.data.get("message"))
         if panel:
             console.print(panel)
-    elif update.type == StreamUpdate.Type.ERROR:
-        console.print(f"[red]Error: {update.data}[/]")
+    elif event.type == EventType.EXECUTION_ERROR:
+        console.print(f"[red]Error: {event.data.get('message', 'Unknown error')}[/]")
 
 def load_custom_tool(file_path: str) -> list:
     """Load custom tools from a Python file.
@@ -473,6 +552,12 @@ tools:
 @click.option('--title', '-t', help='Initial thread title')
 def main(config: Optional[str], title: Optional[str]):
     """Tyler Chat CLI"""
+    # Apply output filtering for the entire session
+    with suppress_output():
+        _main_inner(config, title)
+
+def _main_inner(config: Optional[str], title: Optional[str]):
+    """Inner main function with suppressed output"""
     try:
         # Load configuration
         config_data = load_config(config)
@@ -504,8 +589,8 @@ def main(config: Optional[str], title: Optional[str]):
             
             # Process with agent
             async def process_message():
-                async for update in chat_manager.agent.go_stream(chat_manager.current_thread):
-                    await handle_stream_update(update, chat_manager)
+                async for event in chat_manager.agent.go(chat_manager.current_thread, stream=True):
+                    await handle_stream_update(event, chat_manager)
             
             asyncio.run(process_message())
             

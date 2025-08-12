@@ -377,9 +377,9 @@ Since backward compatibility is not required, the migration is straightforward:
 ```python
 # Old API
 thread, messages = await agent.go(thread)
-async for update in agent.go_stream(thread):
-    if update.type == StreamUpdate.Type.CONTENT_CHUNK:
-        print(update.data)
+async for event in agent.go(thread, stream=True):
+    if event.type == EventType.LLM_STREAM_CHUNK:
+        print(event.data.get("content_chunk", ""))
 
 # New API
 result = await agent.go(thread)
