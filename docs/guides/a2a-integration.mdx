@@ -269,6 +269,8 @@ async def setup_enterprise_network():
 ### Task Streaming and Monitoring
 
 ```python
+from tyler.models.execution import EventType
+
 async def stream_coordinated_task():
     """Example of streaming responses from coordinated agents."""
     
@@ -281,16 +283,16 @@ async def stream_coordinated_task():
     print("🎯 Starting coordinated task execution...")
     print("=" * 50)
     
-    async for update in coordinator.go_stream(thread):
-        if update.type.name == "CONTENT_CHUNK":
-            print(update.data, end="", flush=True)
-        elif update.type.name == "TOOL_MESSAGE":
-            tool_name = update.data.name
+    async for update in coordinator.go(thread, stream=True):
+        if update.type == EventType.LLM_STREAM_CHUNK:
+            print(update.data.get("content_chunk", ""), end="", flush=True)
+        elif update.type == EventType.TOOL_SELECTED:
+            tool_name = update.data.get("tool_name", "")
             if "delegate_to_" in tool_name:
                 agent_name = tool_name.replace("delegate_to_", "")
                 print(f"\n\n🤝 Delegating to {agent_name}...")
             print()
-        elif update.type.name == "COMPLETE":
+        elif update.type == EventType.EXECUTION_COMPLETE:
             print("\n\n✅ Task coordination complete!")
 ```
 

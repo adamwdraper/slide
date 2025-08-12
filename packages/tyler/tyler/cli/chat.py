@@ -51,7 +51,8 @@ for logger_name in [
     logging.getLogger(logger_name).setLevel(logging.WARNING)
     logging.getLogger(logger_name).propagate = False
 
-from tyler import Agent, StreamUpdate, Thread, Message, ThreadStore
+from tyler import Agent, Thread, Message, ThreadStore
+from tyler.models.execution import ExecutionEvent, EventType
 
 # Initialize rich console
 console = Console()
@@ -286,9 +287,9 @@ shown in the /threads list. For example:
 """
         console.print(Panel(help_text, title="Help", border_style="blue"))
 
-async def handle_stream_update(update: StreamUpdate, chat_manager: ChatManager):
+async def handle_stream_update(event: ExecutionEvent, chat_manager: ChatManager):
     """Handle streaming updates from the agent"""
-    if update.type == StreamUpdate.Type.CONTENT_CHUNK:
+    if event.type == EventType.LLM_STREAM_CHUNK:
         # Create/update the panel with the streaming content
         if not hasattr(handle_stream_update, 'live'):
             handle_stream_update.content = []
@@ -304,35 +305,36 @@ async def handle_stream_update(update: StreamUpdate, chat_manager: ChatManager):
             )
             handle_stream_update.live.start()
         
-        handle_stream_update.content.append(update.data)
+        handle_stream_update.content.append(event.data.get("content_chunk", ""))
         handle_stream_update.live.update(Panel(
             Markdown(''.join(handle_stream_update.content)),
             title="[blue]Agent[/]",
             border_style="blue",
             box=box.ROUNDED
         ))
-    elif update.type == StreamUpdate.Type.ASSISTANT_MESSAGE:
+    elif event.type == EventType.MESSAGE_CREATED and event.data.get("message", {}).role == "assistant":
         # Stop the live display if it exists
         if hasattr(handle_stream_update, 'live'):
             handle_stream_update.live.stop()
             delattr(handle_stream_update, 'live')
             delattr(handle_stream_update, 'content')
             
+        message = event.data.get("message")
         # Only print tool calls if present
-        if update.data.tool_calls:
+        if message and message.tool_calls:
             console.print()  # New line after content chunks
-            panels = chat_manager.format_message(update.data)
+            panels = chat_manager.format_message(message)
             if isinstance(panels, list):
                 for panel in panels:
                     console.print(panel)
             elif panels:  # Single panel
                 console.print(panels)
-    elif update.type == StreamUpdate.Type.TOOL_MESSAGE:
-        panel = chat_manager.format_message(update.data)
+    elif event.type == EventType.MESSAGE_CREATED and event.data.get("message", {}).role == "tool":
+        panel = chat_manager.format_message(event.data.get("message"))
         if panel:
             console.print(panel)
-    elif update.type == StreamUpdate.Type.ERROR:
-        console.print(f"[red]Error: {update.data}[/]")
+    elif event.type == EventType.EXECUTION_ERROR:
+        console.print(f"[red]Error: {event.data.get('message', 'Unknown error')}[/]")
 
 def load_custom_tool(file_path: str) -> list:
     """Load custom tools from a Python file.
@@ -504,8 +506,8 @@ def main(config: Optional[str], title: Optional[str]):
             
             # Process with agent
             async def process_message():
-                async for update in chat_manager.agent.go_stream(chat_manager.current_thread):
-                    await handle_stream_update(update, chat_manager)
+                async for event in chat_manager.agent.go(chat_manager.current_thread, stream=True):
+                    await handle_stream_update(event, chat_manager)
             
             asyncio.run(process_message())
             

@@ -368,6 +368,8 @@ class CompositeTools:
 Optimize streaming for better UX:
 
 ```python
+from tyler.models.execution import EventType
+
 class StreamBuffer:
     def __init__(self, buffer_size: int = 10, flush_interval: float = 0.5):
         self.buffer = []
@@ -378,9 +380,9 @@ class StreamBuffer:
     async def process_stream(self, agent: Agent, thread: Thread):
         """Process stream with intelligent buffering"""
         
-        async for update in agent.go_stream(thread):
-            if update.type == StreamUpdate.Type.CONTENT_CHUNK:
-                self.buffer.append(update.data)
+        async for update in agent.go(thread, stream=True):
+            if update.type == EventType.LLM_STREAM_CHUNK:
+                self.buffer.append(update.data.get("content_chunk", ""))
                 
                 # Flush if buffer full or timeout
                 current_time = asyncio.get_event_loop().time()
@@ -391,7 +393,7 @@ class StreamBuffer:
                     self.buffer = []
                     self.last_flush = current_time
             
-            elif update.type == StreamUpdate.Type.COMPLETE:
+            elif update.type == EventType.EXECUTION_COMPLETE:
                 # Flush remaining buffer
                 if self.buffer:
                     yield "".join(self.buffer)
