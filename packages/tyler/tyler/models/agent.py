@@ -1028,11 +1028,12 @@ class Agent(Model):
             new_messages.append(message)
             
             # Still try to return a result with error information
-            if events:
-                record_event(EventType.EXECUTION_ERROR, {
-                    "error_type": type(e).__name__,
-                    "message": error_msg
-                })
+            if events is None:
+                events = []
+            record_event(EventType.EXECUTION_ERROR, {
+                "error_type": type(e).__name__,
+                "message": error_msg
+            })
             
             if self.thread_store:
                 await self.thread_store.save(thread)

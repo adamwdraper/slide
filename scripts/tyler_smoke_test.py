@@ -69,6 +69,26 @@ def print_header(title: str) -> None:
     print_separator("=")
     print()
 
+def is_filtered_log_line(line: str) -> bool:
+    """Check if a log line should be filtered out (LiteLLM/Weave noise)."""
+    # Match LiteLLM log patterns with timestamps
+    if "- LiteLLM" in line and any(level in line for level in ["INFO:", "ERROR:", "WARNING:", "DEBUG:"]):
+        return True
+    if "- LiteLLM -" in line:
+        return True
+    if line.strip().startswith("LiteLLM") and "completion()" in line:
+        return True
+    
+    # Match Weave log patterns
+    if line.strip().startswith("weave:"):
+        return True
+    if "weave.trace.op" in line:
+        return True
+    if "🍩" in line and "wandb.ai" in line:
+        return True
+    
+    return False
+
 def run_example(example_file: str) -> Tuple[bool, str]:
     """
     Run a single example file using uv.
@@ -107,16 +127,7 @@ def run_example(example_file: str) -> Tuple[bool, str]:
                 # Filter out LiteLLM and Weave log lines
                 filtered_stderr = "\n".join(
                     line for line in result.stderr.split("\n")
-                    if not (
-                        # Match LiteLLM log patterns with timestamps
-                        ("- LiteLLM" in line and ("INFO:" in line or "ERROR:" in line or "WARNING:" in line or "DEBUG:" in line)) or
-                        ("- LiteLLM -" in line) or
-                        (line.strip().startswith("LiteLLM") and "completion()" in line) or
-                        # Match Weave log patterns
-                        line.strip().startswith("weave:") or
-                        "weave.trace.op" in line or
-                        ("🍩" in line and "wandb.ai" in line)
-                    )
+                    if not is_filtered_log_line(line)
                 )
                 if filtered_stderr.strip():
                     print("Warnings/Info:", filtered_stderr)
@@ -129,16 +140,7 @@ def run_example(example_file: str) -> Tuple[bool, str]:
                 # Filter out LiteLLM and Weave log lines in error messages too
                 filtered_stderr = "\n".join(
                     line for line in result.stderr.split("\n")
-                    if not (
-                        # Match LiteLLM log patterns with timestamps
-                        ("- LiteLLM" in line and ("INFO:" in line or "ERROR:" in line or "WARNING:" in line or "DEBUG:" in line)) or
-                        ("- LiteLLM -" in line) or
-                        (line.strip().startswith("LiteLLM") and "completion()" in line) or
-                        # Match Weave log patterns
-                        line.strip().startswith("weave:") or
-                        "weave.trace.op" in line or
-                        ("🍩" in line and "wandb.ai" in line)
-                    )
+                    if not is_filtered_log_line(line)
                 )
                 if filtered_stderr.strip():
                     error_msg += f"Error:\n{filtered_stderr}"
