@@ -37,11 +37,6 @@ result = asyncio.run(agent.go(thread))
 # Print the agent's response
 print(f"ASSISTANT: {result.content}")
 print("-" * 80)
-
-# You can also access the full conversation
-for msg in result.thread.messages:
-    print(f"{msg.role.upper()}: {msg.content}")
-    print("-" * 80)
 ```
 
 That's it! Your agent can now search the web, analyze images, and complete complex tasks autonomously.

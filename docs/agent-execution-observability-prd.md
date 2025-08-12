@@ -289,17 +289,22 @@ print(result.content)
 result = await agent.go(thread)
 
 # Log execution metrics
-logger.info(f"Execution took {result.execution.duration_ms}ms")
-logger.info(f"Used {result.execution.total_tokens} tokens")
+if result.new_messages:
+    start = min(msg.timestamp for msg in result.new_messages)
+    end = max(msg.timestamp for msg in result.new_messages)
+    duration_ms = (end - start).total_seconds() * 1000
+    logger.info(f"Execution took {duration_ms:.0f}ms")
+
+token_stats = result.thread.get_total_tokens()
+logger.info(f"Used {token_stats['overall']['total_tokens']} tokens")
 
 # Track tool usage
-for tool_call in result.execution.tool_calls:
-    metrics.increment(f"tool_usage.{tool_call.tool_name}")
-    if not tool_call.success:
-        logger.error(f"Tool {tool_call.tool_name} failed: {tool_call.error}")
+tool_usage = result.thread.get_tool_usage()
+for tool_name, count in tool_usage['tools'].items():
+    metrics.increment(f"tool_usage.{tool_name}", count)
 
 # Cost tracking
-estimated_cost = calculate_cost(result.execution.total_tokens, model="gpt-4")
+estimated_cost = calculate_cost(token_stats['overall']['total_tokens'], model="gpt-4")
 metrics.gauge("agent_cost", estimated_cost)
 ```
 

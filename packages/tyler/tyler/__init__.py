@@ -7,9 +7,7 @@ from tyler.models.agent import Agent
 from tyler.models.execution import (
     AgentResult,
     ExecutionEvent,
-    EventType,
-    ExecutionDetails,
-    ToolCall
+    EventType
 )
 from narrator import Thread, Message, ThreadStore, FileStore, Attachment
 

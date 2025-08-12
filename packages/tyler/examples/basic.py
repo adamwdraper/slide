@@ -60,15 +60,23 @@ async def main():
         
         # Show execution metrics
         logger.debug("Execution metrics:")
-        logger.debug("  - Duration: %.2fms", result.execution.duration_ms)
-        logger.debug("  - Total tokens: %d", result.execution.total_tokens)
-        logger.debug("  - Success: %s", result.success)
+        # Calculate duration from message timestamps
+        if result.new_messages:
+            start_time = min(msg.timestamp for msg in result.new_messages)
+            end_time = max(msg.timestamp for msg in result.new_messages)
+            duration_ms = (end_time - start_time).total_seconds() * 1000
+            logger.debug("  - Duration: %.2fms", duration_ms)
+        
+        # Get token usage from thread
+        token_stats = result.thread.get_total_tokens()
+        logger.debug("  - Total tokens: %d", token_stats['overall']['total_tokens'])
         
         # Show any tool usage
-        if result.execution.tool_calls:
+        tool_usage = result.thread.get_tool_usage()
+        if tool_usage['total_calls'] > 0:
             logger.debug("  - Tools used:")
-            for tool_call in result.execution.tool_calls:
-                logger.debug("    * %s (%.2fms)", tool_call.tool_name, tool_call.duration_ms)
+            for tool_name, count in tool_usage['tools'].items():
+                logger.debug("    * %s (%d calls)", tool_name, count)
         
         logger.info("-" * 50)
 

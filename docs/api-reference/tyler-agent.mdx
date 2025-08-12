@@ -137,28 +137,28 @@ class ExecutionEvent:
 
 ## Execution Details
 
-The `ExecutionDetails` object provides comprehensive information:
+You can access execution information through the thread and messages:
 
 ```python
-execution = result.execution
+# Calculate timing from messages
+if result.new_messages:
+    start_time = min(msg.timestamp for msg in result.new_messages)
+    end_time = max(msg.timestamp for msg in result.new_messages)
+    duration_ms = (end_time - start_time).total_seconds() * 1000
+    print(f"Duration: {duration_ms:.0f}ms")
+    print(f"Started: {start_time}")
+    print(f"Ended: {end_time}")
 
-# Timing information
-print(f"Duration: {execution.duration_ms}ms")
-print(f"Started: {execution.start_time}")
-print(f"Ended: {execution.end_time}")
+# Token usage from thread
+token_stats = result.thread.get_total_tokens()
+print(f"Total tokens: {token_stats['overall']['total_tokens']}")
 
-# Token usage
-print(f"Total tokens: {execution.total_tokens}")
-
-# Tool usage
-for tool_call in execution.tool_calls:
-    print(f"Tool: {tool_call.tool_name}")
-    print(f"Duration: {tool_call.duration_ms}ms")
-    print(f"Success: {tool_call.success}")
-
-# All events
-for event in execution.events:
-    print(f"{event.timestamp}: {event.type}")
+# Tool usage from thread
+tool_usage = result.thread.get_tool_usage()
+if tool_usage['total_calls'] > 0:
+    print(f"\nTools used:")
+    for tool_name, count in tool_usage['tools'].items():
+        print(f"  {tool_name}: {count} calls")
 ```
 
 ## Working with Tools
@@ -177,8 +177,9 @@ agent = Agent(
 result = await agent.go(thread)
 
 # Check which tools were used
-for tool in result.execution.tool_calls:
-    print(f"Used {tool.tool_name}: {tool.success}")
+tool_usage = result.thread.get_tool_usage()
+for tool_name, count in tool_usage['tools'].items():
+    print(f"Used {tool_name}: {count} times")
 ```
 
 ## Agent Delegation

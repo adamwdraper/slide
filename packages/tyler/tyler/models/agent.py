@@ -15,7 +15,7 @@ from narrator import Thread, Message, Attachment, ThreadStore, FileStore
 from tyler.utils.tool_runner import tool_runner
 from tyler.utils.logging import get_logger
 from tyler.models.execution import (
-    EventType, ExecutionEvent, ToolCall, ExecutionDetails, 
+    EventType, ExecutionEvent,
     AgentResult
 )
 import asyncio
@@ -977,14 +977,6 @@ class Agent(Model):
                 "total_tokens": total_tokens
             })
             
-            # Build execution details
-            execution = ExecutionDetails(
-                events=events,
-                start_time=start_time,
-                end_time=end_time,
-                total_iterations=self._iteration_count
-            )
-            
             # Extract final output
             output = None
             for msg in reversed(new_messages):
@@ -995,8 +987,7 @@ class Agent(Model):
             return AgentResult(
                 thread=thread,
                 new_messages=new_messages,
-                content=output,
-                execution=execution
+                content=output
             )
 
         except ValueError:
@@ -1029,18 +1020,11 @@ class Agent(Model):
             
             # Build result even with error
             end_time = datetime.now(UTC)
-            execution = ExecutionDetails(
-                events=events,
-                start_time=start_time,
-                end_time=end_time,
-                total_iterations=self._iteration_count
-            )
             
             return AgentResult(
                 thread=thread,
                 new_messages=new_messages,
-                content=None,
-                execution=execution
+                content=None
             )
 
     @weave.op()
