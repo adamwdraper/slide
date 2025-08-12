@@ -339,16 +339,4 @@ Each example is a standalone Python script that can be run directly or as part o
 
 ## License
 
-This project is licensed under the Creative Commons Attribution-NonCommercial 4.0 International License (CC BY-NC 4.0) - see the [LICENSE](LICENSE) file for details.
-
-This means you are free to:
-- Share and adapt the work for non-commercial purposes
-- Use the software for personal projects
-- Modify and distribute the code
-
-But you cannot:
-- Use the software for commercial purposes without permission
-- Sublicense the code
-- Hold the author liable
-
-For commercial use, please contact the author.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
