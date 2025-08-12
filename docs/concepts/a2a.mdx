@@ -64,7 +64,7 @@ async def main():
     thread.add_message(message)
     
     # Agent will automatically delegate to appropriate remote agents
-    processed_thread, new_messages = await agent.go(thread)
+    result = await agent.go(thread)
 
 if __name__ == "__main__":
     asyncio.run(main())

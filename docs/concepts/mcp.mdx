@@ -65,7 +65,7 @@ async def main():
     )
     thread.add_message(message)
     
-    processed_thread, new_messages = await agent.go(thread)
+    result = await agent.go(thread)
 
 if __name__ == "__main__":
     asyncio.run(main())
@@ -85,7 +85,7 @@ message = Message(
 thread.add_message(message)
 
 # Agent can now use any tools exposed by the MCP server
-processed_thread, new_messages = await agent.go(thread)
+result = await agent.go(thread)
 ```
 
 ## MCP Server Types
@@ -227,7 +227,7 @@ async def main():
     message = Message(role="user", content="Analyze the latest data and create predictions")
     thread.add_message(message)
     
-    processed_thread, new_messages = await agent.go(thread)
+    result = await agent.go(thread)
 
 if __name__ == "__main__":
     asyncio.run(main())
@@ -263,8 +263,8 @@ async def discover_and_use_tools(adapter: MCPAdapter, task: str):
     message = Message(role="user", content=task)
     thread.add_message(message)
     
-    processed_thread, new_messages = await agent.go(thread)
-    return processed_thread
+    result = await agent.go(thread)
+    return result.thread
 ```
 
 ### Context Sharing
@@ -288,7 +288,7 @@ message = Message(
 )
 thread.add_message(message)
 
-processed_thread, new_messages = await agent.go(thread)
+result = await agent.go(thread)
 ```
 
 ## MCP Security
@@ -434,7 +434,7 @@ async def main():
     )
     thread.add_message(message)
     
-    processed_thread, new_messages = await agent.go(thread)
+    result = await agent.go(thread)
 ```
 
 ### 2. Fallback Pattern
@@ -494,8 +494,8 @@ async def create_federated_agent():
     )
     thread.add_message(message)
     
-    processed_thread, new_messages = await agent.go(thread)
-    return processed_thread
+    result = await agent.go(thread)
+    return result.thread
 ```
 
 ## Troubleshooting
