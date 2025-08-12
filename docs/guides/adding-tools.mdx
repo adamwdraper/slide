@@ -290,6 +290,22 @@ agent = Agent(
 )
 ```
 
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="File type detection issues">
+    If file type detection isn't working correctly, install libmagic:
+    - macOS: `brew install libmagic`
+    - Ubuntu: `sudo apt-get install libmagic1`
+  </Accordion>
+  
+  <Accordion title="Can't process scanned PDFs">
+    For OCR support with image-based PDFs, install poppler:
+    - macOS: `brew install poppler`
+    - Ubuntu: `sudo apt-get install poppler-utils`
+  </Accordion>
+</AccordionGroup>
+
 ## Next steps
 
 <CardGroup cols={2}>

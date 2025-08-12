@@ -1,0 +1,137 @@
+---
+title: 'Lye'
+description: 'Pre-built tools for AI agents'
+---
+
+Lye provides a comprehensive collection of pre-built tools that enable AI agents to interact with the world. From web browsing to file management, image processing to audio transcription, Lye has the tools your agents need.
+
+## Overview
+
+Lye is designed to be:
+- **Easy to use**: Import tool groups or individual tools with a single line
+- **Comprehensive**: Covers web, files, images, audio, and more
+- **Reliable**: Battle-tested tools with proper error handling
+- **Flexible**: Use all tools or just the ones you need
+
+## Installation
+
+```bash
+uv add slide-lye
+```
+
+## Quick start
+
+```python
+from lye import WEB_TOOLS, FILES_TOOLS, IMAGE_TOOLS
+
+# Use with Tyler agents
+from tyler import Agent
+
+agent = Agent(
+    name="my-agent",
+    tools=[*WEB_TOOLS, *FILES_TOOLS]
+)
+```
+
+## Available tool groups
+
+### Web tools
+- `search` - Search the web for information
+- `fetch` - Fetch and parse web pages
+- `scrape` - Extract structured data from websites
+
+### File tools
+- `read_file` - Read file contents
+- `write_file` - Write content to files
+- `list_files` - List directory contents
+- `delete_file` - Delete files
+
+### Image tools
+- `describe_image` - Get AI descriptions of images
+- `generate_image` - Create images from text
+- `edit_image` - Modify existing images
+
+### Audio tools
+- `transcribe_audio` - Convert speech to text
+- `generate_speech` - Convert text to speech
+
+## Usage examples
+
+### Web research
+```python
+from lye.web import search, fetch
+
+# Search for information
+results = await search("latest AI developments 2024")
+
+# Fetch a specific page
+content = await fetch("https://example.com/article")
+```
+
+### File operations
+```python
+from lye.files import read_file, write_file
+
+# Read a file
+content = await read_file("data.txt")
+
+# Write processed data
+await write_file("results.txt", processed_content)
+```
+
+### Multimodal processing
+```python
+from lye.image import describe_image
+from lye.audio import transcribe_audio
+
+# Analyze an image
+description = await describe_image("photo.jpg")
+
+# Transcribe audio
+transcript = await transcribe_audio("recording.mp3")
+```
+
+## Optional dependencies
+
+For advanced file processing capabilities, you can install these system libraries:
+
+<Tabs>
+  <Tab title="macOS">
+    ```bash
+    # Enhanced file type detection and PDF OCR
+    brew install libmagic poppler
+    ```
+  </Tab>
+  <Tab title="Ubuntu/Debian">
+    ```bash
+    # Enhanced file type detection and PDF OCR
+    sudo apt-get install libmagic1 poppler-utils
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+These are optional and only needed for:
+- More accurate file type detection for unusual formats
+- Processing scanned PDFs or PDFs without embedded text
+</Note>
+
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Tool Reference"
+    icon="wrench"
+    href="/api-reference/lye/tools"
+  >
+    Detailed documentation for each tool
+  </Card>
+  <Card
+    title="Adding Tools"
+    icon="code"
+    href="/guides/adding-tools"
+  >
+    Learn to create your own tools
+  </Card>
+</CardGroup> 
