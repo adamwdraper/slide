@@ -259,13 +259,13 @@ async def summarize_old_conversations(thread: Thread, max_messages: int = 50):
             model_name="gpt-3.5-turbo",
             purpose="To create concise summaries"
         )
-        _, summary_messages = await summary_agent.go(summary_thread)
+        summary_result = await summary_agent.go(summary_thread)
         
         # Replace old messages with summary
         thread.messages = [
             Message(
                 role="system",
-                content=f"Previous conversation summary: {summary_messages[-1].content}"
+                content=f"Previous conversation summary: {summary_result.new_messages[-1].content}"
             )
         ] + thread.messages[-max_messages:]
 ```

@@ -74,10 +74,10 @@ class ResearchAssistant:
         print("\n⏳ Researching... This may take a few minutes.")
         start_time = datetime.now()
         
-        processed_thread, new_messages = await self.agent.go(thread)
+        result = await self.agent.go(thread)
         
         # Save thread
-        await self.thread_store.save_thread(processed_thread)
+        await self.thread_store.save_thread(result.thread)
         
         # Extract results
         research_results = {
@@ -87,8 +87,8 @@ class ResearchAssistant:
             "duration": (datetime.now() - start_time).total_seconds(),
             "depth": depth,
             "questions": questions or [],
-            "findings": self._extract_findings(new_messages),
-            "sources": self._extract_sources(new_messages),
+            "findings": self._extract_findings(result.new_messages),
+            "sources": self._extract_sources(result.new_messages),
             "report_path": None
         }
         
@@ -246,12 +246,12 @@ Format as a structured comparison report.
             comparison_thread.add_message(Message(role="system", content=summary))
         
         # Generate comparison
-        processed_thread, messages = await self.agent.go(comparison_thread)
+        result = await self.agent.go(comparison_thread)
         
         comparison_results = {
             "topics": topics,
             "individual_results": results,
-            "comparison": messages[-1].content if messages else "No comparison generated",
+            "comparison": result.new_messages[-1].content if result.new_messages else "No comparison generated",
             "timestamp": datetime.now().isoformat()
         }
         
@@ -276,7 +276,7 @@ Be thorough and objective in your analysis.
         
         thread.add_message(Message(role="user", content=fact_check_prompt))
         
-        processed_thread, messages = await self.agent.go(thread)
+        agent_result = await self.agent.go(thread)
         
         # Parse results
         result = {
@@ -284,12 +284,12 @@ Be thorough and objective in your analysis.
             "verdict": "Unverifiable",  # Default
             "evidence": [],
             "sources": [],
-            "analysis": messages[-1].content if messages else "No analysis available",
+            "analysis": agent_result.new_messages[-1].content if agent_result.new_messages else "No analysis available",
             "timestamp": datetime.now().isoformat()
         }
         
         # Extract verdict from response
-        response = messages[-1].content.lower() if messages else ""
+        response = agent_result.new_messages[-1].content.lower() if agent_result.new_messages else ""
         for verdict in ["true", "false", "partially true", "misleading", "unverifiable"]:
             if verdict in response:
                 result["verdict"] = verdict.title()
@@ -308,12 +308,12 @@ Be thorough and objective in your analysis.
                    f"Format each as a proper citation."
         ))
         
-        processed_thread, messages = await self.agent.go(thread)
+        result = await self.agent.go(thread)
         
         # Extract citations
         bibliography = []
-        if messages:
-            lines = messages[-1].content.split('\n')
+        if result.new_messages:
+            lines = result.new_messages[-1].content.split('\n')
             for line in lines:
                 if line.strip() and (line[0].isdigit() or line.startswith('-')):
                     bibliography.append(line.strip())

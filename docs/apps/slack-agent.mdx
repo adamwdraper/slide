@@ -122,7 +122,7 @@ export OPENAI_API_KEY=sk-your-openai-key
 Give your agent persistence across conversations:
 
 ```python
-from tyler import ThreadStore, FileStore
+from narrator import ThreadStore, FileStore, Thread, Message
 
 async def create_bot_with_persistence():
     # Set up persistent storage
@@ -167,11 +167,11 @@ async def handle_mention_with_persistence(event, say):
     thread.add_message(message)
     
     # Process and save
-    processed_thread, new_messages = await app.agent.go(thread)
-    await app.agent.thread_store.save_thread(processed_thread)
+    result = await app.agent.go(thread)
+    await app.agent.thread_store.save_thread(result.thread)
     
     # Respond
-    await say(new_messages[-1].content)
+    await say(result.new_messages[-1].content)
 ```
 
 ### Message Routing
