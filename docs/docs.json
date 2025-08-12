@@ -60,6 +60,16 @@
             ]
           },
           {
+            "group": "Narrator",
+            "pages": [
+              "api-reference/narrator-thread",
+              "api-reference/narrator-message",
+              "api-reference/narrator-attachment",
+              "api-reference/narrator-threadstore",
+              "api-reference/narrator-filestore"
+            ]
+          },
+          {
             "group": "Space Monkey",
             "pages": [
               "api-reference/space-monkey-slackapp"

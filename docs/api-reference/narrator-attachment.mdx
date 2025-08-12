@@ -1,0 +1,285 @@
+---
+title: 'Attachment'
+description: 'Represents a file attached to a message'
+---
+
+## Overview
+
+The `Attachment` class handles file attachments on messages, supporting various file types with automatic processing for text extraction, MIME type detection, and integration with FileStore for persistence.
+
+## Creating Attachments
+
+### From Raw Content
+
+```python
+from narrator import Attachment
+
+# Create from bytes
+pdf_attachment = Attachment(
+    filename="report.pdf",
+    content=pdf_bytes,
+    mime_type="application/pdf"
+)
+
+# Create from base64 string
+image_attachment = Attachment(
+    filename="screenshot.png",
+    content="iVBORw0KGgoAAAANS...",  # base64 string
+    mime_type="image/png"
+)
+
+# MIME type auto-detection
+attachment = Attachment(
+    filename="document.pdf",
+    content=file_bytes
+)
+attachment.detect_mime_type()  # Sets mime_type automatically
+```
+
+### From File Path
+
+```python
+# Load from file system
+attachment = Attachment.from_file_path("/path/to/document.pdf")
+# Automatically sets filename, content, and mime_type
+```
+
+### From Data URLs
+
+```python
+# Handle data URLs (e.g., from web uploads)
+attachment = Attachment(
+    filename="upload.jpg",
+    content="data:image/jpeg;base64,/9j/4AAQSkZJRg..."
+)
+```
+
+## Key Properties
+
+<ParamField path="filename" type="string" required>
+  Name of the file
+</ParamField>
+
+<ParamField path="content" type="bytes | str" optional>
+  File content as bytes or base64-encoded string
+</ParamField>
+
+<ParamField path="mime_type" type="string" optional>
+  MIME type of the file (auto-detected if not provided)
+</ParamField>
+
+<ParamField path="attributes" type="Dict[str, Any]" optional>
+  Processed content and metadata (e.g., extracted text, image info)
+</ParamField>
+
+<ParamField path="file_id" type="string" optional>
+  Unique identifier when stored in FileStore
+</ParamField>
+
+<ParamField path="storage_path" type="string" optional>
+  Path where file is stored in FileStore
+</ParamField>
+
+<ParamField path="status" type="Literal['pending', 'stored', 'failed']" default="pending">
+  Current processing status
+</ParamField>
+
+<ParamField path="id" type="string" computed>
+  Auto-generated unique ID based on content hash
+</ParamField>
+
+## Processing and Storage
+
+Attachments can be processed to extract content and stored persistently:
+
+```python
+from narrator import FileStore
+
+# Create file store
+file_store = await FileStore.create("./attachments")
+
+# Process and store attachment
+await attachment.process_and_store(file_store)
+
+# After processing:
+print(f"File ID: {attachment.file_id}")
+print(f"Storage path: {attachment.storage_path}")
+print(f"Status: {attachment.status}")  # "stored"
+print(f"Extracted content: {attachment.attributes}")
+```
+
+## Content Processing
+
+Different file types are automatically processed:
+
+### Text Files
+```python
+text_attachment = Attachment(
+    filename="notes.txt",
+    content=b"Meeting notes: Project update..."
+)
+await text_attachment.process_and_store(file_store)
+# attributes["text"] contains the file content
+```
+
+### PDFs
+```python
+pdf_attachment = Attachment(
+    filename="report.pdf",
+    content=pdf_bytes
+)
+await pdf_attachment.process_and_store(file_store)
+# attributes["text"] contains extracted text from all pages
+```
+
+### Images
+```python
+image_attachment = Attachment(
+    filename="diagram.png",
+    content=image_bytes
+)
+await image_attachment.process_and_store(file_store)
+# attributes["type"] = "image"
+# attributes["url"] contains the file URL for viewing
+```
+
+### JSON Files
+```python
+json_attachment = Attachment(
+    filename="config.json",
+    content=b'{"setting": "value"}'
+)
+await json_attachment.process_and_store(file_store)
+# attributes["parsed_content"] contains the parsed JSON object
+```
+
+### Audio Files
+```python
+audio_attachment = Attachment(
+    filename="recording.mp3",
+    content=audio_bytes,
+    mime_type="audio/mpeg"
+)
+await audio_attachment.process_and_store(file_store)
+# attributes["type"] = "audio"
+```
+
+## Retrieving Content
+
+```python
+# Get content as bytes (handles all encoding types)
+content_bytes = await attachment.get_content_bytes()
+
+# If stored in FileStore, pass it to retrieve
+content_bytes = await attachment.get_content_bytes(file_store=file_store)
+
+# Access processed attributes
+if attachment.attributes.get("type") == "text":
+    text_content = attachment.attributes["text"]
+elif attachment.attributes.get("type") == "image":
+    image_url = attachment.attributes["url"]
+```
+
+## Serialization
+
+```python
+# Convert to dictionary (excludes content for efficiency)
+attachment_dict = attachment.model_dump()
+# {
+#     "filename": "report.pdf",
+#     "mime_type": "application/pdf",
+#     "file_id": "abc123",
+#     "storage_path": "/files/abc123_report.pdf",
+#     "status": "stored",
+#     "attributes": {...}
+# }
+
+# Content is not included in serialization to avoid large payloads
+# Retrieve content separately using get_content_bytes()
+```
+
+## File Size and Type Validation
+
+When used with FileStore, attachments are validated:
+
+```python
+try:
+    # FileStore enforces size limits (default 50MB)
+    await large_attachment.process_and_store(file_store)
+except FileTooLargeError:
+    print("File exceeds size limit")
+
+try:
+    # FileStore checks allowed MIME types
+    await executable.process_and_store(file_store)
+except UnsupportedFileTypeError:
+    print("File type not allowed")
+```
+
+## Example: Document Processing Pipeline
+
+```python
+from narrator import Message, Attachment, FileStore
+
+# Initialize storage
+file_store = await FileStore.create("./documents")
+
+# Create message with multiple attachments
+message = Message(
+    role="user",
+    content="Please review these documents",
+    attachments=[
+        Attachment(
+            filename="contract.pdf",
+            content=contract_bytes
+        ),
+        Attachment(
+            filename="requirements.txt",
+            content=b"Project requirements:\n1. Feature A\n2. Feature B"
+        ),
+        Attachment.from_file_path("./data/analytics.json")
+    ]
+)
+
+# Process all attachments
+for attachment in message.attachments:
+    try:
+        await attachment.process_and_store(file_store)
+        print(f"Processed {attachment.filename}:")
+        
+        if attachment.attributes.get("text"):
+            print(f"  Extracted text: {len(attachment.attributes['text'])} chars")
+        elif attachment.attributes.get("parsed_content"):
+            print(f"  Parsed JSON with {len(attachment.attributes['parsed_content'])} keys")
+            
+        print(f"  Stored at: {attachment.storage_path}")
+        print(f"  URL: {attachment.attributes.get('url')}")
+        
+    except Exception as e:
+        print(f"Failed to process {attachment.filename}: {e}")
+
+# Access processed content
+for attachment in message.attachments:
+    if attachment.status == "stored":
+        # Retrieve content when needed
+        content = await attachment.get_content_bytes(file_store)
+        print(f"{attachment.filename}: {len(content)} bytes")
+```
+
+## Integration with Messages
+
+Attachments are designed to work seamlessly with messages:
+
+```python
+# Attachments are included in message serialization
+msg_dict = message.model_dump()
+attachments_data = msg_dict["attachments"]
+
+# Each attachment includes metadata but not content
+for att_data in attachments_data:
+    print(f"File: {att_data['filename']}")
+    print(f"Type: {att_data['mime_type']}")
+    print(f"Status: {att_data['status']}")
+    if att_data.get('attributes', {}).get('url'):
+        print(f"URL: {att_data['attributes']['url']}")
+```

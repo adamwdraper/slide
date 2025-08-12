@@ -1,0 +1,390 @@
+---
+title: 'Message'
+description: 'Represents a single message within a conversation thread'
+---
+
+## Overview
+
+The `Message` class represents individual messages in a conversation, supporting various roles (system, user, assistant, tool), rich content types, attachments, and detailed metrics.
+
+## Creating Messages
+
+### Basic Messages
+
+```python
+from narrator import Message
+
+# User message
+user_msg = Message(
+    role="user",
+    content="Hello, how can I analyze this data?"
+)
+
+# Assistant message
+assistant_msg = Message(
+    role="assistant",
+    content="I can help you analyze your data in several ways..."
+)
+
+# System message
+system_msg = Message(
+    role="system",
+    content="You are a data analysis expert."
+)
+```
+
+### Tool Messages
+
+```python
+# Tool response message
+tool_msg = Message(
+    role="tool",
+    name="data_analyzer",
+    tool_call_id="call_abc123",
+    content="Analysis complete: 500 records processed"
+)
+
+# Assistant message with tool calls
+assistant_with_tools = Message(
+    role="assistant",
+    content="Let me analyze that data for you.",
+    tool_calls=[{
+        "id": "call_abc123",
+        "type": "function",
+        "function": {
+            "name": "data_analyzer",
+            "arguments": '{"dataset": "sales_2024"}'
+        }
+    }]
+)
+```
+
+## Key Properties
+
+<ParamField path="id" type="string" default="auto-generated">
+  Unique identifier based on content hash
+</ParamField>
+
+<ParamField path="role" type="Literal['system', 'user', 'assistant', 'tool']" required>
+  The role of the message sender
+</ParamField>
+
+<ParamField path="content" type="str | List[TextContent | ImageContent]" default="None">
+  Message content - can be text or multimodal content
+</ParamField>
+
+<ParamField path="name" type="string" optional>
+  Name identifier for tool messages
+</ParamField>
+
+<ParamField path="tool_call_id" type="string" optional>
+  Required for tool role messages to link to the tool call
+</ParamField>
+
+<ParamField path="tool_calls" type="List[Dict]" optional>
+  Tool calls made by assistant messages
+</ParamField>
+
+<ParamField path="timestamp" type="datetime" default="now">
+  When the message was created (UTC)
+</ParamField>
+
+<ParamField path="sequence" type="int" optional>
+  Message order within the thread (set automatically)
+</ParamField>
+
+<ParamField path="turn" type="int" optional>
+  Conversational turn number (set automatically)
+</ParamField>
+
+<ParamField path="attachments" type="List[Attachment]" default="[]">
+  File attachments on the message
+</ParamField>
+
+<ParamField path="reactions" type="Dict[str, List[str]]" default="{}">
+  Emoji reactions - maps emoji to list of user IDs
+</ParamField>
+
+<ParamField path="source" type="EntitySource" optional>
+  Information about who/what created this message
+</ParamField>
+
+<ParamField path="platforms" type="Dict[str, Dict[str, str]]" default="{}">
+  Platform-specific identifiers (e.g., Slack message ID)
+</ParamField>
+
+<ParamField path="metrics" type="Dict[str, Any]">
+  Performance and usage metrics for the message
+</ParamField>
+
+## Multimodal Content
+
+Messages support text and image content:
+
+```python
+# Text with images
+multimodal_msg = Message(
+    role="user",
+    content=[
+        {"type": "text", "text": "What's in this image?"},
+        {"type": "image_url", "image_url": {"url": "https://example.com/image.jpg"}},
+        {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,..."}}
+    ]
+)
+
+# Check content type
+if message.is_multimodal_content():
+    print("Message contains images")
+```
+
+## Attachments
+
+Messages can have file attachments:
+
+```python
+from narrator import Message, Attachment
+
+# Create message with attachment
+message = Message(
+    role="user",
+    content="Please review this document",
+    attachments=[
+        Attachment(
+            filename="report.pdf",
+            content=pdf_bytes,
+            mime_type="application/pdf"
+        )
+    ]
+)
+
+# Or create from file during initialization
+message = Message(
+    role="user",
+    content="Here's the data",
+    filename="data.csv",
+    file_content=csv_bytes
+)
+```
+
+## Message Source
+
+Track who created a message:
+
+```python
+# User-created message
+user_message = Message(
+    role="user",
+    content="Hello",
+    source={
+        "type": "user",
+        "id": "user_123",
+        "name": "John Doe",
+        "attributes": {"email": "john@example.com"}
+    }
+)
+
+# Agent-created message
+agent_message = Message(
+    role="assistant",
+    content="Hello! How can I help?",
+    source={
+        "type": "agent",
+        "id": "agent_xyz",
+        "name": "Support Bot"
+    }
+)
+
+# Tool-created message
+tool_message = Message(
+    role="tool",
+    name="calculator",
+    content="Result: 42",
+    source={
+        "type": "tool",
+        "id": "calc_v1",
+        "name": "Calculator Tool"
+    }
+)
+```
+
+## Metrics
+
+Messages track detailed performance metrics:
+
+```python
+message = Message(
+    role="assistant",
+    content="Here's your answer...",
+    metrics={
+        "model": "gpt-4",
+        "timing": {
+            "started_at": "2024-01-01T00:00:00Z",
+            "ended_at": "2024-01-01T00:00:02Z",
+            "latency": 2000  # milliseconds
+        },
+        "usage": {
+            "completion_tokens": 150,
+            "prompt_tokens": 500,
+            "total_tokens": 650
+        },
+        "weave_call": {
+            "id": "call_abc123",
+            "ui_url": "https://wandb.ai/..."
+        }
+    }
+)
+
+# Access metrics
+print(f"Model used: {message.metrics['model']}")
+print(f"Latency: {message.metrics['timing']['latency']}ms")
+print(f"Tokens: {message.metrics['usage']['total_tokens']}")
+```
+
+## Reactions
+
+Add emoji reactions to messages:
+
+```python
+# Add a reaction
+added = message.add_reaction("thumbsup", "user_123")
+
+# Remove a reaction
+removed = message.remove_reaction("thumbsup", "user_123")
+
+# Get all reactions
+reactions = message.get_reactions()
+# Returns: {"thumbsup": ["user_123", "user_456"], "heart": ["user_789"]}
+
+# Check if user reacted with specific emoji
+has_reacted = message.user_has_reacted("thumbsup", "user_123")
+```
+
+## Platform References
+
+Link messages to external platforms:
+
+```python
+message = Message(
+    role="user",
+    content="Hello from Slack!",
+    platforms={
+        "slack": {
+            "channel": "C123456",
+            "ts": "1234567890.123456",
+            "thread_ts": "1234567890.000000"
+        }
+    }
+)
+```
+
+## Conversion for APIs
+
+```python
+# Convert to chat completion format
+chat_msg = message.to_chat_completion_message()
+# Returns: {"role": "user", "content": "Hello"}
+
+# For messages with attachments (requires FileStore)
+chat_msg = message.to_chat_completion_message(file_store=file_store)
+
+# Serialize to dictionary
+msg_dict = message.model_dump(mode="json")  # Dates as ISO strings
+msg_dict = message.model_dump(mode="python")  # Dates as datetime objects
+```
+
+## Validation
+
+Messages include automatic validation:
+
+```python
+# Tool messages require tool_call_id
+try:
+    msg = Message(role="tool", content="Result")  # Raises ValueError
+except ValueError as e:
+    print("Tool messages need tool_call_id")
+
+# Tool calls must have proper structure
+msg = Message(
+    role="assistant",
+    tool_calls=[{
+        "id": "123",
+        "type": "function",
+        "function": {
+            "name": "get_weather",
+            "arguments": "{}"
+        }
+    }]
+)
+```
+
+## Example: Complete Message Flow
+
+```python
+from narrator import Message, Attachment
+import datetime
+
+# User sends message with attachment
+user_msg = Message(
+    role="user",
+    content="Can you analyze this sales data?",
+    attachments=[
+        Attachment(
+            filename="sales_q4.csv",
+            content=csv_data,
+            mime_type="text/csv"
+        )
+    ],
+    source={
+        "type": "user",
+        "id": "user_123",
+        "name": "Alice Smith"
+    }
+)
+
+# Assistant responds with tool use
+assistant_msg = Message(
+    role="assistant",
+    content="I'll analyze your Q4 sales data.",
+    tool_calls=[{
+        "id": "analysis_001",
+        "type": "function",
+        "function": {
+            "name": "analyze_csv",
+            "arguments": '{"file_id": "sales_q4.csv"}'
+        }
+    }],
+    source={
+        "type": "agent",
+        "id": "analyst_bot",
+        "name": "Data Analyst"
+    }
+)
+
+# Tool provides results
+tool_msg = Message(
+    role="tool",
+    name="analyze_csv",
+    tool_call_id="analysis_001",
+    content="Total sales: $1.2M, Top product: Widget Pro",
+    metrics={
+        "timing": {
+            "latency": 1500
+        }
+    }
+)
+
+# Assistant summarizes
+summary_msg = Message(
+    role="assistant",
+    content="Your Q4 sales totaled $1.2M, with Widget Pro as your top product!",
+    metrics={
+        "model": "gpt-4",
+        "usage": {
+            "total_tokens": 245
+        }
+    }
+)
+
+# User reacts
+user_msg.add_reaction("thumbsup", "user_123")
+```

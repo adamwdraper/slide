@@ -1,0 +1,280 @@
+---
+title: 'Thread'
+description: 'Represents a conversation thread containing messages'
+---
+
+## Overview
+
+The `Thread` class represents a conversation containing multiple messages. It provides rich functionality for managing conversation state, tracking metrics, and organizing messages by turns.
+
+## Creating a Thread
+
+```python
+from narrator import Thread, Message
+
+# Create a new thread
+thread = Thread()
+
+# Create with a specific ID and title
+thread = Thread(
+    id="my-thread-123",
+    title="Customer Support Chat"
+)
+
+# Create with platform references
+thread = Thread(
+    title="Slack Conversation",
+    platforms={
+        "slack": {
+            "channel": "C123456",
+            "thread_ts": "1234567890.123"
+        }
+    }
+)
+```
+
+## Key Properties
+
+<ParamField path="id" type="string" default="auto-generated UUID">
+  Unique identifier for the thread
+</ParamField>
+
+<ParamField path="title" type="string" default="Untitled Thread">
+  Human-readable title for the thread
+</ParamField>
+
+<ParamField path="messages" type="List[Message]" default="[]">
+  List of messages in the thread
+</ParamField>
+
+<ParamField path="created_at" type="datetime" default="now">
+  Timestamp when the thread was created (UTC)
+</ParamField>
+
+<ParamField path="updated_at" type="datetime" default="now">
+  Timestamp when the thread was last updated (UTC)
+</ParamField>
+
+<ParamField path="attributes" type="Dict" default="{}">
+  Custom metadata for the thread
+</ParamField>
+
+<ParamField path="platforms" type="Dict[str, Dict[str, str]]" default="{}">
+  References to where this thread exists on external platforms (e.g., Slack, Discord)
+</ParamField>
+
+## Adding Messages
+
+### Single Message
+
+```python
+# Add a user message
+thread.add_message(Message(
+    role="user",
+    content="Hello, I need help with my order"
+))
+
+# Add an assistant message
+thread.add_message(Message(
+    role="assistant",
+    content="I'd be happy to help you with your order."
+))
+
+# Messages in the same turn (e.g., tool calls)
+thread.add_message(tool_message, same_turn=True)
+```
+
+### Batch Messages
+
+```python
+# Add multiple messages with the same turn number
+messages = [
+    Message(role="assistant", content="Let me check that for you."),
+    Message(role="tool", name="order_lookup", content="Order #12345 found"),
+    Message(role="assistant", content="I found your order!")
+]
+
+thread.add_messages_batch(messages)
+```
+
+## Accessing Messages
+
+```python
+# Get all messages for chat completion (excludes system messages)
+messages = await thread.get_messages_for_chat_completion()
+
+# Get last message by role
+last_user_msg = thread.get_last_message_by_role("user")
+last_assistant_msg = thread.get_last_message_by_role("assistant")
+
+# Get system message if exists
+system_msg = thread.get_system_message()
+
+# Get messages by turn
+turn_messages = thread.get_messages_by_turn(3)
+
+# Get current turn number
+current_turn = thread.get_current_turn()
+
+# Get message by ID
+message = thread.get_message_by_id("msg-123")
+```
+
+## Thread Analytics
+
+### Token Usage
+
+```python
+# Get total token usage
+tokens = thread.get_total_tokens()
+print(f"Total tokens: {tokens['overall']['total_tokens']}")
+print(f"By model: {tokens['by_model']}")
+
+# Get usage for specific model
+gpt4_usage = thread.get_model_usage("gpt-4")
+print(f"GPT-4 calls: {gpt4_usage['calls']}")
+print(f"GPT-4 tokens: {gpt4_usage['total_tokens']}")
+```
+
+### Message Statistics
+
+```python
+# Get message counts by role
+counts = thread.get_message_counts()
+print(f"User messages: {counts['user']}")
+print(f"Assistant messages: {counts['assistant']}")
+
+# Get timing statistics
+timing = thread.get_message_timing_stats()
+print(f"Average latency: {timing['average_latency']}ms")
+
+# Get tool usage
+tools = thread.get_tool_usage()
+print(f"Tools used: {tools['tools']}")
+print(f"Total tool calls: {tools['total_calls']}")
+
+# Get turns summary
+turns = thread.get_turns_summary()
+for turn_num, info in turns.items():
+    print(f"Turn {turn_num}: {info['message_count']} messages")
+```
+
+## Thread Management
+
+```python
+# Generate title from first message
+thread.generate_title()  # Sets title based on first user message
+
+# Clear all messages
+thread.clear_messages()
+
+# Access messages in sequence order
+ordered_messages = thread.get_messages_in_sequence()
+```
+
+## Reactions
+
+Threads support emoji reactions on messages:
+
+```python
+# Add a reaction
+success = thread.add_reaction(
+    message_id="msg-123",
+    emoji="thumbsup",
+    user_id="user-456"
+)
+
+# Remove a reaction
+removed = thread.remove_reaction(
+    message_id="msg-123",
+    emoji="thumbsup",
+    user_id="user-456"
+)
+
+# Get all reactions for a message
+reactions = thread.get_reactions("msg-123")
+# Returns: {"thumbsup": ["user-456", "user-789"], "heart": ["user-456"]}
+```
+
+## Serialization
+
+```python
+# Convert to dictionary for JSON
+thread_dict = thread.model_dump(mode="json")  # Dates as ISO strings
+thread_dict = thread.model_dump(mode="python")  # Dates as datetime objects
+
+# The thread is Pydantic-based, so standard serialization works
+import json
+json_str = thread.model_dump_json()
+```
+
+## Turn Management
+
+Messages are organized into turns, representing conversation rounds:
+
+```python
+# Messages added separately get sequential turns
+thread.add_message(user_msg)     # Turn 1
+thread.add_message(assistant_msg) # Turn 2
+
+# Messages added together share a turn
+thread.add_message(assistant_msg)           # Turn 3
+thread.add_message(tool_msg, same_turn=True) # Also turn 3
+
+# Or use batch for multiple messages in one turn
+thread.add_messages_batch([msg1, msg2, msg3]) # All get same turn
+```
+
+## Example: Building a Conversation
+
+```python
+from narrator import Thread, Message
+
+# Create thread
+thread = Thread(title="Technical Support")
+
+# Add system message (always turn 0)
+thread.add_message(Message(
+    role="system",
+    content="You are a helpful technical support agent."
+))
+
+# User asks question (turn 1)
+thread.add_message(Message(
+    role="user",
+    content="My computer won't start. The screen is black."
+))
+
+# Assistant responds with tool use (turn 2)
+thread.add_message(Message(
+    role="assistant",
+    content="I'll help you troubleshoot this issue.",
+    tool_calls=[{
+        "id": "call_123",
+        "type": "function",
+        "function": {
+            "name": "diagnose_computer",
+            "arguments": '{"symptom": "black screen"}'
+        }
+    }]
+))
+
+# Tool response (same turn as assistant)
+thread.add_message(Message(
+    role="tool",
+    name="diagnose_computer",
+    tool_call_id="call_123",
+    content="Possible causes: 1) Power issue, 2) Display cable..."
+), same_turn=True)
+
+# Assistant final response (still same turn)
+thread.add_message(Message(
+    role="assistant",
+    content="Based on the diagnosis, let's start by checking your power connection."
+), same_turn=True)
+
+# Check thread state
+print(f"Total messages: {len(thread.messages)}")
+print(f"Current turn: {thread.get_current_turn()}")
+print(f"Token usage: {thread.get_total_tokens()}")
+```
