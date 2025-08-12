@@ -81,7 +81,7 @@ Please help me with these tasks.
     
     # Print the results
     print("\n=== FINAL CONVERSATION ===\n")
-    print(f"Final Response:\n{result.output}")
+    print(f"Final Response:\n{result.content}")
     
     # Show execution details
     print(f"\n=== EXECUTION DETAILS ===")

@@ -21,7 +21,7 @@ async def basic_usage():
     
     # Simple usage - just get the output
     result = await agent.go(thread)
-    print(f"Response: {result.output}")
+    print(f"Response: {result.content}")
     
     # But you also have access to detailed execution info
     print(f"Took {result.execution.duration_ms:.2f}ms")

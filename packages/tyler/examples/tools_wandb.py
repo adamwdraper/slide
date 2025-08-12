@@ -116,8 +116,8 @@ async def main():
             result = await agent.go(thread)
             
             # Log response and tool usage
-            logger.info("Assistant: %s", result.output)
-            print(f"🤖 Agent: {result.output}")
+            logger.info("Assistant: %s", result.content)
+            print(f"🤖 Agent: {result.content}")
             
             if result.execution.tool_calls:
                 logger.info("Tools used:")
@@ -170,7 +170,7 @@ async def interactive_demo():
         
         result = await agent.go(thread)
         
-        print(f"\n🤖 Agent: {result.output}")
+        print(f"\n🤖 Agent: {result.content}")
         
         # Show execution details
         print(f"\n📊 Execution stats:")

@@ -13,8 +13,8 @@ The `AgentResult` class encapsulates the complete result of an agent's execution
 @dataclass
 class AgentResult:
     thread: Thread                    # Updated thread with new messages
-    messages: List[Message]           # New messages added during execution
-    output: Optional[str]             # Final assistant response content
+    new_messages: List[Message]       # New messages added during execution
+    content: Optional[str]            # Final assistant response content
     execution: ExecutionDetails       # Full execution telemetry
 ```
 
@@ -24,20 +24,16 @@ class AgentResult:
   The updated thread containing all messages including those added during this execution
 </ParamField>
 
-<ParamField path="messages" type="List[Message]">
+<ParamField path="new_messages" type="List[Message]">
   List of new messages added during this execution (excludes pre-existing messages)
 </ParamField>
 
-<ParamField path="output" type="Optional[str]">
+<ParamField path="content" type="Optional[str]">
   The final assistant response content. None if no assistant message was generated
 </ParamField>
 
 <ParamField path="execution" type="ExecutionDetails">
   Comprehensive execution telemetry including events, timing, and metrics
-</ParamField>
-
-<ParamField path="final_output" type="Optional[str]">
-  Alias for `output` (provides compatibility with OpenAI SDK style)
 </ParamField>
 
 <ParamField path="success" type="bool">
@@ -59,7 +55,7 @@ thread.add_message(Message(role="user", content="Hello!"))
 result = await agent.go(thread)
 
 # Access the response
-print(f"Response: {result.output}")
+print(f"Response: {result.content}")
 print(f"Success: {result.success}")
 ```
 
@@ -82,7 +78,7 @@ for tool_call in result.execution.tool_calls:
 
 ```python
 # Access all new messages
-for message in result.messages:
+for message in result.new_messages:
     print(f"{message.role}: {message.content}")
     
     # Check for tool calls
@@ -107,9 +103,9 @@ if not result.success:
             print(f"Error: {event.data['message']}")
             print(f"Type: {event.data['error_type']}")
     
-    # The output may still contain an error message
-    if result.output:
-        print(f"Error response: {result.output}")
+    # The content may still contain an error message
+    if result.content:
+        print(f"Error response: {result.content}")
 ```
 
 ### Thread Management
@@ -140,7 +136,7 @@ async def chat_loop(agent: Agent, thread: Thread):
         thread.add_message(Message(role="user", content=user_input))
         result = await agent.go(thread)
         
-        print(f"Assistant: {result.output}")
+        print(f"Assistant: {result.content}")
         print(f"(Took {result.execution.duration_ms:.0f}ms)")
 ```
 
@@ -154,8 +150,8 @@ def analyze_result(result: AgentResult):
         "duration_ms": result.execution.duration_ms,
         "tokens": result.execution.total_tokens,
         "tool_calls": len(result.execution.tool_calls),
-        "messages_added": len(result.messages),
-        "has_output": result.output is not None
+        "messages_added": len(result.new_messages),
+        "has_content": result.content is not None
     }
     
     # Check for specific events

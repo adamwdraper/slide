@@ -131,7 +131,7 @@ async def main():
         result = await agent.go(thread)
 
         # Log response and execution details
-        logger.info("Assistant: %s", result.output)
+        logger.info("Assistant: %s", result.content)
         
         # Show tool usage
         if result.execution.tool_calls:
@@ -140,7 +140,7 @@ async def main():
                 logger.info("  - %s: %.2fms", tc.tool_name, tc.duration_ms)
         
         # Show detailed message info
-        for message in result.messages:
+        for message in result.new_messages:
             if message.tool_calls:
                 tool_calls_info = [{
                     "name": tc.get('function', {}).get('name'),

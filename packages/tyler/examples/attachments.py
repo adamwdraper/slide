@@ -97,11 +97,11 @@ async def example_tool_generated_attachment(thread_store, agent, file_store):
     result = await agent.go(thread)
     
     # The thread is automatically saved by the agent, which processes any attachments
-    logger.info(f"Agent response: {result.output}")
+    logger.info(f"Agent response: {result.content}")
     logger.info(f"Execution time: {result.execution.duration_ms:.2f}ms")
     
     # Log information about generated attachments
-    for msg in result.messages:
+    for msg in result.new_messages:
         if msg.attachments:
             logger.info(f"Message from {msg.role} has {len(msg.attachments)} attachments:")
             for att in msg.attachments:

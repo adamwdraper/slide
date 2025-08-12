@@ -59,7 +59,7 @@ async def main():
     result = await agent.go(thread)
 
     # Log response and execution details
-    logger.info("Assistant: %s", result.output)
+    logger.info("Assistant: %s", result.content)
     logger.info("Execution time: %.2fms", result.execution.duration_ms)
     logger.info("Total tokens: %d", result.execution.total_tokens)
     

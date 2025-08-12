@@ -730,7 +730,7 @@ class Agent(Model):
         Example:
             # Non-streaming usage
             result = await agent.go(thread)
-            print(f"Response: {result.output}")
+            print(f"Response: {result.content}")
             print(f"Tokens used: {result.execution.total_tokens}")
             
             # Streaming usage
@@ -756,12 +756,12 @@ class Agent(Model):
         new_messages = []
         
         # Helper to record events
-        def record_event(event_type: EventType, data: Dict[str, Any], metadata=None):
+        def record_event(event_type: EventType, data: Dict[str, Any], attributes=None):
             events.append(ExecutionEvent(
                 type=event_type,
                 timestamp=datetime.now(UTC),
                 data=data,
-                metadata=metadata
+                attributes=attributes
             ))
             
         # Reset iteration count at the beginning of each go call
@@ -994,8 +994,8 @@ class Agent(Model):
             
             return AgentResult(
                 thread=thread,
-                messages=new_messages,
-                output=output,
+                new_messages=new_messages,
+                content=output,
                 execution=execution
             )
 
@@ -1038,8 +1038,8 @@ class Agent(Model):
             
             return AgentResult(
                 thread=thread,
-                messages=new_messages,
-                output=None,
+                new_messages=new_messages,
+                content=None,
                 execution=execution
             )
 
@@ -1425,321 +1425,6 @@ class Agent(Model):
             if self.thread_store:
                 await self.thread_store.save(thread)
             raise
-
-
-        """DEPRECATED: Use go(thread, stream=True) instead. Process the thread with streaming updates.
-        
-        Yields:
-            StreamUpdate objects containing:
-            - Content chunks as they arrive
-            - Complete assistant messages with tool calls
-            - Tool execution results
-            - Final thread state
-            - Any errors that occur
-        """
-        try:
-            self._iteration_count = 0
-            # Clear tool attributes cache for fresh request
-            self._tool_attributes_cache.clear()
-            current_content = []  # Accumulate content chunks
-            current_tool_calls = []  # Accumulate tool calls
-            current_tool_call = None  # Track current tool call being built
-            api_start_time = None  # Track API call start time
-            current_weave_call = None  # Track current weave call
-            new_messages = []  # Track new messages for tool processing
-
-            # Check if we've already hit max iterations
-            if self._iteration_count >= self.max_tool_iterations:
-                message = Message(
-                    role="assistant",
-                    content="Maximum tool iteration count reached. Stopping further tool calls.",
-                    source=self._create_assistant_source(include_version=False)
-                )
-                thread.add_message(message)
-                yield StreamUpdate(StreamUpdate.Type.ASSISTANT_MESSAGE, message)
-                if self.thread_store:
-                    await self.thread_store.save(thread)
-                return
-
-            while self._iteration_count < self.max_tool_iterations:
-                try:
-                    # Get streaming response using step
-                    streaming_response, metrics = await self.step(thread, stream=True)
-                    
-                    if not streaming_response:
-                        error_msg = "No response received from chat completion"
-                        logger.error(error_msg)
-                        message = self._create_error_message(error_msg)
-                        thread.add_message(message)
-                        new_messages.append(message)
-                        yield StreamUpdate(StreamUpdate.Type.ERROR, error_msg)
-                        # Save on error like in go
-                        if self.thread_store:
-                            await self.thread_store.save(thread)
-                        break
-
-                    # Process streaming response
-                    async for chunk in streaming_response:
-                        if not hasattr(chunk, 'choices') or not chunk.choices:
-                            continue
-
-                        delta = chunk.choices[0].delta
-                        
-                        # Handle content chunks
-                        if hasattr(delta, 'content') and delta.content is not None:
-                            current_content.append(delta.content)
-                            yield StreamUpdate(StreamUpdate.Type.CONTENT_CHUNK, delta.content)
-                            
-                        # Gather tool calls (don't yield yet)
-                        if hasattr(delta, 'tool_calls') and delta.tool_calls:
-                            logger.debug(f"Tool call chunk: {delta.tool_calls}")
-                            for tool_call in delta.tool_calls:
-                                # Log the tool call structure
-                                logger.debug(f"Processing tool call: {tool_call}")
-                                if isinstance(tool_call, dict):
-                                    logger.debug(f"Dict tool call: {tool_call}")
-                                else:
-                                    logger.debug(f"Object tool call - has id: {hasattr(tool_call, 'id')}, has function: {hasattr(tool_call, 'function')}")
-                                    if hasattr(tool_call, 'function'):
-                                        logger.debug(f"Function attrs - has name: {hasattr(tool_call.function, 'name')}, has arguments: {hasattr(tool_call.function, 'arguments')}")
-
-                                # Handle both dict and object formats
-                                if isinstance(tool_call, dict):
-                                    if 'id' in tool_call and tool_call['id']:
-                                        # New tool call
-                                        current_tool_call = {
-                                            "id": str(tool_call['id']),
-                                            "type": "function",
-                                            "function": {
-                                                "name": tool_call.get('function', {}).get('name', ''),
-                                                "arguments": tool_call.get('function', {}).get('arguments', '{}')
-                                            }
-                                        }
-                                        if current_tool_call not in current_tool_calls:
-                                            current_tool_calls.append(current_tool_call)
-                                    elif current_tool_call and 'function' in tool_call:
-                                        # Update existing tool call
-                                        if 'name' in tool_call['function'] and tool_call['function']['name']:
-                                            current_tool_call['function']['name'] = tool_call['function']['name']
-                                        if 'arguments' in tool_call['function']:
-                                            if not current_tool_call['function']['arguments'].strip('{}').strip():
-                                                current_tool_call['function']['arguments'] = tool_call['function']['arguments']
-                                            else:
-                                                # Append to existing arguments, handling JSON chunks
-                                                current_tool_call['function']['arguments'] = current_tool_call['function']['arguments'].rstrip('}') + tool_call['function']['arguments'].lstrip('{')
-                                else:
-                                    # Handle object format
-                                    if hasattr(tool_call, 'id') and tool_call.id:
-                                        # New tool call
-                                        current_tool_call = {
-                                            "id": str(tool_call.id),
-                                            "type": "function",
-                                            "function": {
-                                                "name": getattr(tool_call.function, 'name', ''),
-                                                "arguments": getattr(tool_call.function, 'arguments', '{}')
-                                            }
-                                        }
-                                        if current_tool_call not in current_tool_calls:
-                                            current_tool_calls.append(current_tool_call)
-                                    elif current_tool_call and hasattr(tool_call, 'function'):
-                                        # Update existing tool call
-                                        if hasattr(tool_call.function, 'name') and tool_call.function.name:
-                                            current_tool_call['function']['name'] = tool_call.function.name
-                                        if hasattr(tool_call.function, 'arguments'):
-                                            if not current_tool_call['function']['arguments'].strip('{}').strip():
-                                                current_tool_call['function']['arguments'] = tool_call.function.arguments
-                                            else:
-                                                # Append to existing arguments, handling JSON chunks
-                                                current_tool_call['function']['arguments'] = current_tool_call['function']['arguments'].rstrip('}') + tool_call.function.arguments.lstrip('{')
-
-                                # Validate tool call is complete before proceeding
-                                if current_tool_call:
-                                    logger.debug(f"Current tool call state: {current_tool_call}")
-                                    if not current_tool_call['id']:
-                                        logger.warning("Tool call missing ID")
-                                    if not current_tool_call['function']['name']:
-                                        logger.warning("Tool call missing function name")
-
-                            logger.debug(f"Current tool calls after processing: {current_tool_calls}")
-
-                    # Create and add assistant message with complete content and tool calls
-                    content = ''.join(current_content)
-                    # Add usage metrics from the final chunk if available
-                    if hasattr(chunk, 'usage'):
-                        metrics["usage"] = {
-                            "completion_tokens": getattr(chunk.usage, "completion_tokens", 0),
-                            "prompt_tokens": getattr(chunk.usage, "prompt_tokens", 0),
-                            "total_tokens": getattr(chunk.usage, "total_tokens", 0)
-                        }
-                    assistant_message = Message(
-                        role="assistant",
-                        content=content,
-                        tool_calls=current_tool_calls if current_tool_calls else None,
-                        source=self._create_assistant_source(include_version=True),
-                        metrics=metrics  # metrics from step() already includes model name
-                    )
-                    thread.add_message(assistant_message)
-                    new_messages.append(assistant_message)
-                    yield StreamUpdate(StreamUpdate.Type.ASSISTANT_MESSAGE, assistant_message)
-
-                    # If no tool calls, we're done
-                    if not current_tool_calls:
-                        # Save state like in go
-                        if self.thread_store:
-                            await self.thread_store.save(thread)
-                        break
-
-                    # Execute tools in parallel and yield results
-                    try:
-                        # Prepare all tool calls for parallel execution
-                        tool_tasks = []
-                        for tool_call in current_tool_calls:
-                            # Ensure we have valid JSON for arguments
-                            args = tool_call['function']['arguments']
-                            if not args.strip():
-                                args = '{}'
-                            # Parse arguments to ensure valid JSON
-                            try:
-                                parsed_args = json.loads(args)
-                            except json.JSONDecodeError as json_err:
-                                # If invalid JSON, try to fix common streaming artifacts
-                                try:
-                                    args = args.strip().rstrip(',').rstrip('"')
-                                    if not args.endswith('}'):
-                                        args += '}'
-                                    if not args.startswith('{'):
-                                        args = '{' + args
-                                    parsed_args = json.loads(args)
-                                except json.JSONDecodeError:
-                                    # If fix attempt fails, create error message with expected format and raise
-                                    error_msg = f"Tool execution failed: Invalid JSON in tool arguments: {json_err}"
-                                    yield StreamUpdate(StreamUpdate.Type.ERROR, error_msg)
-                                    # Save on error
-                                    if self.thread_store:
-                                        await self.thread_store.save(thread)
-                                    # Break out of the inner loop and continue to the next iteration
-                                    raise ValueError(error_msg)
-
-                            tool_call['function']['arguments'] = json.dumps(parsed_args)
-                            
-                            # Add to tasks
-                            tool_tasks.append(self._handle_tool_execution(tool_call))
-                            
-                        # Execute all tool calls in parallel
-                        tool_results = await asyncio.gather(*tool_tasks, return_exceptions=True)
-                        
-                        # Process results sequentially to update thread safely
-                        should_break = False
-                        for i, result in enumerate(tool_results):
-                            tool_call = current_tool_calls[i]
-                            tool_name = tool_call['function']['name']
-                            
-                            # Process tool result using helper
-                            tool_message, break_iteration = self._process_tool_result(result, tool_call, tool_name)
-                            
-                            # Add message to thread and yield update
-                            thread.add_message(tool_message)
-                            new_messages.append(tool_message)
-                            
-                            # Yield appropriate update based on message type
-                            if isinstance(result, Exception):
-                                yield StreamUpdate(StreamUpdate.Type.ERROR, f"Tool execution failed: {str(result)}")
-                            else:
-                                yield StreamUpdate(StreamUpdate.Type.TOOL_MESSAGE, tool_message)
-                            
-                            if break_iteration:
-                                should_break = True
-                        
-                        # Save after processing all tool calls but before next completion
-                        if self.thread_store:
-                            await self.thread_store.save(thread)
-                            
-                        if should_break:
-                            break
-                    
-                    except Exception as e:
-                        tool_name_for_error = "unknown_tool"
-                        if current_tool_call and 'function' in current_tool_call and 'name' in current_tool_call['function']:
-                            tool_name_for_error = current_tool_call['function']['name']
-                        error_msg = f"Tool execution failed: {str(e)}"
-                        error_message = Message(
-                            role="tool",
-                            name=tool_name_for_error,
-                            content=error_msg,
-                            tool_call_id=current_tool_call.get('id') if current_tool_call else None,
-                            source=self._create_tool_source(tool_name_for_error),
-                            metrics={
-                                "timing": {
-                                    "started_at": datetime.now(UTC).isoformat(),
-                                    "ended_at": datetime.now(UTC).isoformat(),
-                                    "latency": 0
-                                }
-                            }
-                        )
-                        thread.add_message(error_message)
-                        yield StreamUpdate(StreamUpdate.Type.ERROR, error_msg)
-                        # Save on error like in go
-                        if self.thread_store:
-                            await self.thread_store.save(thread)
-                        break
-
-                    # Save after processing all tool calls but before next completion
-                    if self.thread_store:
-                        await self.thread_store.save(thread)
-                            
-                    if should_break:
-                        break
-
-                    # Reset for next iteration
-                    current_content = []
-                    current_tool_calls = []
-                    current_tool_call = None
-                    api_start_time = None
-                    self._iteration_count += 1
-
-                except Exception as e:
-                    error_msg = f"Completion failed: {str(e)}"
-                    error_message = self._create_error_message(error_msg)
-                    thread.add_message(error_message)
-                    new_messages.append(error_message)
-                    yield StreamUpdate(StreamUpdate.Type.ERROR, error_msg)
-                    # Save on error like in go
-                    if self.thread_store:
-                        await self.thread_store.save(thread)
-                    break
-
-            # Handle max iterations
-            if self._iteration_count >= self.max_tool_iterations:
-                message = Message(
-                    role="assistant",
-                    content="Maximum tool iteration count reached. Stopping further tool calls.",
-                    source=self._create_assistant_source(include_version=False)
-                )
-                thread.add_message(message)
-                new_messages.append(message)
-                yield StreamUpdate(StreamUpdate.Type.ASSISTANT_MESSAGE, message)
-
-            # Save final state if using thread store
-            if self.thread_store:
-                await self.thread_store.save(thread)
-
-            # Yield final complete update
-            final_new_messages = [m for m in thread.messages if m.role != "user"]
-            yield StreamUpdate(StreamUpdate.Type.COMPLETE, (thread, final_new_messages))
-
-        except Exception as e:
-            error_msg = f"Stream processing failed: {str(e)}"
-            error_message = self._create_error_message(error_msg)
-            thread.add_message(error_message)
-            yield StreamUpdate(StreamUpdate.Type.ERROR, error_msg)
-            # Save on error like in go
-            if self.thread_store:
-                await self.thread_store.save(thread)
-            raise  # Re-raise to ensure error is properly propagated
-
-        finally:
-            # Finally block intentionally left empty
-            pass 
 
     def _create_tool_source(self, tool_name: str) -> Dict:
         """Creates a standardized source entity dict for tool messages."""

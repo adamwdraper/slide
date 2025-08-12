@@ -57,7 +57,7 @@ async def main():
     # Execute in non-streaming mode
     result = await agent.go(thread)
     
-    print(f"Final response: {result.output}")
+    print(f"Final response: {result.content}")
     print(f"\nExecution details:")
     print(f"- Duration: {result.execution.duration_ms:.2f}ms")
     print(f"- Total tokens: {result.execution.total_tokens}")

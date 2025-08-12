@@ -30,7 +30,7 @@ thread.add_message(message)
 result = asyncio.run(agent.go(thread))
 
 # Print the response
-print(f"ASSISTANT: {result.output}")
+print(f"ASSISTANT: {result.content}")
 print("-" * 80)
 
 # Show execution metrics

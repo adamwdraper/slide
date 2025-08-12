@@ -24,7 +24,7 @@ async def test_non_streaming():
     # Run agent and get detailed result
     result = await agent.go(thread)
     
-    print(f"\nFinal output: {result.output}")
+    print(f"\nFinal output: {result.content}")
     print(f"Success: {result.success}")
     print(f"Total tokens: {result.execution.total_tokens}")
     print(f"Duration: {result.execution.duration_ms:.2f}ms")

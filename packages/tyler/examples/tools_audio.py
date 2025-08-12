@@ -71,14 +71,14 @@ async def text_to_speech_example():
     generated_audio = None
 
     # Log response and tool usage
-    logger.info("Assistant: %s", result.output)
+    logger.info("Assistant: %s", result.content)
     if result.execution.tool_calls:
         logger.info("Tools used:")
         for tc in result.execution.tool_calls:
             logger.info("  - %s: %.2fms", tc.tool_name, tc.duration_ms)
     
     # Check messages for generated audio files
-    new_messages = result.messages
+    new_messages = result.new_messages
     for message in new_messages:
         if message.role == "assistant":
             logger.info("Assistant: %s", message.content)
@@ -129,11 +129,11 @@ async def speech_to_text_example(audio_attachment):
     result = await agent.go(thread)
 
     # Log response
-    logger.info("Assistant: %s", result.output)
+    logger.info("Assistant: %s", result.content)
     logger.info("Execution time: %.2fms", result.execution.duration_ms)
     
     # Log message details
-    for message in result.messages:
+    for message in result.new_messages:
         if message.tool_calls:
             tool_calls_info = [{
                 "name": tc.get('function', {}).get('name'),

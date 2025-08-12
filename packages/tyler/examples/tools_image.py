@@ -72,7 +72,7 @@ async def main():
     result = await agent.go(generation_thread)
 
     # Log response and execution details
-    logger.info("Assistant: %s", result.output)
+    logger.info("Assistant: %s", result.content)
     
     # Show tool usage
     if result.execution.tool_calls:
@@ -81,7 +81,7 @@ async def main():
             logger.info("  - %s: %.2fms", tc.tool_name, tc.duration_ms)
     
     # Track generated image from new messages
-    new_messages = result.messages
+    new_messages = result.new_messages
     for message in new_messages:
         if message.tool_calls:
             tool_calls_info = [{
@@ -151,7 +151,7 @@ async def main():
         result = await agent.go(analysis_thread)
         
         # Log response
-        logger.info("Assistant: %s", result.output)
+        logger.info("Assistant: %s", result.content)
         logger.info("Execution time: %.2fms", result.execution.duration_ms)
         if message.tool_calls:
                 tool_calls_info = [{

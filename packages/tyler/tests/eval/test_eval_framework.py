@@ -398,8 +398,8 @@ class TestAgentEval:
             
             return AgentResult(
                 thread=thread,
-                messages=[assistant_msg],
-                output="Using tool",
+                new_messages=[assistant_msg],
+                content="Using tool",
                 execution=execution
             )
         

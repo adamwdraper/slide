@@ -37,7 +37,7 @@ class ExecutionEvent:
     type: EventType
     timestamp: datetime
     data: Dict[str, Any]
-    metadata: Optional[Dict[str, Any]] = None
+    attributes: Optional[Dict[str, Any]] = None
 
 
 @dataclass
@@ -114,15 +114,10 @@ class ExecutionDetails:
 class AgentResult:
     """Result from agent execution"""
     thread: Thread                    # Updated thread with new messages
-    messages: List[Message]           # New messages added during execution
-    output: Optional[str]             # Final assistant response content
+    new_messages: List[Message]       # New messages added during execution
+    content: Optional[str]            # Final assistant response content
     execution: ExecutionDetails       # Full execution telemetry
     
-    @property
-    def final_output(self) -> Optional[str]:
-        """Alias for output (compatibility with OpenAI SDK style)"""
-        return self.output
-
     @property
     def success(self) -> bool:
         """Whether execution completed without errors"""

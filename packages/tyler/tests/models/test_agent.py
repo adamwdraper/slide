@@ -3,7 +3,7 @@ import os
 import pytest
 from unittest.mock import patch, MagicMock, create_autospec, Mock, AsyncMock
 from tyler import Agent, Thread, Message, ThreadStore
-from tyler.models.agent import StreamUpdate
+
 from tyler.utils.tool_runner import tool_runner, ToolRunner
 from narrator.database.storage_backend import MemoryBackend
 from narrator import FileStore
@@ -206,9 +206,9 @@ async def test_go_max_recursion(agent, mock_thread_store):
         with patch.object(agent, '_get_thread', return_value=thread):
             result = await agent.go("test-conv")
             
-            assert len(result.messages) == 1
-            assert result.messages[0].role == "assistant"
-            assert result.messages[0].content == "Maximum tool iteration count reached. Stopping further tool calls."
+            assert len(result.new_messages) == 1
+            assert result.new_messages[0].role == "assistant"
+            assert result.new_messages[0].content == "Maximum tool iteration count reached. Stopping further tool calls."
             mock_thread_store.save.assert_called_with(result.thread)
 
 @pytest.mark.asyncio
@@ -252,11 +252,11 @@ async def test_go_no_tool_calls(agent, mock_thread_store, mock_prompt, mock_lite
         assert len(result.thread.messages) == 1  
         assert result.thread.messages[0].role == "assistant"
         assert result.thread.messages[0].content == "Test response"
-        assert len(result.messages) == 1
-        assert result.messages[0].role == "assistant"
-        assert "metrics" in result.messages[0].model_dump()
-        assert "timing" in result.messages[0].metrics
-        assert "usage" in result.messages[0].metrics
+        assert len(result.new_messages) == 1
+        assert result.new_messages[0].role == "assistant"
+        assert "metrics" in result.new_messages[0].model_dump()
+        assert "timing" in result.new_messages[0].metrics
+        assert "usage" in result.new_messages[0].metrics
         mock_thread_store.save.assert_called_with(result.thread)
         assert agent._iteration_count == 0
 
@@ -669,8 +669,8 @@ async def test_go_with_weave_metrics(agent, mock_thread_store, mock_prompt):
         with patch.object(agent, '_get_thread', return_value=thread):
             result = await agent.go(thread)
             
-            assert len(result.messages) == 1
-            message = result.messages[0]
+            assert len(result.new_messages) == 1
+            message = result.new_messages[0]
             assert 'model' in message.metrics
             assert 'timing' in message.metrics
             assert 'usage' in message.metrics
@@ -1162,14 +1162,14 @@ async def test_go_with_tool_returning_image(mock_thread_store, mock_file_store):
             result = await agent.go("test-thread")
 
             # Verify messages
-            assert len(result.messages) == 3
-            assert result.messages[0].role == "assistant"  # Initial message with tool call
-            assert result.messages[0].content == "Let me generate that image for you"
-            assert result.messages[1].role == "tool"  # Tool response with image
-            assert len(result.messages[1].attachments) == 1
-            assert result.messages[1].attachments[0].content == encoded_content
-            assert result.messages[2].role == "assistant"  # Final message
-            assert result.messages[2].content == "Here's your generated image"
+            assert len(result.new_messages) == 3
+            assert result.new_messages[0].role == "assistant"  # Initial message with tool call
+            assert result.new_messages[0].content == "Let me generate that image for you"
+            assert result.new_messages[1].role == "tool"  # Tool response with image
+            assert len(result.new_messages[1].attachments) == 1
+            assert result.new_messages[1].attachments[0].content == encoded_content
+            assert result.new_messages[2].role == "assistant"  # Final message
+            assert result.new_messages[2].content == "Here's your generated image"
 
 @pytest.mark.asyncio
 async def test_normalize_tool_call():
@@ -1248,9 +1248,9 @@ async def test_go_with_completion_error(agent, mock_thread_store):
         result = await agent.go(thread)
 
         # Verify error was handled and added to thread
-        assert len(result.messages) == 1
+        assert len(result.new_messages) == 1
         # Check that the error is reflected in the message content
-        assert "error" in result.messages[0].content.lower() or "Completion API error" in result.messages[0].content
+        assert "error" in result.new_messages[0].content.lower() or "Completion API error" in result.new_messages[0].content
 
         # Verify thread was saved
         assert mock_thread_store.save.call_count > 0  # Allow multiple saves
@@ -1269,9 +1269,9 @@ async def test_go_with_invalid_response(agent, mock_thread_store):
         result = await agent.go(thread)
 
         # Verify error was handled and added to thread
-        assert len(result.messages) == 1
+        assert len(result.new_messages) == 1
         # Check for presence of error message without requiring exact format
-        assert "error" in result.messages[0].content.lower() or "response" in result.messages[0].content.lower()
+        assert "error" in result.new_messages[0].content.lower() or "response" in result.new_messages[0].content.lower()
 
         # Verify thread was saved
         assert mock_thread_store.save.call_count > 0  # Allow multiple saves
@@ -1525,9 +1525,9 @@ async def test_go_with_custom_api_params(mock_thread_store):
             result = await agent.go("test-conv")
             
             # Verify basic functionality still works
-            assert len(result.messages) == 1
-            assert result.messages[0].role == "assistant"
-            assert result.messages[0].content == "Test response"
+            assert len(result.new_messages) == 1
+            assert result.new_messages[0].role == "assistant"
+            assert result.new_messages[0].content == "Test response"
 
 @pytest.mark.asyncio
 async def test_step_with_streaming_and_custom_params(mock_thread_store):
@@ -1702,10 +1702,10 @@ async def test_go_general_exception_handling(mock_thread_store):
         result = await agent.go(thread)
         
         # Should have an error message
-        assert len(result.messages) == 1
-        assert result.messages[0].role == "assistant"
-        assert "I encountered an error:" in result.messages[0].content
-        assert "Unexpected error" in result.messages[0].content
+        assert len(result.new_messages) == 1
+        assert result.new_messages[0].role == "assistant"
+        assert "I encountered an error:" in result.new_messages[0].content
+        assert "Unexpected error" in result.new_messages[0].content
         
         # Thread should be saved even on error
         mock_thread_store.save.assert_called()
@@ -1739,8 +1739,8 @@ async def test_go_with_thread_id(mock_thread_store):
         mock_thread_store.get.assert_called_with("test_thread_id")
         
         # Verify we got a response
-        assert len(result.messages) == 1
-        assert result.messages[0].content == "Response"
+        assert len(result.new_messages) == 1
+        assert result.new_messages[0].content == "Response"
 
 
 @pytest.mark.asyncio
@@ -1929,24 +1929,11 @@ async def test_step_error_handling():
         result = await agent.go(thread)
         
         # Should have error message
-        assert len(result.messages) > 0
-        assert any("encountered an error" in m.content for m in result.messages if m.role == "assistant")
+        assert len(result.new_messages) > 0
+        assert any("encountered an error" in m.content for m in result.new_messages if m.role == "assistant")
 
 
-def test_stream_update_slots():
-    """Test that StreamUpdate uses __slots__ correctly"""
-    update = StreamUpdate(StreamUpdate.Type.CONTENT_CHUNK, "test data")
-    
-    # Should have type and data attributes
-    assert update.type == StreamUpdate.Type.CONTENT_CHUNK
-    assert update.data == "test data"
-    
-    # Should not have __dict__ due to __slots__
-    assert not hasattr(update, '__dict__')
-    
-    # Should not be able to add new attributes
-    with pytest.raises(AttributeError):
-        update.new_attr = "value"
+
 
 
 @pytest.mark.asyncio

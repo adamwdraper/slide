@@ -231,7 +231,7 @@ async def run_conversation_step(agent, thread, user_message):
         result = await agent.go(thread)
         
         # Display the agent's response
-        for msg in result.messages:
+        for msg in result.new_messages:
             if msg.role == "assistant":
                 content = msg.content or ""
                 if len(content) > 500:

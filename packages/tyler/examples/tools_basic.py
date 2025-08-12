@@ -110,7 +110,7 @@ async def main():
         result = await agent.go(thread)
 
         # Log response and execution details
-        logger.info("Assistant: %s", result.output)
+        logger.info("Assistant: %s", result.content)
         
         # Show tool usage
         if result.execution.tool_calls:

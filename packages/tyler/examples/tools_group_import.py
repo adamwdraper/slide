@@ -113,7 +113,7 @@ async def main():
     
     result = await agent1.go(thread)
     
-    print(f"Multi-tool agent: {result.output}")
+    print(f"Multi-tool agent: {result.content}")
     print(f"\nAvailable tools: {len(agent1._processed_tools)}")
     print(f"Execution time: {result.execution.duration_ms:.2f}ms")
 

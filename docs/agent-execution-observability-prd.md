@@ -59,7 +59,7 @@ class ExecutionEvent:
     type: EventType
     timestamp: datetime
     data: Dict[str, Any]
-    metadata: Optional[Dict[str, Any]] = None
+    attributes: Optional[Dict[str, Any]] = None
 
 @dataclass
 class ToolCall:
@@ -133,14 +133,9 @@ class ExecutionDetails:
 class AgentResult:
     """Result from agent execution"""
     thread: Thread                    # Updated thread with new messages
-    messages: List[Message]           # New messages added during execution
-    output: Optional[str]             # Final assistant response content
+    new_messages: List[Message]       # New messages added during execution
+    content: Optional[str]            # Final assistant response content
     execution: ExecutionDetails       # Full execution telemetry
-    
-    @property
-    def final_output(self) -> Optional[str]:
-        """Alias for output (compatibility with OpenAI SDK style)"""
-        return self.output
     
     @property
     def success(self) -> bool:
@@ -188,7 +183,7 @@ class Agent:
         Example:
             # Non-streaming usage
             result = await agent.go(thread)
-            print(f"Response: {result.output}")
+            print(f"Response: {result.content}")
             print(f"Tokens used: {result.execution.total_tokens}")
             
             # Streaming usage
@@ -284,7 +279,7 @@ async def _go_stream(self, thread: Union[Thread, str]) -> AsyncGenerator[Executi
 ```python
 # Simple usage - developers can ignore execution details
 result = await agent.go(thread)
-print(result.output)
+print(result.content)
 ```
 
 ### Advanced Monitoring
@@ -383,7 +378,7 @@ async for update in agent.go_stream(thread):
 
 # New API
 result = await agent.go(thread)
-messages = result.messages  # Same messages as before
+messages = result.new_messages  # Same messages as before
 
 async for event in agent.go(thread, stream=True):
     if event.type == EventType.LLM_STREAM_CHUNK:

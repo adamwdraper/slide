@@ -56,7 +56,7 @@ async def main():
         result = await agent.go(thread)
         
         # The thread is updated in-place, but we also get rich execution details
-        logger.info("Assistant: %s", result.output)
+        logger.info("Assistant: %s", result.content)
         
         # Show execution metrics
         logger.debug("Execution metrics:")

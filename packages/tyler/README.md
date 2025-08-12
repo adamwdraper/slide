@@ -291,7 +291,7 @@ async def main():
     result = await agent.go(thread)
 
     # Print the assistant's response
-    print(f"Assistant: {result.output}")
+    print(f"Assistant: {result.content}")
     
     # Access additional information if needed
     print(f"Execution time: {result.execution.duration_ms}ms")

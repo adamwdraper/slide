@@ -77,7 +77,7 @@ async def demo_non_streaming():
     result = await agent.go(thread)
     
     # Display the response
-    logger.info("\n📝 Response: %s", result.output)
+    logger.info("\n📝 Response: %s", result.content)
     
     # Display execution metrics
     logger.info("\n📊 Execution Metrics:")

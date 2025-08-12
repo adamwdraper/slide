@@ -69,9 +69,9 @@ thread.add_message(Message(role="user", content="Hello!"))
 result = await agent.go(thread)
 
 # Access the response
-print(result.output)  # The agent's final response
+print(result.content)  # The agent's final response
 print(result.thread)  # Updated thread with all messages
-print(result.messages)  # New messages added in this turn
+print(result.new_messages)  # New messages added in this turn
 print(result.execution)  # Detailed execution information
 ```
 

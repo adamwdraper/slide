@@ -27,7 +27,7 @@ import weave
 import signal
 from typing import List, Dict, Any
 
-from tyler import Agent, Thread, Message
+from tyler import Agent, Thread, Message, EventType
 from tyler.a2a import A2AServer, A2AAdapter
 from lye import WEB_TOOLS, FILES_TOOLS, COMMAND_LINE_TOOLS
 
@@ -223,11 +223,11 @@ async def run_interactive_session(coordinator: Agent, adapter: A2AAdapter):
             print('='*60)
             
             # Process with streaming
-            async for update in coordinator.go_stream(thread):
-                if update.type.name == "CONTENT_CHUNK":
-                    print(update.data, end="", flush=True)
-                elif update.type.name == "TOOL_MESSAGE":
-                    tool_name = update.data.name
+            async for event in coordinator.go(thread, stream=True):
+                if event.type == EventType.LLM_STREAM_CHUNK:
+                    print(event.data.get("content_chunk", ""), end="", flush=True)
+                elif event.type == EventType.MESSAGE_CREATED and event.data.get("message", {}).get("role") == "tool":
+                    tool_name = event.data.get("message", {}).get("name", "")
                     if "delegate_to_research" in tool_name:
                         print(f"\n\n[🔍 Delegating to Research Specialist...]")
                     elif "delegate_to_analysis" in tool_name:

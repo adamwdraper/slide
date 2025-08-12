@@ -24,7 +24,7 @@ import sys
 import weave
 from typing import List, Dict, Any
 
-from tyler import Agent, Thread, Message
+from tyler import Agent, Thread, Message, EventType
 from tyler.a2a import A2AAdapter
 
 # Add the parent directory to the path so we can import the example utils
@@ -107,17 +107,14 @@ async def main():
         print("Tyler Agent Response:")
         print("="*60)
         
-        async for update in agent.go_stream(thread):
-            if update.type.name == "CONTENT_CHUNK":
-                print(update.data, end="", flush=True)
-            elif update.type.name == "TOOL_MESSAGE":
-                print(f"\n\n[🔧 Tool execution: {update.data.name}]")
-                if hasattr(update.data, 'arguments'):
-                    args = update.data.arguments
-                    if isinstance(args, dict) and 'task_description' in args:
-                        print(f"[📝 Delegating task: {args['task_description'][:100]}...]")
+        async for event in agent.go(thread, stream=True):
+            if event.type == EventType.LLM_STREAM_CHUNK:
+                print(event.data.get("content_chunk", ""), end="", flush=True)
+            elif event.type == EventType.MESSAGE_CREATED and event.data.get("message", {}).get("role") == "tool":
+                tool_name = event.data.get("message", {}).get("name", "")
+                print(f"\n\n[🔧 Tool execution: {tool_name}]")
                 print()
-            elif update.type.name == "COMPLETE":
+            elif event.type == EventType.EXECUTION_COMPLETE:
                 print("\n\n" + "="*60)
                 print("Processing complete!")
                 print("="*60)

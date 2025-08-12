@@ -57,8 +57,8 @@ async def test_go_non_streaming_returns_agent_result(mock_completion):
     # Verify result type and structure
     assert isinstance(result, AgentResult)
     assert result.thread == thread
-    assert len(result.messages) > 0
-    assert result.output == "Test response"
+    assert len(result.new_messages) > 0
+    assert result.content == "Test response"
     assert hasattr(result, 'execution')
     assert result.success is True
     
@@ -201,8 +201,8 @@ async def test_execution_error_handling(mock_completion):
     assert isinstance(result, AgentResult)
     assert result.success is False
     # Error message is set as output
-    assert result.output is not None
-    assert "error" in result.output.lower()
+    assert result.content is not None
+    assert "error" in result.content.lower()
     
     # Check error event
     error_events = [e for e in result.execution.events if e.type == EventType.EXECUTION_ERROR]
