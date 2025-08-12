@@ -1,0 +1,33 @@
+# Tyler Chat Configuration
+# Save this file as tyler-chat-config.yaml in:
+#   - Current directory
+#   - ~/.tyler/chat-config.yaml
+#   - /etc/tyler/chat-config.yaml
+# Or specify location with: tyler-chat --config path/to/config.yaml
+
+# Agent Identity
+name: "Tyler"
+purpose: "To be a helpful AI assistant with access to various tools and capabilities."
+notes: |
+  - Prefer clear, concise communication
+  - Use tools when appropriate to enhance responses
+  - Maintain context across conversations
+
+# Model Configuration
+model_name: "gpt-4.1"
+temperature: 0.7
+max_tool_iterations: 10
+
+# Tool Configuration
+# List of tools to load. Can be:
+#   - Built-in tool module names (e.g., "web", "slack")
+#   - Paths to Python files containing custom tools:
+#     - "./my_tools.py"          # Relative to config file
+#     - "~/tools/translate.py"    # User's home directory
+#     - "/opt/tools/search.py"    # Absolute path
+tools:
+  - "web"           # Web search and browsing capabilities
+  - "slack"         # Slack integration tools
+  - "notion"        # Notion integration tools
+  - "command_line"  # System command execution tools
+  # - "./my_tools.py"  # Example custom tools (uncomment to use)
