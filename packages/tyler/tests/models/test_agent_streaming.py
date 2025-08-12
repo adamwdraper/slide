@@ -236,13 +236,14 @@ async def test_go_stream_max_iterations():
 
 @pytest.mark.asyncio
 async def test_go_stream_invalid_json_handling():
-    """Test handling of invalid JSON in tool arguments"""
+    """Test handling of invalid JSON in tool arguments - should handle gracefully"""
     agent = Agent(stream=True)
     thread = Thread()
     thread.add_message(Message(role="user", content="Test invalid JSON"))
     
     # Mock chunks with invalid JSON in tool arguments
     chunks = [
+        create_streaming_chunk(content="I'll use the tool"),
         create_streaming_chunk(tool_calls=[{
             "id": "call_123",
             "type": "function",
@@ -253,17 +254,38 @@ async def test_go_stream_invalid_json_handling():
         }])
     ]
     
+    # Add a second completion response after tool execution
+    chunks2 = [
+        create_streaming_chunk(content="Done")
+    ]
+    
     mock_weave_call = MagicMock()
     
+    # Mock tool execution to return success
     with patch.object(agent, '_get_completion') as mock_get_completion:
-        mock_get_completion.call.return_value = (async_generator(chunks), mock_weave_call)
+        mock_get_completion.call.side_effect = [
+            (async_generator(chunks), mock_weave_call),
+            (async_generator(chunks2), mock_weave_call)
+        ]
         
-        updates = []
-        async for event in agent.go(thread, stream=True):
-            updates.append(event)
-        
-        # Verify error handling: Check for tool error or execution error
-        assert any(event.type in [EventType.EXECUTION_ERROR, EventType.TOOL_ERROR] for event in updates)
+        with patch('tyler.utils.tool_runner.tool_runner.execute_tool_call') as mock_tool_exec:
+            mock_tool_exec.return_value = "Tool executed successfully"
+            
+            updates = []
+            async for event in agent.go(thread, stream=True):
+                updates.append(event)
+            
+            # Verify that tool was selected with empty args due to JSON parse error
+            tool_selected_events = [e for e in updates if e.type == EventType.TOOL_SELECTED]
+            assert len(tool_selected_events) > 0
+            # The arguments should be empty dict due to parse error
+            assert tool_selected_events[0].data['arguments'] == {}
+            
+            # Verify tool was executed (no error thrown)
+            assert any(event.type == EventType.TOOL_RESULT for event in updates)
+            
+            # Verify no execution errors (graceful handling)
+            assert not any(event.type == EventType.EXECUTION_ERROR for event in updates)
 
 @pytest.mark.asyncio
 async def test_go_stream_metrics_tracking():

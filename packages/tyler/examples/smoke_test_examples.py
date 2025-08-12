@@ -6,8 +6,45 @@ This helps with manual testing before releases.
 import subprocess
 import sys
 import time
+import os
+import logging
 from pathlib import Path
 from typing import List, Tuple
+
+# Suppress ALL LiteLLM logging (including errors)
+# We need to set this before any imports that might load litellm
+os.environ["LITELLM_LOG"] = "CRITICAL"  # Highest level - only critical errors
+os.environ["LITELLM_SUPPRESS_DEBUG_LOGS"] = "true"
+
+# Suppress Weave logging
+os.environ["WEAVE_DISABLE_ANALYTICS"] = "true"
+os.environ["WEAVE_SUPPRESS_LOGS"] = "true"
+
+# Configure logging to suppress ALL LiteLLM messages
+# Create a null handler to send logs to nowhere
+class NullHandler(logging.Handler):
+    def emit(self, record):
+        pass
+
+logging.basicConfig(level=logging.WARNING)
+null_handler = NullHandler()
+
+for logger_name in [
+    'litellm',
+    'litellm.utils',
+    'litellm.llms',
+    'litellm._logging',
+    'LiteLLM',
+    'weave',
+    'weave.trace',
+    'weave.trace.op',
+    'wandb',
+]:
+    logger = logging.getLogger(logger_name)
+    logger.handlers = [null_handler]  # Replace all handlers with null handler
+    logger.setLevel(logging.CRITICAL + 1)  # Higher than CRITICAL to suppress everything
+    logger.disabled = True  # Completely disable the logger
+    logger.propagate = False
 
 # Examples to run in order
 EXAMPLES_TO_RUN = [
@@ -46,25 +83,65 @@ def run_example(example_file: str) -> Tuple[bool, str]:
         workspace_root = Path(__file__).parent.parent.parent.parent
         cmd = ["uv", "run", f"packages/tyler/examples/{example_file}"]
         
+        # Prepare environment with LiteLLM and Weave suppression
+        env = os.environ.copy()
+        env["LITELLM_LOG"] = "CRITICAL"
+        env["LITELLM_SUPPRESS_DEBUG_LOGS"] = "true"
+        env["WEAVE_DISABLE_ANALYTICS"] = "true"
+        env["WEAVE_SUPPRESS_LOGS"] = "true"
+        
         result = subprocess.run(
             cmd,
             cwd=workspace_root,
             capture_output=True,
             text=True,
-            timeout=30  # 30 second timeout per example
+            timeout=30,  # 30 second timeout per example
+            env=env
         )
         
         if result.returncode == 0:
+            # Always print stdout - this contains the actual example output
+            # (streams, tool outputs, agent responses, etc.)
             print(result.stdout)
             if result.stderr:
-                print("Warnings/Info:", result.stderr)
+                # Filter out LiteLLM and Weave log lines
+                filtered_stderr = "\n".join(
+                    line for line in result.stderr.split("\n")
+                    if not (
+                        # Match LiteLLM log patterns with timestamps
+                        ("- LiteLLM" in line and ("INFO:" in line or "ERROR:" in line or "WARNING:" in line or "DEBUG:" in line)) or
+                        ("- LiteLLM -" in line) or
+                        (line.strip().startswith("LiteLLM") and "completion()" in line) or
+                        # Match Weave log patterns
+                        line.strip().startswith("weave:") or
+                        "weave.trace.op" in line or
+                        ("🍩" in line and "wandb.ai" in line)
+                    )
+                )
+                if filtered_stderr.strip():
+                    print("Warnings/Info:", filtered_stderr)
             return True, "Success"
         else:
             error_msg = f"Exit code: {result.returncode}\n"
             if result.stdout:
                 error_msg += f"Output:\n{result.stdout}\n"
             if result.stderr:
-                error_msg += f"Error:\n{result.stderr}"
+                # Filter out LiteLLM and Weave log lines in error messages too
+                filtered_stderr = "\n".join(
+                    line for line in result.stderr.split("\n")
+                    if not (
+                        # Match LiteLLM log patterns with timestamps
+                        ("- LiteLLM" in line and ("INFO:" in line or "ERROR:" in line or "WARNING:" in line or "DEBUG:" in line)) or
+                        ("- LiteLLM -" in line) or
+                        (line.strip().startswith("LiteLLM") and "completion()" in line) or
+                        # Match Weave log patterns
+                        line.strip().startswith("weave:") or
+                        "weave.trace.op" in line or
+                        ("🍩" in line and "wandb.ai" in line)
+                    )
+                )
+                if filtered_stderr.strip():
+                    error_msg += f"Error:\n{filtered_stderr}"
             return False, error_msg
             
     except subprocess.TimeoutExpired:
