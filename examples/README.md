@@ -20,7 +20,7 @@ Real-world examples for specific scenarios:
 Examples showing integration patterns:
 - **cross-package.py** - Using all three packages together
 - **storage-patterns.py** - Different storage configurations
-- **streaming.py** - Real-time response streaming
+- **104_streaming.py** - Real-time response streaming
 
 ## Running Examples
 

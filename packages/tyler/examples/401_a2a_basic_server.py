@@ -7,7 +7,7 @@ Requirements:
 - pip install a2a-sdk
 - pip install uvicorn (for running the FastAPI server)
 
-Run this server, then you can connect to it with a2a_basic_client.py
+Run this server, then you can connect to it with 402_a2a_basic_client.py
 or any other A2A-compatible client.
 """
 
@@ -109,7 +109,7 @@ async def main():
     print("\nTo connect from another agent:")
     print("  base_url = 'http://localhost:8000'")
     print("\nTo test with the client example:")
-    print("  python examples/a2a_basic_client.py")
+    print("  python examples/402_a2a_basic_client.py")
     print("\nPress Ctrl+C to stop the server")
     print("="*60)
     

@@ -5,7 +5,7 @@ to connect to and delegate tasks to remote A2A agents.
 
 Requirements:
 - pip install a2a-sdk
-- A running A2A agent server (see a2a_basic_server.py)
+- A running A2A agent server (see 401_a2a_basic_server.py)
 
 Run the server first, then run this client example.
 """
@@ -55,7 +55,7 @@ async def main():
     
     # Connect to a remote A2A agent
     # This assumes you have a Tyler A2A server running on localhost:8000
-    # (see a2a_basic_server.py example)
+    # (see 401_a2a_basic_server.py example)
     connected = await a2a.connect(
         name="remote_agent",
         base_url="http://localhost:8000"
@@ -64,7 +64,7 @@ async def main():
     if not connected:
         logger.error("Failed to connect to A2A agent server.")
         logger.info("Make sure you have an A2A agent running on http://localhost:8000")
-        logger.info("You can start one with: python examples/a2a_basic_server.py")
+        logger.info("You can start one with: python examples/401_a2a_basic_server.py")
         return
     
     try:
