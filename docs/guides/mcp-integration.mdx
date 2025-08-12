@@ -42,7 +42,7 @@ async def main():
     message = Message(role="user", content="List available tools")
     thread.add_message(message)
     
-    processed_thread, _ = await agent.go(thread)
+    result = await agent.go(thread)
 
 asyncio.run(main())
 ```
@@ -314,7 +314,7 @@ message = Message(
 )
 thread.add_message(message)
 
-processed_thread, _ = await agent.go(thread)
+result = await agent.go(thread)
 ```
 
 ## Security Considerations
@@ -421,10 +421,10 @@ async def analyze_sales_data():
     thread.add_message(message)
     
     # Process - agent will use SQL via MCP, Python via MCP, and files via Lye
-    processed_thread, new_messages = await agent.go(thread)
+    result = await agent.go(thread)
     
     # Print results
-    for msg in new_messages:
+    for msg in result.new_messages:
         if msg.role == "assistant":
             print(f"\n📊 Analysis: {msg.content}")
         elif msg.role == "tool" and "save" in msg.name:

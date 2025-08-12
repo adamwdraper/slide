@@ -133,7 +133,7 @@ for msg in thread.messages:
     print(f"{msg.role}: {msg.content}")
 
 # The agent sees all previous messages when processing
-processed_thread, new_messages = await agent.go(thread)
+result = await agent.go(thread)
 ```
 
 ## Conversation Patterns
@@ -189,10 +189,11 @@ class ConversationSession:
         message = Message(role="user", content=content)
         self.thread.add_message(message)
         
-        self.thread, new_messages = await self.agent.go(self.thread)
+        result = await self.agent.go(self.thread)
+        self.thread = result.thread
         await self.thread_store.save_thread(self.thread)
         
-        return new_messages
+        return result.new_messages
 ```
 
 ## File Attachments
@@ -228,7 +229,7 @@ with open("chart.png", "rb") as f:
 thread.add_message(message)
 
 # Files are automatically saved and managed
-processed_thread, _ = await agent.go(thread)
+result = await agent.go(thread)
 ```
 
 ## Advanced Persistence Patterns
@@ -371,7 +372,8 @@ class SupportAgent:
         ))
         
         # Process with agent
-        thread, messages = await self.agent.go(thread)
+        result = await self.agent.go(thread)
+        thread = result.thread
         
         # Save thread
         await self.thread_store.save_thread(thread)

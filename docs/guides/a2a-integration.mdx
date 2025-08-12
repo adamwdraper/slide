@@ -108,10 +108,10 @@ async def coordinate_project():
     ))
     
     # The coordinator will automatically delegate to appropriate agents
-    processed_thread, new_messages = await coordinator.go(thread)
+    result = await coordinator.go(thread)
     
     # Print the coordinated response
-    for message in processed_thread.messages:
+    for message in result.thread.messages:
         if message.role == "assistant":
             print(f"Coordinator: {message.content}")
 

@@ -311,8 +311,8 @@ async def run_pipeline(task: str):
     for agent in pipeline:
         thread = Thread()
         thread.add_message(Message(role="user", content=context))
-        _, messages = await agent.go(thread)
-        context = messages[-1].content
+        result = await agent.go(thread)
+        context = result.new_messages[-1].content
     return context
 ```
 
@@ -329,10 +329,10 @@ for agent in [optimist_agent, pessimist_agent, realist_agent]:
         role="user",
         content="What are the implications of AGI?"
     ))
-    _, messages = await agent.go(thread)
+    result = await agent.go(thread)
     perspectives.append({
         "agent": agent.name,
-        "view": messages[-1].content
+        "view": result.new_messages[-1].content
     })
 
 # Synthesizer agent combines perspectives

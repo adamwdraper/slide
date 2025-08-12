@@ -73,7 +73,9 @@ class ValidatedAgent:
         """Process thread with output validation"""
         
         # Process normally
-        result_thread, messages = await self.agent.go(thread)
+        result = await self.agent.go(thread)
+        result_thread = result.thread
+        messages = result.new_messages
         
         # Validate outputs
         for message in messages:
@@ -192,8 +194,8 @@ class ContextManager:
         ))
         
         # Get summary
-        _, summary_messages = await agent.go(summary_thread)
-        return summary_messages[-1].content if summary_messages else "No summary available"
+        result = await agent.go(summary_thread)
+        return result.new_messages[-1].content if result.new_messages else "No summary available"
 ```
 
 ### Branching Conversations
