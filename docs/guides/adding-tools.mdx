@@ -1,5 +1,5 @@
 ---
-title: 'Adding Tools to Agents'
+title: 'Adding tools to agents'
 description: 'Learn how to give your agents new capabilities with tools'
 ---
 
@@ -11,7 +11,7 @@ Tools in Slide follow the OpenAI function calling format. Each tool has:
 - A **definition** that describes what it does
 - An **implementation** that executes the action
 
-## Using Lye's Built-in Tools
+## Using Lye's built-in tools
 
 The easiest way to add tools is using Lye's pre-built tool groups:
 
@@ -109,7 +109,7 @@ agent = Agent(
 )
 ```
 
-## Creating Custom Tools
+## Creating custom tools
 
 You can create your own tools by following the OpenAI function format:
 
@@ -205,7 +205,7 @@ api_tool = {
 
 ## Tool Combinations for Common Tasks
 
-### Research Assistant
+### Research assistant
 ```python
 from lye import WEB_TOOLS, FILES_TOOLS
 
@@ -241,7 +241,7 @@ scraper_agent = Agent(
 )
 ```
 
-## Best Practices
+## Best practices
 
 ### 1. Tool Selection
 Only give your agent the tools it needs:
@@ -290,7 +290,7 @@ agent = Agent(
 )
 ```
 
-## Next Steps
+## Next steps
 
 <CardGroup cols={2}>
   <Card

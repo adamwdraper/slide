@@ -25,7 +25,7 @@ uv add slide-lye
 pip install slide-lye
 ```
 
-### Basic Usage
+### Basic usage
 
 ```python
 import asyncio
@@ -321,7 +321,7 @@ processor = MediaProcessor("./media_files", "./processed")
 await processor.process_all()
 ```
 
-### Research Assistant
+### Research assistant
 
 Automated research tool:
 
@@ -396,7 +396,7 @@ research = await assistant.research_topic(
 )
 ```
 
-## Advanced Patterns
+## Advanced patterns
 
 ### Rate Limiting
 
@@ -534,7 +534,7 @@ class SearchView(View):
         return JsonResponse({'query': query, 'results': results})
 ```
 
-## Performance Tips
+## Performance tips
 
 1. **Use asyncio.gather() for parallel operations**
    ```python
@@ -566,7 +566,7 @@ class SearchView(View):
                pass
    ```
 
-## Next Steps
+## Next steps
 
 <CardGroup cols={2}>
   <Card

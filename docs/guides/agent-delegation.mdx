@@ -1,5 +1,5 @@
 ---
-title: 'Agent Delegation'
+title: 'Agent delegation'
 description: 'Build multi-agent systems where specialized agents work together'
 ---
 
@@ -64,9 +64,9 @@ When an agent has access to other agents:
 3. **Task Delegation**: The coordinator formulates a clear request for the specialized agent
 4. **Result Integration**: The coordinator receives and integrates the results into its response
 
-## Advanced Patterns
+## Advanced patterns
 
-### Hierarchical Teams
+### Hierarchical teams
 
 Create multi-level agent hierarchies:
 
@@ -124,7 +124,7 @@ project_manager = Agent(
 )
 ```
 
-### Specialized Agent Networks
+### Specialized agent networks
 
 Create agents that can collaborate peer-to-peer:
 
@@ -166,7 +166,7 @@ thread.add_message(Message(
 result = await agents["researcher"].go(thread)
 ```
 
-### Dynamic Agent Selection
+### Dynamic agent selection
 
 Choose agents based on task requirements:
 
@@ -221,7 +221,7 @@ class DynamicCoordinator:
         return await coordinator.go(thread)
 ```
 
-## Best Practices
+## Best practices
 
 ### 1. Clear Purpose Definition
 
@@ -316,7 +316,7 @@ async def run_pipeline(task: str):
     return context
 ```
 
-### Consensus Building
+### Consensus building
 
 Multiple agents provide input:
 
@@ -430,7 +430,7 @@ class AgentPool:
         self.available[agent.name] = agent
 ```
 
-## Error Handling
+## Error handling
 
 Handle delegation failures gracefully:
 
@@ -457,7 +457,7 @@ class ResilientCoordinator:
         return await self.fallback.go(thread)
 ```
 
-## Testing Multi-Agent Systems
+## Testing multi-agent systems
 
 ```python
 from tyler.eval import AgentEval, Conversation, Turn, Expectation
@@ -486,7 +486,7 @@ eval = AgentEval(
 results = await eval.run(coordinator)
 ```
 
-## Next Steps
+## Next steps
 
 <CardGroup cols={2}>
   <Card

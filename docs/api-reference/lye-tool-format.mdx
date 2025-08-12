@@ -1,5 +1,5 @@
 ---
-title: 'Tool Format'
+title: 'Tool format'
 description: 'Understanding Lye tool structure and usage'
 ---
 
@@ -152,14 +152,14 @@ def create_file(*, filename: str, content: str) -> Tuple[str, List[Dict[str, Any
 
 ## Return Formats
 
-### Simple String Return
+### Simple string return
 
 ```python
 def simple_tool(*, input: str) -> str:
     return f"Processed: {input}"
 ```
 
-### Structured Return with Files
+### Structured return with files
 
 ```python
 def file_tool(*, data: str) -> Tuple[str, List[Dict[str, Any]]]:
@@ -199,7 +199,7 @@ Lye follows consistent naming patterns:
   - `image-generate_image`
   - `slack-send_message`
 
-## Using Tools with Agents
+## Using tools with agents
 
 ### Direct Usage
 
@@ -245,9 +245,9 @@ agent = Agent(
 6. **Result Processing**: Result is returned to agent
 7. **Response**: Agent incorporates result into response
 
-## Best Practices
+## Best practices
 
-### Clear Descriptions
+### Clear descriptions
 
 ```python
 # Good
@@ -257,7 +257,7 @@ agent = Agent(
 "description": "Search tool"
 ```
 
-### Parameter Descriptions
+### Parameter descriptions
 
 ```python
 # Good
@@ -273,7 +273,7 @@ agent = Agent(
 }
 ```
 
-### Error Messages
+### Error messages
 
 ```python
 # Good
@@ -283,7 +283,7 @@ return "Error: Unable to connect to https://example.com - Connection timeout aft
 return "Error"
 ```
 
-### File Returns
+### File returns
 
 ```python
 # Always include metadata
@@ -367,7 +367,7 @@ def download_file(*, url: str, timeout: int = 30) -> Tuple[str, List[Dict[str, A
         return f"Unexpected error: {str(e)}", []
 ```
 
-## Testing Tools
+## Testing tools
 
 ```python
 # Test tool directly

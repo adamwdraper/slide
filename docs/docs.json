@@ -11,14 +11,14 @@
   "navigation": {
     "groups": [
       {
-        "group": "Getting Started",
+        "group": "Getting started",
         "pages": [
           "introduction",
           "quickstart"
         ]
       },
       {
-        "group": "Building Agents",
+        "group": "Building agents",
         "pages": [
           "guides/your-first-agent",
           "guides/adding-tools",
@@ -48,7 +48,7 @@
         ]
       },
       {
-        "group": "API Reference",
+        "group": "API reference",
         "pages": [
           {
             "group": "Tyler",
@@ -85,7 +85,7 @@
         ]
       },
       {
-        "group": "Standalone Packages",
+        "group": "Standalone packages",
         "pages": [
           "standalone-packages/using-narrator",
           "standalone-packages/using-lye"

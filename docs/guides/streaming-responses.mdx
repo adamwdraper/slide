@@ -1,5 +1,5 @@
 ---
-title: 'Streaming Responses'
+title: 'Streaming responses'
 description: 'Build real-time interactive agents with streaming'
 ---
 
@@ -116,9 +116,9 @@ async def research_with_streaming(topic: str):
             print("\n🤖 ", end="", flush=True)
 ```
 
-## Building Interactive Applications
+## Building interactive applications
 
-### Terminal Chat Interface
+### Terminal chat interface
 
 ```python
 import asyncio
@@ -178,7 +178,7 @@ async def main():
 asyncio.run(main())
 ```
 
-### Web Application Streaming
+### Web application streaming
 
 For web applications, you can stream to a WebSocket or Server-Sent Events:
 
@@ -232,7 +232,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
 ## Advanced Streaming Patterns
 
-### Progress Indicators
+### Progress indicators
 
 Show progress for long-running tasks:
 
@@ -261,7 +261,7 @@ async def stream_with_progress():
             print("\n🤖 " + "".join(content_buffer))
 ```
 
-### Buffered Streaming
+### Buffered streaming
 
 For smoother output, buffer chunks:
 
@@ -295,7 +295,7 @@ async for chunk in streamer.stream(agent, thread):
         pass
 ```
 
-### Cancellable Streaming
+### Cancellable streaming
 
 Allow users to stop generation:
 
@@ -334,7 +334,7 @@ signal.signal(signal.SIGINT, signal_handler)
 
 ## Streaming UI Components
 
-### Rich Terminal UI
+### Rich terminal UI
 
 Using the `rich` library for better terminal output:
 
@@ -368,7 +368,7 @@ async def rich_streaming():
                 console.print(tool_panel)
 ```
 
-### Token Counting
+### Token counting
 
 Track tokens during streaming:
 
@@ -390,7 +390,7 @@ class TokenCounter:
         print(f"\n\n📊 Approximate tokens used: {self.total_tokens}")
 ```
 
-## Performance Tips
+## Performance tips
 
 ### 1. Chunk Size Optimization
 Larger chunks reduce overhead but decrease responsiveness:
@@ -532,7 +532,7 @@ async def main():
 asyncio.run(main())
 ```
 
-## Next Steps
+## Next steps
 
 <CardGroup cols={2}>
   <Card

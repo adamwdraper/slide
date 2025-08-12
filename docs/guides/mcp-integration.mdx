@@ -1,5 +1,5 @@
 ---
-title: 'MCP Integration' 
+title: 'MCP integration' 
 description: 'Connect your agents to Model Context Protocol servers'
 ---
 
@@ -13,7 +13,7 @@ MCP provides a standardized way to:
 - Execute code in sandboxed environments
 - Share context between AI applications
 
-## Quick Start
+## Quick start
 
 ### Using an MCP Server
 
@@ -85,7 +85,7 @@ await adapter.connect("http://localhost:3000/mcp")
 
 ## Popular MCP Servers
 
-### Filesystem Server
+### Filesystem server
 Access and manipulate files:
 
 ```python
@@ -98,7 +98,7 @@ message = Message(role="user", content="Read the contents of config.json")
 thread.add_message(message)
 ```
 
-### Database Server
+### Database server
 Query databases:
 
 ```python
@@ -109,7 +109,7 @@ await adapter.connect("stdio://mcp-server-sqlite --db-path ./mydatabase.db")
 message = Message(role="user", content="Show me all users created this week")
 ```
 
-### Code Execution Server
+### Code execution server
 Run code safely:
 
 ```python
@@ -120,7 +120,7 @@ await adapter.connect("stdio://mcp-server-code --lang python")
 message = Message(role="user", content="Calculate the fibonacci sequence up to 100")
 ```
 
-## Building Custom MCP Servers
+## Building custom MCP servers
 
 ### Basic MCP Server (Python)
 
@@ -214,7 +214,7 @@ Use your custom server:
 await adapter.connect("stdio://python3 my_mcp_server.py")
 ```
 
-## Advanced Usage
+## Advanced usage
 
 ### Multiple MCP Servers
 
@@ -240,7 +240,7 @@ agent = Agent(
 )
 ```
 
-### Dynamic Tool Discovery
+### Dynamic tool discovery
 
 List available tools from MCP servers:
 
@@ -260,7 +260,7 @@ async def discover_tools(adapter: MCPAdapter):
 await discover_tools(adapter)
 ```
 
-### Error Handling
+### Error handling
 
 Handle MCP connection errors gracefully:
 
@@ -330,7 +330,7 @@ await adapter.connect("stdio://docker run --rm -i mcp-server")
 await adapter.connect("stdio://./venv/bin/python mcp_server.py")
 ```
 
-### Access Control
+### Access control
 Limit MCP server permissions:
 
 ```python
@@ -458,7 +458,7 @@ asyncio.run(analyze_sales_data())
   </Accordion>
 </AccordionGroup>
 
-## Next Steps
+## Next steps
 
 <CardGroup cols={2}>
   <Card

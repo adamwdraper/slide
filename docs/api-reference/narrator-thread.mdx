@@ -33,7 +33,7 @@ thread = Thread(
 )
 ```
 
-## Key Properties
+## Key properties
 
 <ParamField path="id" type="string" default="auto-generated UUID">
   Unique identifier for the thread
@@ -65,7 +65,7 @@ thread = Thread(
 
 ## Adding Messages
 
-### Single Message
+### Single message
 
 ```python
 # Add a user message
@@ -84,7 +84,7 @@ thread.add_message(Message(
 thread.add_message(tool_message, same_turn=True)
 ```
 
-### Batch Messages
+### Batch messages
 
 ```python
 # Add multiple messages with the same turn number
@@ -122,7 +122,7 @@ message = thread.get_message_by_id("msg-123")
 
 ## Thread Analytics
 
-### Token Usage
+### Token usage
 
 ```python
 # Get total token usage
@@ -136,7 +136,7 @@ print(f"GPT-4 calls: {gpt4_usage['calls']}")
 print(f"GPT-4 tokens: {gpt4_usage['total_tokens']}")
 ```
 
-### Message Statistics
+### Message statistics
 
 ```python
 # Get message counts by role

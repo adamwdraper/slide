@@ -111,30 +111,30 @@ await app.start(
 
 SlackApp automatically handles different types of Slack events:
 
-### Direct Messages
+### Direct messages
 All direct messages to the bot are processed automatically.
 
-### Channel Messages
+### Channel messages
 In channels, the bot responds to:
 - Messages where the bot is @mentioned
 - Thread replies where the bot has previously participated
 - Messages matching the configured `response_topics` (if set)
 
-### Thread Management
+### Thread management
 Each Slack channel gets its own persistent conversation thread, maintaining context across messages.
 
 ## Features
 
-### Intelligent Message Classification
+### Intelligent message classification
 When `response_topics` is configured, SlackApp uses an AI classifier to determine whether to respond to messages based on relevance.
 
-### File Handling
+### File handling
 Automatically downloads and processes files shared in Slack when the agent has file-handling tools.
 
-### Health Monitoring
+### Health monitoring
 Built-in health check endpoint at `/health` and optional external health check pings.
 
-### Graceful Shutdown
+### Graceful shutdown
 Proper signal handling for clean shutdown in containerized environments.
 
 ## Example with Advanced Features
@@ -186,7 +186,7 @@ Health check endpoint returning server status.
 ### `GET /`
 Root endpoint with basic server information.
 
-## Error Handling
+## Error handling
 
 SlackApp includes comprehensive error handling:
 - Automatic retries for transient Slack API errors

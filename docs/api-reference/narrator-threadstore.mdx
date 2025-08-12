@@ -102,7 +102,7 @@ Configure connection pooling via environment variables:
   Seconds after which to recycle connections
 </ParamField>
 
-## Basic Operations
+## Basic operations
 
 ### Saving Threads
 
@@ -272,7 +272,7 @@ stats = await store.get_usage_stats()
 print(f"Active support threads: {stats['total_threads']}")
 ```
 
-## Error Handling
+## Error handling
 
 ```python
 try:
@@ -289,7 +289,7 @@ except Exception as e:
     print(f"Failed to retrieve thread: {e}")
 ```
 
-## Best Practices
+## Best practices
 
 1. **Use the factory method** (`ThreadStore.create()`) for immediate validation
 2. **Configure connection pools** for production PostgreSQL deployments
