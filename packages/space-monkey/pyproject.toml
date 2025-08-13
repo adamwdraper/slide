@@ -25,7 +25,7 @@ classifiers = [
 ]
 dependencies = [
     # Core Tyler ecosystem packages
-    "slide-tyler>=2.0.1",
+    "slide-tyler>=2.0.2",
     "slide-narrator>=1.0.1",
     # Slack integration
     "slack-bolt>=1.23.0",
