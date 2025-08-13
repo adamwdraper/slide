@@ -41,45 +41,55 @@ pip install slide-narrator
 
 ### Docker Setup (Recommended for Development)
 
-For local development with PostgreSQL, we provide a Docker Compose configuration:
+For local development with PostgreSQL, Narrator includes built-in Docker commands:
 
 ```bash
-# 1. Start PostgreSQL container
-cd packages/narrator
-docker-compose up -d
+# One-command setup: starts PostgreSQL and initializes tables
+uv run narrator docker-setup
 
-# 2. Initialize the database tables (required!)
-uv run narrator init --database-url "postgresql+asyncpg://narrator:narrator_dev@localhost:5432/narrator"
-
-# Or using environment variable:
-export NARRATOR_DATABASE_URL="postgresql+asyncpg://narrator:narrator_dev@localhost:5432/narrator"
-uv run narrator init
-
-# 3. Verify the setup
-uv run narrator status
+# This will:
+# 1. Start a PostgreSQL container
+# 2. Wait for it to be ready  
+# 3. Initialize the database tables
+# 4. Show you the connection string
 
 # The database will be available at:
 # postgresql+asyncpg://narrator:narrator_dev@localhost:5432/narrator
-
-# To use a different configuration, create a .env file:
-# NARRATOR_DB_NAME=mydb
-# NARRATOR_DB_USER=myuser
-# NARRATOR_DB_PASSWORD=mypassword
-# NARRATOR_DB_PORT=5433
 ```
 
-**Note**: The Docker container only creates an empty PostgreSQL database. You must run `uv run narrator init` to create the required tables (`threads` and `messages`).
-
-#### Quick Setup Scripts
-
-For convenience, we provide helper scripts:
+To manage the Docker container:
 
 ```bash
-# One-command setup (starts Docker and initializes tables)
-./scripts/setup-docker.sh
+# Stop container (preserves data)
+uv run narrator docker-stop
 
-# Teardown (stops containers, optionally removes data)
-./scripts/teardown-docker.sh
+# Stop and remove all data
+uv run narrator docker-stop --remove-volumes
+
+# Start container again
+uv run narrator docker-start
+
+# Check database status
+uv run narrator status
+```
+
+For custom configurations, the Docker commands respect environment variables:
+
+```bash
+# Use a different port
+uv run narrator docker-setup --port 5433
+
+# Or set environment variables (matching docker-compose.yml)
+export NARRATOR_DB_NAME=mydb
+export NARRATOR_DB_USER=myuser
+export NARRATOR_DB_PASSWORD=mypassword
+export NARRATOR_DB_PORT=5433
+
+# Then run docker-setup
+uv run narrator docker-setup
+
+# This will create:
+# postgresql+asyncpg://myuser:mypassword@localhost:5433/mydb
 ```
 
 ### Database Setup
