@@ -143,7 +143,6 @@ Repository = "https://github.com/adamwdraper/slide"
 
 [project.scripts]
 tyler = "tyler.cli.main:main"
-tyler-chat = "tyler.cli.chat:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["tyler"]

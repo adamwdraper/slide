@@ -44,27 +44,27 @@ echo "🔧 Initializing database tables..."
 export NARRATOR_DATABASE_URL="postgresql+asyncpg://narrator:narrator_dev@localhost:5432/narrator"
 
 if command -v uv &> /dev/null; then
-    echo "Using uv to run narrator-db..."
-    uv run narrator-db init
+    echo "Using uv to run narrator..."
+    uv run narrator init
     echo "✅ Database tables created successfully!"
     
     # Show status
     echo ""
     echo "📊 Database status:"
-    uv run narrator-db status
-elif command -v narrator-db &> /dev/null; then
-    narrator-db init
+    uv run narrator status
+elif command -v narrator &> /dev/null; then
+    narrator init
     echo "✅ Database tables created successfully!"
     
     # Show status
     echo ""
     echo "📊 Database status:"
-    narrator-db status
+    narrator status
 else
-    echo "⚠️  narrator-db command not found. Please install narrator first:"
+    echo "⚠️  narrator command not found. Please install narrator first:"
     echo "    uv add slide-narrator"
     echo ""
-    echo "Then run: uv run narrator-db init --database-url \"$NARRATOR_DATABASE_URL\""
+    echo "Then run: uv run narrator init --database-url \"$NARRATOR_DATABASE_URL\""
 fi
 
 echo ""

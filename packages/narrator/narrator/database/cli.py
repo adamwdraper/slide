@@ -10,7 +10,7 @@ logger = get_logger(__name__)
 
 @click.group()
 def main():
-    """Tyler Stores Database CLI"""
+    """Narrator CLI - Database management commands"""
     pass
 
 @main.command()

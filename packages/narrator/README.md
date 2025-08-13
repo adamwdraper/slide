@@ -49,14 +49,14 @@ cd packages/narrator
 docker-compose up -d
 
 # 2. Initialize the database tables (required!)
-uv run narrator-db init --database-url "postgresql+asyncpg://narrator:narrator_dev@localhost:5432/narrator"
+uv run narrator init --database-url "postgresql+asyncpg://narrator:narrator_dev@localhost:5432/narrator"
 
 # Or using environment variable:
 export NARRATOR_DATABASE_URL="postgresql+asyncpg://narrator:narrator_dev@localhost:5432/narrator"
-uv run narrator-db init
+uv run narrator init
 
 # 3. Verify the setup
-uv run narrator-db status
+uv run narrator status
 
 # The database will be available at:
 # postgresql+asyncpg://narrator:narrator_dev@localhost:5432/narrator
@@ -68,7 +68,7 @@ uv run narrator-db status
 # NARRATOR_DB_PORT=5433
 ```
 
-**Note**: The Docker container only creates an empty PostgreSQL database. You must run `uv run narrator-db init` to create the required tables (`threads` and `messages`).
+**Note**: The Docker container only creates an empty PostgreSQL database. You must run `uv run narrator init` to create the required tables (`threads` and `messages`).
 
 #### Quick Setup Scripts
 
@@ -88,13 +88,13 @@ For production use with PostgreSQL or SQLite persistence, you'll need to initial
 
 ```bash
 # Initialize database tables (PostgreSQL)
-uv run narrator-db init --database-url "postgresql+asyncpg://user:password@localhost/dbname"
+uv run narrator init --database-url "postgresql+asyncpg://user:password@localhost/dbname"
 
 # Initialize database tables (SQLite)
-uv run narrator-db init --database-url "sqlite+aiosqlite:///path/to/your/database.db"
+uv run narrator init --database-url "sqlite+aiosqlite:///path/to/your/database.db"
 
 # Check database status
-uv run narrator-db status --database-url "postgresql+asyncpg://user:password@localhost/dbname"
+uv run narrator status --database-url "postgresql+asyncpg://user:password@localhost/dbname"
 ```
 
 You can also use environment variables instead of passing the database URL:
@@ -104,8 +104,8 @@ You can also use environment variables instead of passing the database URL:
 export NARRATOR_DATABASE_URL="postgresql+asyncpg://user:password@localhost/dbname"
 
 # Then run without --database-url flag
-uv run narrator-db init
-uv run narrator-db status
+uv run narrator init
+uv run narrator status
 ```
 
 ### Environment Variables
@@ -390,22 +390,22 @@ The Narrator includes a CLI tool for database management:
 
 ```bash
 # Initialize database tables
-uv run narrator-db init --database-url "postgresql+asyncpg://user:pass@localhost/dbname"
+uv run narrator init --database-url "postgresql+asyncpg://user:pass@localhost/dbname"
 
 # Initialize using environment variable
 export NARRATOR_DATABASE_URL="postgresql+asyncpg://user:pass@localhost/dbname"
-uv run narrator-db init
+uv run narrator init
 
 # Check database status
-uv run narrator-db status --database-url "postgresql+asyncpg://user:pass@localhost/dbname"
+uv run narrator status --database-url "postgresql+asyncpg://user:pass@localhost/dbname"
 
 # Check status using environment variable
-uv run narrator-db status
+uv run narrator status
 ```
 
 Available commands:
-- `uv run narrator-db init` - Initialize database tables
-- `uv run narrator-db status` - Check database connection and basic statistics
+- `uv run narrator init` - Initialize database tables
+- `uv run narrator status` - Check database connection and basic statistics
 
 ## Key Design Principles
 

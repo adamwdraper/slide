@@ -547,11 +547,8 @@ tools:
         console.print(f"[yellow]Warning: Error loading config from {config_path}: {str(e)}[/]")
         return {}
 
-@click.command()
-@click.option('--config', '-c', help='Path to config file (YAML or JSON)')
-@click.option('--title', '-t', help='Initial thread title')
 def main(config: Optional[str], title: Optional[str]):
-    """Tyler Chat CLI"""
+    """Tyler Chat CLI main function"""
     # Apply output filtering for the entire session
     with suppress_output():
         _main_inner(config, title)
