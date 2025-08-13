@@ -48,7 +48,7 @@ Repository = "https://github.com/adamwdraper/slide"
 "Bug Tracker" = "https://github.com/adamwdraper/slide/issues"
 
 [project.scripts]
-narrator-db = "narrator.database.cli:main"
+narrator = "narrator.database.cli:main"
 
 [tool.uv.sources]
 # No workspace dependencies for narrator currently

@@ -82,6 +82,29 @@ store = await ThreadStore.create(
 # - Horizontal scaling
 ```
 
+#### Quick Docker Setup
+
+For local development with PostgreSQL:
+
+```bash
+# One-command setup (starts PostgreSQL and initializes tables)
+uv run narrator docker-setup
+
+# Then use in your code:
+store = await ThreadStore.create(
+    "postgresql+asyncpg://narrator:narrator_dev@localhost:5432/narrator"
+)
+```
+
+To manage the database:
+```bash
+# Stop container (preserves data)
+uv run narrator docker-stop
+
+# Stop and remove all data
+uv run narrator docker-stop --remove-volumes
+```
+
 ## Connection Pool Configuration
 
 Configure connection pooling via environment variables:

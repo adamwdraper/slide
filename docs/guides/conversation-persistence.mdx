@@ -27,7 +27,15 @@ from tyler import Agent, Thread, Message, ThreadStore, FileStore
 
 async def create_agent_with_persistence():
     # Set up persistent storage
+    # Option 1: SQLite (simple, local)
     thread_store = await ThreadStore.create("sqlite+aiosqlite:///conversations.db")
+    
+    # Option 2: PostgreSQL with Docker (production-ready)
+    # Run: uv run narrator docker-setup
+    # thread_store = await ThreadStore.create(
+    #     "postgresql+asyncpg://narrator:narrator_dev@localhost:5432/narrator"
+    # )
+    
     file_store = await FileStore.create(base_path="./conversation_files")
     
     # Create agent with persistence
@@ -75,6 +83,30 @@ Scalable for multi-user applications:
 thread_store = await ThreadStore.create(
     "postgresql+asyncpg://user:pass@localhost/dbname"
 )
+```
+
+#### Quick PostgreSQL Setup with Docker
+
+Narrator includes built-in Docker commands for easy PostgreSQL setup:
+
+```bash
+# One-command setup that starts PostgreSQL and initializes tables
+uv run narrator docker-setup
+
+# This creates a PostgreSQL database at:
+# postgresql+asyncpg://narrator:narrator_dev@localhost:5432/narrator
+```
+
+To manage the database:
+```bash
+# Stop container (keeps data)
+uv run narrator docker-stop
+
+# Stop and remove all data
+uv run narrator docker-stop --remove-volumes
+
+# Start again
+uv run narrator docker-start
 ```
 
 ### In-Memory (Testing)
@@ -339,9 +371,14 @@ class SupportAgent:
         self.file_store = None
     
     async def initialize(self):
+        # Use Narrator's Docker PostgreSQL (after running: uv run narrator docker-setup)
         self.thread_store = await ThreadStore.create(
-            "postgresql+asyncpg://localhost/support"
+            "postgresql+asyncpg://narrator:narrator_dev@localhost:5432/narrator"
         )
+        # Or use your own PostgreSQL instance:
+        # self.thread_store = await ThreadStore.create(
+        #     "postgresql+asyncpg://localhost/support"
+        # )
         self.file_store = await FileStore.create("./support_files")
         
         self.agent = Agent(
@@ -394,6 +431,35 @@ class SupportAgent:
     customer_id="cust-789",
     issue="Cannot login to my account"
 )
+```
+
+## Database Setup and Configuration
+
+### Environment Variables
+
+When using PostgreSQL, you can configure the connection via environment variables:
+
+```bash
+# Set the database URL
+export NARRATOR_DATABASE_URL="postgresql+asyncpg://narrator:narrator_dev@localhost:5432/narrator"
+
+# Then initialize tables (one-time setup)
+uv run narrator init
+
+# Check database status
+uv run narrator status
+```
+
+### Connection Pooling
+
+For production applications, Narrator automatically configures connection pooling:
+
+```bash
+# Optional pool configuration
+export NARRATOR_DB_POOL_SIZE=5           # Max connections (default: 5)
+export NARRATOR_DB_MAX_OVERFLOW=10       # Max overflow connections (default: 10)
+export NARRATOR_DB_POOL_TIMEOUT=30       # Connection timeout in seconds (default: 30)
+export NARRATOR_DB_POOL_RECYCLE=300      # Recycle connections after seconds (default: 300)
 ```
 
 ## Performance Considerations

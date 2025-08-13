@@ -1,13 +1,13 @@
 ---
-title: 'Tyler chat CLI'
-description: 'Interactive command-line interface for chatting with Tyler agents'
+title: 'Tyler CLI'
+description: 'Command-line interface for Tyler agent development'
 ---
 
-The Tyler Chat CLI provides an interactive terminal interface for conversing with your Tyler agents. It offers a clean, distraction-free chat experience with streaming responses, conversation persistence, and easy thread management.
+The Tyler CLI provides tools for creating and interacting with Tyler agents. It includes commands for scaffolding new projects and chatting with agents interactively.
 
 ## Installation
 
-Tyler Chat CLI is automatically installed when you install the Tyler package:
+The Tyler CLI is automatically installed when you install the Tyler package:
 
 <Tabs>
   <Tab title="uv (recommended)">
@@ -22,14 +22,35 @@ Tyler Chat CLI is automatically installed when you install the Tyler package:
   </Tab>
 </Tabs>
 
-After installation, the `tyler-chat` command will be available in your terminal.
+After installation, the `tyler` command will be available in your terminal.
 
-## Basic usage
+## Commands
 
-To start a chat session:
+### tyler init
+
+Create a new Tyler agent project with all the necessary scaffolding:
 
 ```bash
-tyler-chat
+tyler init my-agent
+tyler init "Research Assistant" --purpose "To help with academic research"
+```
+
+This creates a project structure with:
+- `agent.py` - Main agent configuration
+- `tyler-config.yaml` - Chat configuration
+- `.env.example` - API key template
+- `pyproject.toml` - Project dependencies
+- `tools/` - Directory for custom tools
+- `README.md` - Project documentation
+
+### tyler chat
+
+Start an interactive chat session with an agent:
+
+```bash
+tyler chat
+tyler chat --config my-agent-config.yaml
+tyler chat --title "Research Session"
 ```
 
 This launches an interactive chat where you can:
@@ -44,14 +65,14 @@ Tyler Chat can be configured using a YAML or JSON file to customize the agent's 
 ### Using a configuration file
 
 ```bash
-tyler-chat --config my-agent-config.yaml
+tyler chat --config my-agent-config.yaml
 # or
-tyler-chat -c config.json
+tyler chat -c config.json
 ```
 
 ### Configuration file format
 
-Create a `tyler-chat-config.yaml` file:
+Create a `tyler-config.yaml` file:
 
 ```yaml
 # Agent Identity
@@ -87,13 +108,13 @@ tools:
 
 ```bash
 # Specify a configuration file
-tyler-chat --config path/to/config.yaml
+tyler chat --config path/to/config.yaml
 
 # Set an initial thread title
-tyler-chat --title "Research Session"
+tyler chat --title "Research Session"
 
 # Combine options
-tyler-chat -c my-config.yaml -t "Project Discussion"
+tyler chat -c my-config.yaml -t "Project Discussion"
 ```
 
 ## Chat commands
@@ -167,8 +188,8 @@ To enable persistent storage across sessions, set up a database:
 # Set environment variable
 export NARRATOR_DATABASE_URL="sqlite:///tyler_chat.db"
 
-# Then run tyler-chat
-tyler-chat
+# Then run tyler chat
+tyler chat
 ```
 
 ### Custom tools
@@ -220,7 +241,7 @@ Tyler Chat automatically suppresses noisy output from third-party libraries. If 
 
 ```bash
 # Enable debug mode
-TYLER_DEBUG=1 tyler-chat
+TYLER_DEBUG=1 tyler chat
 ```
 
 ### Common issues
@@ -253,7 +274,7 @@ notes: |
 ```
 
 ```bash
-tyler-chat -c research-assistant-config.yaml -t "Climate Research"
+tyler chat -c research-assistant-config.yaml -t "Climate Research"
 ```
 
 ### Code helper
@@ -270,6 +291,23 @@ notes: |
   - Write clean, well-commented code
   - Follow best practices
   - Include error handling
+```
+
+### Quick project setup
+
+Use `tyler init` to scaffold a complete project:
+
+```bash
+# Create a new research assistant project
+tyler init research-bot --purpose "To help with academic research and paper analysis"
+cd research-bot
+
+# Set up environment
+cp .env.example .env
+# Edit .env with your API keys
+
+# Start chatting with your configured agent
+tyler chat --config tyler-config.yaml
 ```
 
 ## Next steps

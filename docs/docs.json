@@ -34,7 +34,8 @@
       {
         "group": "Apps",
         "pages": [
-          "apps/tyler-chat-cli",
+          "apps/tyler-cli",
+          "apps/narrator-cli",
           "apps/slack-agent"
         ]
       },

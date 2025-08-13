@@ -1,0 +1,373 @@
+---
+title: 'Narrator CLI'
+description: 'Command-line interface for managing Narrator database storage'
+---
+
+The Narrator CLI provides database management tools for the Narrator storage system. It includes commands for initializing database tables and checking database status.
+
+## Installation
+
+The Narrator CLI is automatically installed when you install the Narrator package:
+
+<Tabs>
+  <Tab title="uv (recommended)">
+    ```bash
+    uv add slide-narrator
+    ```
+  </Tab>
+  <Tab title="pip">
+    ```bash
+    pip install slide-narrator
+    ```
+  </Tab>
+</Tabs>
+
+After installation, the `narrator` command will be available (run with `uv run narrator` if using uv).
+
+## Commands
+
+### Database Commands
+
+#### narrator init
+
+Initialize database tables for thread and message storage:
+
+```bash
+# Initialize with explicit database URL
+uv run narrator init --database-url "postgresql+asyncpg://user:pass@localhost/dbname"
+
+# Initialize using environment variable
+export NARRATOR_DATABASE_URL="postgresql+asyncpg://user:pass@localhost/dbname"
+uv run narrator init
+```
+
+This command creates the necessary database tables:
+- `threads` - Stores conversation threads
+- `messages` - Stores messages within threads
+
+#### narrator status
+
+Check database connection and display basic statistics:
+
+```bash
+# Check status with explicit database URL
+uv run narrator status --database-url "postgresql+asyncpg://user:pass@localhost/dbname"
+
+# Check status using environment variable
+export NARRATOR_DATABASE_URL="postgresql+asyncpg://user:pass@localhost/dbname"
+uv run narrator status
+```
+
+The status command shows:
+- Database connection status
+- Number of recent threads
+- Basic health check information
+
+### Docker Commands
+
+#### narrator docker-setup
+
+One-command setup that starts PostgreSQL and initializes tables:
+
+```bash
+# Quick setup with defaults
+uv run narrator docker-setup
+
+# Use a custom port
+uv run narrator docker-setup --port 5433
+```
+
+This command:
+1. Starts a PostgreSQL container with the correct configuration
+2. Waits for the database to be ready
+3. Initializes the required tables
+4. Provides the connection string to use
+
+#### narrator docker-start
+
+Start a PostgreSQL container for Narrator:
+
+```bash
+# Start with defaults (port 5432, detached)
+uv run narrator docker-start
+
+# Use a custom port
+uv run narrator docker-start --port 5433
+
+# Run in foreground (useful for debugging)
+uv run narrator docker-start --no-detach
+```
+
+#### narrator docker-stop
+
+Stop the PostgreSQL container:
+
+```bash
+# Stop container (preserves data)
+uv run narrator docker-stop
+
+# Stop and remove all data
+uv run narrator docker-stop --remove-volumes
+```
+
+## Quick Start with Docker
+
+The fastest way to get started with PostgreSQL for Narrator:
+
+```bash
+# One command to set up everything
+uv run narrator docker-setup
+
+# This will:
+# 1. Start a PostgreSQL container
+# 2. Wait for it to be ready
+# 3. Initialize the database tables
+# 4. Show you the connection string
+
+# The database is now available at:
+# postgresql+asyncpg://narrator:narrator_dev@localhost:5432/narrator
+```
+
+That's it! Your database is ready to use.
+
+## Configuration
+
+### Environment Variables
+
+The Narrator CLI respects these environment variables:
+
+#### Database Connection
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `NARRATOR_DATABASE_URL` | Database connection string | None (uses in-memory) |
+
+#### Docker Configuration
+These variables affect the `docker-*` commands:
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `NARRATOR_DB_NAME` | Database name | narrator |
+| `NARRATOR_DB_USER` | Database username | narrator |
+| `NARRATOR_DB_PASSWORD` | Database password | narrator_dev |
+| `NARRATOR_DB_PORT` | Port to expose PostgreSQL | 5432 |
+
+#### Connection Pool Settings
+For PostgreSQL connections:
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `NARRATOR_DB_POOL_SIZE` | Connection pool size | 5 |
+| `NARRATOR_DB_MAX_OVERFLOW` | Max overflow connections | 10 |
+| `NARRATOR_DB_POOL_TIMEOUT` | Connection timeout (seconds) | 30 |
+| `NARRATOR_DB_POOL_RECYCLE` | Connection recycle time (seconds) | 300 |
+| `NARRATOR_DB_ECHO` | Enable SQL logging | false |
+
+### Database URLs
+
+Narrator supports different database backends:
+
+```bash
+# PostgreSQL (recommended for production)
+postgresql+asyncpg://user:password@localhost:5432/dbname
+
+# SQLite (good for development)
+sqlite+aiosqlite:///path/to/database.db
+
+# In-memory (default, no persistence)
+# Just omit the database URL
+```
+
+## Examples
+
+### Local Development Setup
+
+```bash
+# 1. Navigate to your project
+cd my-tyler-project
+
+# 2. Set up local PostgreSQL with Docker (default settings)
+uv run narrator docker-setup
+
+# 3. Use in your code
+export NARRATOR_DATABASE_URL="postgresql+asyncpg://narrator:narrator_dev@localhost:5432/narrator"
+python your_agent.py
+```
+
+### Custom Docker Configuration
+
+```bash
+# Set custom database configuration
+export NARRATOR_DB_NAME=myapp
+export NARRATOR_DB_USER=myapp_user
+export NARRATOR_DB_PASSWORD=secure_password
+export NARRATOR_DB_PORT=5433
+
+# Start Docker with these settings
+uv run narrator docker-setup
+
+# Your database will be available at:
+# postgresql+asyncpg://myapp_user:secure_password@localhost:5433/myapp
+```
+
+### Production Setup
+
+```bash
+# 1. Set production database URL
+export NARRATOR_DATABASE_URL="postgresql+asyncpg://prod_user:prod_pass@prod_host:5432/prod_db"
+
+# 2. Initialize tables (one-time setup)
+uv run narrator init
+
+# 3. Verify connection
+uv run narrator status
+```
+
+### CI/CD Pipeline
+
+```yaml
+# Example GitHub Actions workflow
+- name: Setup Database
+  run: |
+    # Use SQLite for tests
+    export NARRATOR_DATABASE_URL="sqlite+aiosqlite:///test.db"
+    uv run narrator init
+    uv run narrator status
+
+- name: Run Tests
+  run: |
+    export NARRATOR_DATABASE_URL="sqlite+aiosqlite:///test.db"
+    pytest tests/
+```
+
+## Integration with Tyler
+
+When using Tyler agents with persistent storage:
+
+```python
+from tyler import Agent, ThreadStore
+
+# The database must be initialized first with:
+# uv run narrator init
+
+# Then use in your agent
+thread_store = await ThreadStore.create(
+    "postgresql+asyncpg://narrator:narrator_dev@localhost:5432/narrator"
+)
+
+agent = Agent(
+    name="my-agent",
+    thread_store=thread_store
+)
+```
+
+## Troubleshooting
+
+### Connection Errors
+
+**"Failed to connect to database"**: Check your database URL and ensure the database server is running:
+```bash
+# For Docker setup, ensure container is running
+docker ps | grep narrator-postgres
+
+# Test connection with psql
+psql postgresql://narrator:narrator_dev@localhost:5432/narrator
+```
+
+**"No such command 'init'"**: Make sure you're using the correct command:
+```bash
+# Correct
+uv run narrator init
+
+# Incorrect (old command name)
+uv run narrator-db init
+```
+
+### Permission Errors
+
+**"Permission denied"**: Ensure your database user has CREATE TABLE permissions:
+```sql
+-- Grant permissions (run as superuser)
+GRANT ALL PRIVILEGES ON DATABASE narrator TO narrator;
+```
+
+### Migration Issues
+
+**"Table already exists"**: The init command is idempotent and will skip existing tables. This is not an error.
+
+### Environment Variable Issues
+
+**"No database URL provided"**: Set the environment variable:
+```bash
+# Bash/Zsh
+export NARRATOR_DATABASE_URL="your-database-url"
+
+# Or use .env file with python-dotenv
+echo 'NARRATOR_DATABASE_URL="your-database-url"' >> .env
+```
+
+## Best Practices
+
+1. **Always initialize before use**: Run `narrator init` before using ThreadStore with a database
+2. **Use environment variables**: Avoid hardcoding database URLs in your code
+3. **Use connection pooling**: For production, configure pool settings appropriately
+4. **Regular backups**: Set up automated backups for production databases
+5. **Monitor connections**: Keep an eye on connection pool usage in production
+
+## Advanced Usage
+
+### Custom Database Configuration
+
+Create a `.env` file for your project:
+
+```bash
+# .env
+NARRATOR_DATABASE_URL=postgresql+asyncpg://user:pass@localhost/myapp
+NARRATOR_DB_POOL_SIZE=20
+NARRATOR_DB_MAX_OVERFLOW=40
+NARRATOR_DB_POOL_TIMEOUT=60
+NARRATOR_DB_POOL_RECYCLE=600
+```
+
+Then load it in your application:
+
+```python
+from dotenv import load_dotenv
+load_dotenv()
+
+# Now narrator commands will use these settings
+```
+
+### Database Migrations
+
+For schema changes between Narrator versions:
+
+```bash
+# 1. Backup your database
+pg_dump -U narrator -h localhost narrator > backup.sql
+
+# 2. Update Narrator
+uv add slide-narrator@latest
+
+# 3. Re-initialize (safe - won't drop existing data)
+uv run narrator init
+
+# 4. Verify
+uv run narrator status
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="ThreadStore API" icon="database" href="/api-reference/narrator-threadstore">
+    Learn about the ThreadStore API
+  </Card>
+  <Card title="Conversation Persistence" icon="save" href="/guides/conversation-persistence">
+    Build agents with persistent memory
+  </Card>
+  <Card title="Tyler CLI" icon="terminal" href="/apps/tyler-cli">
+    Create and chat with agents
+  </Card>
+  <Card title="Production Deployment" icon="rocket" href="/guides/patterns">
+    Deploy agents to production
+  </Card>
+</CardGroup>
