@@ -22,34 +22,72 @@ agent = Agent(
 )
 ```
 
-## Key Parameters
+## All Parameters
 
 <ParamField path="name" type="string" default="Tyler">
-  The name of your agent
+  The name of your agent. This is used in the system prompt to give the agent an identity.
 </ParamField>
 
 <ParamField path="model_name" type="string" default="gpt-4.1">
-  The LLM model to use (supports any LiteLLM compatible model)
+  The LLM model to use. Supports any LiteLLM compatible model including OpenAI, Anthropic, Gemini, and more.
 </ParamField>
 
-<ParamField path="purpose" type="string | Prompt" required>
-  The agent's purpose or system prompt
+<ParamField path="purpose" type="string | Prompt" default="To be a helpful assistant.">
+  The agent's purpose or system prompt. Can be a string or a Tyler Prompt object for more complex prompts.
 </ParamField>
 
 <ParamField path="temperature" type="float" default="0.7">
-  Controls randomness in responses (0.0 - 2.0)
+  Controls randomness in responses. Range is 0.0 to 2.0, where lower values make output more focused and deterministic.
 </ParamField>
 
-<ParamField path="tools" type="List[Tool]" default="[]">
-  List of tools available to the agent
+<ParamField path="tools" type="List[Union[str, Dict, Callable, ModuleType]]" default="[]">
+  List of tools available to the agent. Can include:
+  - Direct tool function references (callables)
+  - Tool module namespaces (modules like `web`, `files`)
+  - Built-in tool module names (strings like `"web"`, `"files"`)
+  - Custom tool definitions (dicts with 'definition', 'implementation', and optional 'attributes' keys)
+  
+  For module names, you can specify specific tools using `'module:tool1,tool2'` format.
 </ParamField>
 
 <ParamField path="agents" type="List[Agent]" default="[]">
-  Sub-agents for task delegation
+  List of sub-agents that this agent can delegate tasks to. Enables multi-agent systems and task delegation.
 </ParamField>
 
 <ParamField path="max_tool_iterations" type="int" default="10">
-  Maximum number of tool calls per conversation turn
+  Maximum number of tool calls allowed per conversation turn. Prevents infinite loops in tool usage.
+</ParamField>
+
+<ParamField path="api_base" type="string | None" default="None">
+  Custom API base URL for the model provider (e.g., for using alternative inference services). 
+  You can also use `base_url` as an alias for this parameter.
+</ParamField>
+
+<ParamField path="base_url" type="string | None" default="None">
+  Alias for `api_base`. Either parameter can be used to specify a custom API endpoint.
+</ParamField>
+
+<ParamField path="extra_headers" type="Dict[str, str] | None" default="None">
+  Additional headers to include in API requests. Useful for authentication tokens, API keys, or tracking headers.
+</ParamField>
+
+<ParamField path="notes" type="string | Prompt" default="">
+  Supporting notes to help the agent accomplish its purpose. These are included in the system prompt 
+  and can provide additional context or instructions.
+</ParamField>
+
+<ParamField path="version" type="string" default="1.0.0">
+  Version identifier for the agent. Useful for tracking agent iterations and changes.
+</ParamField>
+
+<ParamField path="thread_store" type="ThreadStore | None" default="None">
+  Thread store instance for managing conversation threads. If not provided, uses the default thread store.
+  This parameter is excluded from serialization.
+</ParamField>
+
+<ParamField path="file_store" type="FileStore | None" default="None">
+  File store instance for managing file attachments. If not provided, uses the default file store.
+  This parameter is excluded from serialization.
 </ParamField>
 
 ## Processing Conversations
