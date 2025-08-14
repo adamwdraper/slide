@@ -126,7 +126,7 @@ Storage is handled by the Narrator package, providing:
 
 ### Prerequisites
 
-- Python 3.12+
+- Python 3.13+
 - uv (modern Python package manager) - recommended
 - System dependencies for PDF and image processing
 

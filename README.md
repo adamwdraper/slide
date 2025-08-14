@@ -242,8 +242,8 @@ uv tree              # Shows tyler's dependencies
 ```bash
 # Python version management
 uv python list           # List available Python versions
-uv python install 3.12   # Install Python 3.12
-uv python pin 3.12       # Set project to use Python 3.12
+uv python install 3.13   # Install Python 3.13
+uv python pin 3.13       # Set project to use Python 3.13
 
 # Running code and tests
 uv run python script.py              # Run a script
