@@ -710,6 +710,7 @@ class Agent(Model):
     ) -> AsyncGenerator[ExecutionEvent, None]:
         ...
     
+    @weave.op()
     def go(
         self, 
         thread_or_id: Union[Thread, str],
