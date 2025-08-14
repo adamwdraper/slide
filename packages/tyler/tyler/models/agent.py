@@ -155,6 +155,7 @@ class Agent(Model):
     api_base: Optional[str] = Field(default=None, description="Custom API base URL for the model provider (e.g., for using alternative inference services). You can also use 'base_url' as an alias.")
     extra_headers: Optional[Dict[str, str]] = Field(default=None, description="Additional headers to include in API requests (e.g., for authentication or tracking)")
     temperature: float = Field(default=0.7)
+    drop_params: bool = Field(default=True, description="Whether to drop unsupported parameters for specific models (e.g., O-series models only support temperature=1)")
     name: str = Field(default="Tyler")
     purpose: Union[str, Prompt] = Field(default_factory=lambda: weave.StringPrompt("To be a helpful assistant."))
     notes: Union[str, Prompt] = Field(default_factory=lambda: weave.StringPrompt(""))
@@ -469,6 +470,9 @@ class Agent(Model):
         # Add extra headers if specified
         if self.extra_headers:
             completion_params["extra_headers"] = self.extra_headers
+        
+        # Add drop_params to handle model-specific restrictions
+        completion_params["drop_params"] = self.drop_params
         
         if len(self._processed_tools) > 0:
             # Check if using Gemini model and modify tools accordingly

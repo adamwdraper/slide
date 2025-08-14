@@ -5497,7 +5497,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "slide-narrator"
-version = "1.0.0"
+version = "1.0.1"
 source = { editable = "packages/narrator" }
 dependencies = [
     { name = "aiosqlite" },
@@ -5587,7 +5587,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "slide-tyler"
-version = "2.0.1"
+version = "2.0.3"
 source = { editable = "packages/tyler" }
 dependencies = [
     { name = "aiohappyeyeballs" },

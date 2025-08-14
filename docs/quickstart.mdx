@@ -80,6 +80,10 @@ In this quickstart, you'll build an AI agent that can search the web and analyze
     from tyler import Agent, Thread, Message
     from lye import WEB_TOOLS, IMAGE_TOOLS, FILES_TOOLS
 
+    # Optional: Uncomment these lines if you want observiabiltiy with W&B Weave
+    # import weave
+    # weave.init("wandb-designers/my-agent")
+
     async def main():
         # Create your agent
         agent = Agent(
@@ -88,8 +92,7 @@ In this quickstart, you'll build an AI agent that can search the web and analyze
             purpose="To help with research and analysis tasks",
             tools=[
                 *WEB_TOOLS,      # Can search and fetch web content
-                *IMAGE_TOOLS,    # Can analyze and describe images
-                *FILES_TOOLS     # Can read and write files
+                *IMAGE_TOOLS    # Can analyze and describe images
             ]
         )
 
@@ -209,8 +212,16 @@ Now that you have a working agent, explore these guides to add more capabilities
         model_name="claude-3-opus-20240229",  # Anthropic
         # or
         model_name="gemini-pro",  # Google
+        # or
+        model_name="o3",  # OpenAI O-series
     )
     ```
+    
+    <Note>
+    Tyler automatically handles model-specific parameter restrictions. For example, O-series models 
+    only support `temperature=1`, but Tyler will automatically drop incompatible parameters, so you 
+    can use the same agent configuration across all models.
+    </Note>
   </Accordion>
   
   <Accordion title="Import Errors">
