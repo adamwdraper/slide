@@ -40,6 +40,12 @@ agent = Agent(
   Controls randomness in responses. Range is 0.0 to 2.0, where lower values make output more focused and deterministic.
 </ParamField>
 
+<ParamField path="drop_params" type="bool" default="True">
+  Whether to automatically drop unsupported parameters for specific models. When True, parameters like temperature 
+  are automatically removed for models that don't support them (e.g., O-series models). This ensures seamless 
+  compatibility across different model providers without requiring model-specific configuration.
+</ParamField>
+
 <ParamField path="tools" type="List[Union[str, Dict, Callable, ModuleType]]" default="[]">
   List of tools available to the agent. Can include:
   - Direct tool function references (callables)

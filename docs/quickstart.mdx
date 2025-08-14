@@ -212,8 +212,16 @@ Now that you have a working agent, explore these guides to add more capabilities
         model_name="claude-3-opus-20240229",  # Anthropic
         # or
         model_name="gemini-pro",  # Google
+        # or
+        model_name="o3",  # OpenAI O-series
     )
     ```
+    
+    <Note>
+    Tyler automatically handles model-specific parameter restrictions. For example, O-series models 
+    only support `temperature=1`, but Tyler will automatically drop incompatible parameters, so you 
+    can use the same agent configuration across all models.
+    </Note>
   </Accordion>
   
   <Accordion title="Import Errors">
