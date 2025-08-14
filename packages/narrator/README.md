@@ -498,7 +498,7 @@ uv run pytest tests/ -v
 ### Test Requirements
 
 The test suite requires:
-- Python 3.12+
+- Python 3.13+
 - pytest with async support
 - Test coverage reporting
 - System dependencies (libmagic for file type detection)

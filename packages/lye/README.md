@@ -83,7 +83,7 @@ agent = Agent(tools=WEB_TOOLS + SLACK_TOOLS)
 
 ## Requirements
 
-- Python 3.12+
+- Python 3.13+
 - System dependencies for PDF and image processing:
   ```bash
   # macOS
