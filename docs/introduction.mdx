@@ -27,7 +27,7 @@ agent = Agent(
 thread = Thread()
 message = Message(
     role="user", 
-    content="Why should I use https://slide.mintlify.app/introduction?"
+    content="Why should I use https://slide.mintlify.app/?"
 )
 thread.add_message(message)
 
@@ -36,7 +36,6 @@ result = asyncio.run(agent.go(thread))
 
 # Print the agent's response
 print(f"ASSISTANT: {result.content}")
-print("-" * 80)
 ```
 
 That's it! Your agent can now search the web, analyze images, and complete complex tasks autonomously.
