@@ -1,3 +1,7 @@
+from dotenv import load_dotenv
+load_dotenv()
+
+import os
 import asyncio
 from tyler import Agent, Thread, Message, ThreadStore, FileStore, AgentResult
 
@@ -5,10 +9,15 @@ async def main():
     """
     Demonstrates explicitly creating and setting stores for an Agent.
     """
-    # 1. Create default in-memory stores individually.
-    #    Calling .create() without arguments defaults to in-memory.
-    thread_store = await ThreadStore.create()
-    file_store = await FileStore.create()
+    # 1. Create stores.
+    #    By default, this uses in-memory stores. To persist across runs, set env vars:
+    #      NARRATOR_DATABASE_URL (e.g., "sqlite+aiosqlite:///threads.db")
+    #      FILE_STORE_PATH (e.g., "./stored_files")
+    database_url = os.getenv("NARRATOR_DATABASE_URL")
+    file_store_path = os.getenv("FILE_STORE_PATH")
+
+    thread_store = await ThreadStore.create(database_url) if database_url else await ThreadStore.create()
+    file_store = await FileStore.create(base_path=file_store_path) if file_store_path else await FileStore.create()
     print(f"Created in-memory stores:")
     print(f"  Thread Store: {type(thread_store)}")
     print(f"  File Store: {type(file_store)}")
@@ -59,6 +68,26 @@ async def main():
     )
     print(f"Created second agent: {second_agent.name}")
     print("Both agents now share the same thread and file stores!")
+
+    # 8. Simulate a reload from the store to demonstrate persistence/continuity
+    #    (Even with in-memory, this exercises the store API)
+    reloaded_thread = await thread_store.get(thread.id)
+    print(f"Reloaded thread {reloaded_thread.id} from store (messages: {len(reloaded_thread.messages)})")
+
+    # 9. Have the second agent continue the conversation on the same (reloaded) thread
+    print("\n--- Follow-up With Second Agent On Same Thread ---")
+    follow_up_message = Message(
+        role="user",
+        content="Thanks! As a follow-up, tell me one fun fact related to your previous answer."
+    )
+    reloaded_thread.add_message(follow_up_message)
+    print(f"Added follow-up user message: '{follow_up_message.content}'")
+    print(f"Thread now has {len(reloaded_thread.messages)} messages (continuing the same conversation)")
+
+    print("Running second agent on the existing thread...")
+    second_result = await second_agent.go(reloaded_thread)
+    print("Second agent finished processing.")
+    print(f"Second Assistant Response: {second_result.content}")
 
     # Note: Since the stores are in-memory, the thread data still only exists
     # for the duration of this script run. To persist data, you would provide

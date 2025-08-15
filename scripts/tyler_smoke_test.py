@@ -52,6 +52,7 @@ EXAMPLES_TO_RUN = [
     "002_basic.py", 
     "003_docs_quickstart.py",
     "004_streaming.py",
+    "005_thread_persistence.py",
     "100_tools_basic.py",
     "101_tools_streaming.py",
     "102_selective_tools.py",
