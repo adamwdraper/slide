@@ -5142,7 +5142,6 @@ dependencies = [
     { name = "pypdf" },
     { name = "python-magic" },
     { name = "sqlalchemy" },
-    { name = "uuid-utils" },
 ]
 
 [package.optional-dependencies]
@@ -5168,7 +5167,6 @@ requires-dist = [
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=6.0.0" },
     { name = "python-magic", specifier = ">=0.4.0" },
     { name = "sqlalchemy", specifier = ">=2.0.36" },
-    { name = "uuid-utils", specifier = ">=0.10.0" },
 ]
 provides-extras = ["dev"]
 
