@@ -1073,6 +1073,11 @@ class Agent(Model):
             start_time = datetime.now(UTC)
             new_messages = []
             
+            # Helper: initialize per-tool_call argument buffer only once
+            def _init_tool_arg_buffer(tool_call_id: str, initial_value: Optional[str], buffers: Dict[str, str]) -> None:
+                if tool_call_id not in buffers:
+                    buffers[tool_call_id] = initial_value or ""
+
             # Yield iteration start
             yield ExecutionEvent(
                 type=EventType.ITERATION_START,
@@ -1182,8 +1187,7 @@ class Agent(Model):
                                             }
                                         }
                                         # Initialize buffer for this tool_call id only once.
-                                        # If the first delta already includes some argument content, seed the buffer with it.
-                                        current_tool_args.setdefault(current_tool_call['id'], current_tool_call['function']['arguments'] or '')
+                                        _init_tool_arg_buffer(current_tool_call['id'], current_tool_call['function']['arguments'], current_tool_args)
                                         if current_tool_call not in current_tool_calls:
                                             current_tool_calls.append(current_tool_call)
                                     elif current_tool_call and 'function' in tool_call:
@@ -1209,7 +1213,7 @@ class Agent(Model):
                                             }
                                         }
                                         # Initialize buffer for this tool_call id only once (object format).
-                                        current_tool_args.setdefault(current_tool_call['id'], current_tool_call['function']['arguments'] or '')
+                                        _init_tool_arg_buffer(current_tool_call['id'], current_tool_call['function']['arguments'], current_tool_args)
                                         if current_tool_call not in current_tool_calls:
                                             current_tool_calls.append(current_tool_call)
                                     elif current_tool_call and hasattr(tool_call, 'function'):
@@ -1277,7 +1281,12 @@ class Agent(Model):
                             # args may be a string (typical) or already a dict if upstream parsed it.
                             # Parse only when it's a non-empty string; otherwise use as-is or fallback to {}.
                             try:
-                                parsed_args = json.loads(args) if isinstance(args, str) and args.strip() else (args if isinstance(args, dict) else {})
+                                if isinstance(args, str) and args.strip():
+                                    parsed_args = json.loads(args)
+                                elif isinstance(args, dict):
+                                    parsed_args = args
+                                else:
+                                    parsed_args = {}
                             except json.JSONDecodeError:
                                 # On invalid JSON, do not guess; fall back to empty dict
                                 parsed_args = {}
