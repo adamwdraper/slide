@@ -20,6 +20,13 @@ from .models import Base, ThreadRecord, MessageRecord
 
 logger = get_logger(__name__)
 
+def _sanitize_key(component: str) -> str:
+    """Allow only alphanumeric and underscore for JSON path keys to avoid SQL injection."""
+    import re
+    if not re.fullmatch(r"[A-Za-z0-9_]+", component):
+        raise ValueError(f"Invalid key component: {component}")
+    return component
+
 class StorageBackend(ABC):
     """Abstract base class for thread storage backends."""
     
@@ -149,28 +156,22 @@ class MemoryBackend(StorageBackend):
         Returns:
             List of messages matching the criteria (possibly empty)
         """
+        matches: List[Message] = []
         # Traverse all threads and messages
         for thread in self._threads.values():
             for message in thread.messages:
-                # Use the path to navigate to the target attribute
-                current = message.model_dump(mode="python")
-                
+                current: Any = message.model_dump(mode="python")
                 # Navigate the nested structure
-                parts = path.split('.')
+                parts = [p for p in path.split('.') if p]
                 for part in parts:
                     if isinstance(current, dict) and part in current:
                         current = current[part]
                     else:
                         current = None
                         break
-                
-                # Check if we found a match
                 if current == value:
-                    # For MemoryBackend, we can't return MessageRecord objects
-                    # Return a list containing the message data that the ThreadStore can handle
-                    return [message]
-        
-        return []
+                    matches.append(message)
+        return matches
 
 class SQLBackend(StorageBackend):
     """SQL storage backend supporting both SQLite and PostgreSQL with proper connection pooling."""
@@ -437,7 +438,10 @@ class SQLBackend(StorageBackend):
             for key, value in attributes.items():
                 if self.database_url.startswith('sqlite'):
                     # Use SQLite json_extract
-                    query = query.where(text(f"json_extract(attributes, '$.{key}') = :value").bindparams(value=str(value)))
+                    safe_key = _sanitize_key(key)
+                    query = query.where(
+                        text(f"json_extract(attributes, '$.{safe_key}') = :value").bindparams(value=str(value))
+                    )
                 else:
                     # Use PostgreSQL JSONB operators via text() for direct SQL control
                     logger.info(f"Searching for attribute[{key}] = {value} (type: {type(value)})")
@@ -445,7 +449,8 @@ class SQLBackend(StorageBackend):
                     # Handle different value types appropriately
                     if value is None:
                         # Check for null/None values
-                        query = query.where(text(f"attributes->>'{key}' IS NULL"))
+                        safe_key = _sanitize_key(key)
+                        query = query.where(text(f"attributes->>'{safe_key}' IS NULL"))
                     else:
                         # Convert value to string for text comparison
                         str_value = str(value)
@@ -454,10 +459,11 @@ class SQLBackend(StorageBackend):
                             str_value = str(value).lower()
                         
                         # Use PostgreSQL's JSONB operators for direct string comparison
-                        param_name = f"attr_{key}"
+                        safe_key = _sanitize_key(key)
+                        param_name = f"attr_{safe_key}"
                         bp = bindparam(param_name, str_value)
                         query = query.where(
-                            text(f"attributes->>'{key}' = :{param_name}").bindparams(bp)
+                            text(f"attributes->>'{safe_key}' = :{param_name}").bindparams(bp)
                         )
             
             # Log the final query for debugging
@@ -481,28 +487,32 @@ class SQLBackend(StorageBackend):
             
             if self.database_url.startswith('sqlite'):
                 # Use SQLite json_extract for platform name
-                query = query.where(text(f"json_extract(platforms, '$.{platform_name}') IS NOT NULL"))
+                safe_platform = _sanitize_key(platform_name)
+                query = query.where(text(f"json_extract(platforms, '$.{safe_platform}') IS NOT NULL"))
                 # Add property conditions
                 for key, value in properties.items():
                     # Convert value to string for text comparison
                     str_value = str(value)
-                    param_name = f"value_{platform_name}_{key}" # Ensure unique param name
+                    safe_key = _sanitize_key(key)
+                    param_name = f"value_{safe_platform}_{safe_key}" # Ensure unique param name
                     bp = bindparam(param_name, str_value)
                     query = query.where(
-                        text(f"json_extract(platforms, '$.{platform_name}.{key}') = :{param_name}")
+                        text(f"json_extract(platforms, '$.{safe_platform}.{safe_key}') = :{param_name}")
                         .bindparams(bp)
                     )
             else:
                 # Use PostgreSQL JSONB operators for platform checks
-                query = query.where(text(f"platforms ? '{platform_name}'"))
+                safe_platform = _sanitize_key(platform_name)
+                query = query.where(text(f"platforms ? '{safe_platform}'"))
                 
                 # Add property conditions with text() for proper PostgreSQL JSONB syntax
                 for key, value in properties.items():
                     str_value = str(value)
-                    param_name = f"value_{platform_name}_{key}"
+                    safe_key = _sanitize_key(key)
+                    param_name = f"value_{safe_platform}_{safe_key}"
                     bp = bindparam(param_name, str_value)
                     query = query.where(
-                        text(f"platforms->'{platform_name}'->>'{key}' = :{param_name}")
+                        text(f"platforms->'{safe_platform}'->>'{safe_key}' = :{param_name}")
                         .bindparams(bp)
                     )
             
@@ -540,16 +550,28 @@ class SQLBackend(StorageBackend):
         try:
             query = select(MessageRecord)
             
+            # Normalize and sanitize path parts
+            parts = [p for p in path.split('.') if p]
+            parts = [_sanitize_key(p) for p in parts]
+            if not parts:
+                return []
             if self.database_url.startswith('sqlite'):
-                # Use SQLite json_extract
-                json_path = '$.' + path.replace('.', '.')
-                query = query.where(text(f"json_extract(source, '{json_path}') = :value").bindparams(value=str(value)))
+                # Use SQLite json_extract with a proper JSON path: $.a.b.c
+                json_path = '$.' + '.'.join(parts)
+                query = query.where(
+                    text("json_extract(source, :json_path) = :value").bindparams(json_path=json_path, value=str(value))
+                )
             else:
-                # Use PostgreSQL JSONB operators
-                # Convert dot notation to PostgreSQL JSON path
-                path_parts = path.split('.')
-                json_path = '->'.join([f"'{part}'" for part in path_parts[:-1]]) + f"->>'{path_parts[-1]}'"
-                query = query.where(text(f"source{json_path} = :value").bindparams(value=str(value)))
+                # Use PostgreSQL JSONB operators: source->'a'->'b'->>'c' (last part text)
+                if len(parts) == 1:
+                    pg_expr = f"source->>'{parts[0]}'"
+                else:
+                    head = parts[:-1]
+                    tail = parts[-1]
+                    pg_expr = "source" + ''.join([f"->'{h}'" for h in head]) + f"->>'{tail}'"
+                query = query.where(
+                    text(f"{pg_expr} = :value").bindparams(value=str(value))
+                )
             
             result = await session.execute(query)
             return result.scalars().all()

@@ -494,13 +494,7 @@ class FileStore:
                 files.append(file_id)
         return files
 
-    def _handle_data_url(self, content: bytes) -> bytes:
-        """Handle data URLs"""
-        if self.content.startswith('data:'):
-            # Handle data URLs
-            header, encoded = self.content.split(",", 1)
-            return base64.b64decode(encoded)
-        return content
+    # Note: data URL handling is performed at the Attachment layer where the content type is known.
 
     @classmethod
     def get_base_path(cls) -> str:

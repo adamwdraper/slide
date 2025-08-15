@@ -3,36 +3,30 @@ import os
 import logging
 from typing import Optional
 
+class _NarratorNullHandler(logging.Handler):
+    def emit(self, record):
+        pass
+
 _is_configured = False
 
 def _ensure_logging_configured():
-    """Internal function to configure logging if not already configured."""
+    """Attach a NullHandler and optionally set level based on env without overriding app config."""
     global _is_configured
     if _is_configured:
         return
 
-    # Get log level from environment and convert to uppercase
-    log_level_str = os.getenv('NARRATOR_LOG_LEVEL', os.getenv('LOG_LEVEL', 'INFO')).upper()
-    
-    # Convert string to logging level constant
-    try:
-        log_level = getattr(logging, log_level_str)
-    except AttributeError:
-        print(f"Invalid LOG_LEVEL: {log_level_str}. Defaulting to INFO.")
-        log_level = logging.INFO
-    
-    # Configure the root logger with our format
-    logging.basicConfig(
-        level=log_level,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        datefmt='%H:%M:%S',
-        force=True  # Ensure we override any existing configuration
-    )
-    
-    # Get the root logger and set its level
-    root_logger = logging.getLogger()
-    root_logger.setLevel(log_level)
-    
+    logger = logging.getLogger('narrator')
+    # Avoid duplicate handlers
+    if not any(isinstance(h, _NarratorNullHandler) for h in logger.handlers):
+        logger.addHandler(_NarratorNullHandler())
+
+    # Respect env level but do not call basicConfig or force reconfigure
+    log_level_str = os.getenv('NARRATOR_LOG_LEVEL', os.getenv('LOG_LEVEL', '')).upper()
+    if log_level_str:
+        level = getattr(logging, log_level_str, None)
+        if isinstance(level, int):
+            logger.setLevel(level)
+
     _is_configured = True
 
 def get_logger(name: Optional[str] = None) -> logging.Logger:
@@ -55,4 +49,4 @@ def get_logger(name: Optional[str] = None) -> logging.Logger:
         logger.debug("Debug message")  # Will respect NARRATOR_LOG_LEVEL from .env
     """
     _ensure_logging_configured()
-    return logging.getLogger(name or '__name__') 
+    return logging.getLogger(name or 'narrator')
