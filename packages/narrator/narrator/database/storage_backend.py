@@ -1,6 +1,7 @@
 """Storage backend implementations for ThreadStore."""
 from abc import ABC, abstractmethod
 from typing import List, Optional, Dict, Any, Union
+import re
 from datetime import datetime, UTC
 import json
 import os
@@ -22,7 +23,6 @@ logger = get_logger(__name__)
 
 def _sanitize_key(component: str) -> str:
     """Allow only alphanumeric and underscore for JSON path keys to avoid SQL injection."""
-    import re
     if not re.fullmatch(r"[A-Za-z0-9_]+", component):
         raise ValueError(f"Invalid key component: {component}")
     return component
@@ -574,10 +574,10 @@ class SQLBackend(StorageBackend):
                 if not parts:
                     return []
             if self.database_url.startswith('sqlite'):
-                # Use SQLite json_extract with a proper JSON path: $.a.b.c
+                # Use SQLite json_extract with a proper JSON path: $.a.b.c (safe due to sanitized parts)
                 json_path = '$.' + '.'.join(parts)
                 query = query.where(
-                    text("json_extract(source, :json_path) = :value").bindparams(json_path=json_path, value=str(value))
+                    text(f"json_extract(source, '{json_path}') = :value").bindparams(value=str(value))
                 )
             else:
                 # Use PostgreSQL JSONB operators: source->'a'->'b'->>'c' (last part text)

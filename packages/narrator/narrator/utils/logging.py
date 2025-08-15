@@ -49,4 +49,4 @@ def get_logger(name: Optional[str] = None) -> logging.Logger:
         logger.debug("Debug message")  # Will respect NARRATOR_LOG_LEVEL from .env
     """
     _ensure_logging_configured()
-    return logging.getLogger(name or 'narrator')
+    return logging.getLogger(name or 'narrator.unknown')
