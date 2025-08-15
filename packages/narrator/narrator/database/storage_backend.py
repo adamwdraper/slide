@@ -439,9 +439,16 @@ class SQLBackend(StorageBackend):
                 if self.database_url.startswith('sqlite'):
                     # Use SQLite json_extract
                     safe_key = _sanitize_key(key)
-                    query = query.where(
-                        text(f"json_extract(attributes, '$.{safe_key}') = :value").bindparams(value=str(value))
-                    )
+                    if value is None:
+                        query = query.where(text(f"json_extract(attributes, '$.{safe_key}') IS NULL"))
+                    elif isinstance(value, bool):
+                        # SQLite stores booleans as 1/0
+                        num_val = 1 if value else 0
+                        query = query.where(text(f"json_extract(attributes, '$.{safe_key}') = {num_val}"))
+                    else:
+                        query = query.where(
+                            text(f"json_extract(attributes, '$.{safe_key}') = :value").bindparams(value=str(value))
+                        )
                 else:
                     # Use PostgreSQL JSONB operators via text() for direct SQL control
                     logger.info(f"Searching for attribute[{key}] = {value} (type: {type(value)})")
@@ -492,14 +499,20 @@ class SQLBackend(StorageBackend):
                 # Add property conditions
                 for key, value in properties.items():
                     # Convert value to string for text comparison
-                    str_value = str(value)
                     safe_key = _sanitize_key(key)
-                    param_name = f"value_{safe_platform}_{safe_key}" # Ensure unique param name
-                    bp = bindparam(param_name, str_value)
-                    query = query.where(
-                        text(f"json_extract(platforms, '$.{safe_platform}.{safe_key}') = :{param_name}")
-                        .bindparams(bp)
-                    )
+                    if value is None:
+                        query = query.where(text(f"json_extract(platforms, '$.{safe_platform}.{safe_key}') IS NULL"))
+                    elif isinstance(value, bool):
+                        num_val = 1 if value else 0
+                        query = query.where(text(f"json_extract(platforms, '$.{safe_platform}.{safe_key}') = {num_val}"))
+                    else:
+                        str_value = str(value)
+                        param_name = f"value_{safe_platform}_{safe_key}" # Ensure unique param name
+                        bp = bindparam(param_name, str_value)
+                        query = query.where(
+                            text(f"json_extract(platforms, '$.{safe_platform}.{safe_key}') = :{param_name}")
+                            .bindparams(bp)
+                        )
             else:
                 # Use PostgreSQL JSONB operators for platform checks
                 safe_platform = _sanitize_key(platform_name)
