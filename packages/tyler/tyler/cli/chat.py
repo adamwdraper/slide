@@ -207,7 +207,9 @@ class ChatManager:
                         system_prompt = self.agent._prompt.system_prompt(
                             self.agent.purpose,
                             self.agent.name,
-                            self.agent.notes
+                            self.agent.model_name,
+                            tools=self.agent._processed_tools,
+                            notes=self.agent.notes
                         )
                         thread.ensure_system_prompt(system_prompt)
                         await self.thread_store.save(thread)
@@ -226,7 +228,9 @@ class ChatManager:
                     system_prompt = self.agent._prompt.system_prompt(
                         self.agent.purpose,
                         self.agent.name,
-                        self.agent.notes
+                        self.agent.model_name,
+                        tools=self.agent._processed_tools,
+                        notes=self.agent.notes
                     )
                     thread.ensure_system_prompt(system_prompt)
                     await self.thread_store.save(thread)
