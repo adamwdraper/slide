@@ -523,7 +523,7 @@ async def test_go_stream_object_format_tool_call_updates():
         )
     )
     
-    # Second chunk with continuation of arguments
+    # Second chunk with continuation of arguments (split JSON across deltas)
     continuation_tool_call = SimpleNamespace(
         function=SimpleNamespace(
             arguments='"value"}'
@@ -556,7 +556,7 @@ async def test_go_stream_object_format_tool_call_updates():
             None
         )
         
-        # Verify arguments were concatenated correctly
+        # Verify arguments were concatenated and parsed into {}
         assert assistant_message is not None
         assert assistant_message.tool_calls[0]["function"]["arguments"] == '{"param": "value"}'
 
