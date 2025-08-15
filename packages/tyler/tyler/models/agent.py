@@ -171,6 +171,7 @@ class Agent(Model):
     _processed_tools: List[Dict] = PrivateAttr(default_factory=list)
     _system_prompt: str = PrivateAttr(default="")
     _tool_attributes_cache: Dict[str, Optional[Dict[str, Any]]] = PrivateAttr(default_factory=dict)
+    step_errors_raise: bool = Field(default=False, description="If True, step() will raise exceptions instead of returning an error message tuple for backward compatibility.")
 
     model_config = {
         "arbitrary_types_allowed": True,
@@ -531,6 +532,9 @@ class Agent(Model):
                     
             return response, metrics
         except Exception as e:
+            if self.step_errors_raise:
+                raise
+            # Backward-compatible behavior: append error message and return (thread, [error_message])
             error_text = f"I encountered an error: {str(e)}"
             error_msg = Message(
                 role='assistant', 
@@ -1065,9 +1069,15 @@ class Agent(Model):
             current_content = []
             current_tool_calls = []
             current_tool_call = None
+            current_tool_args: Dict[str, str] = {}
             start_time = datetime.now(UTC)
             new_messages = []
             
+            # Helper: initialize per-tool_call argument buffer only once
+            def _init_tool_arg_buffer(tool_call_id: str, initial_value: Optional[str], buffers: Dict[str, str]) -> None:
+                if tool_call_id not in buffers:
+                    buffers[tool_call_id] = initial_value or ""
+
             # Yield iteration start
             yield ExecutionEvent(
                 type=EventType.ITERATION_START,
@@ -1173,9 +1183,11 @@ class Agent(Model):
                                             "type": "function",
                                             "function": {
                                                 "name": tool_call.get('function', {}).get('name', ''),
-                                                "arguments": tool_call.get('function', {}).get('arguments', '{}')
+                                                "arguments": tool_call.get('function', {}).get('arguments', '') or ''
                                             }
                                         }
+                                        # Initialize buffer for this tool_call id only once.
+                                        _init_tool_arg_buffer(current_tool_call['id'], current_tool_call['function']['arguments'], current_tool_args)
                                         if current_tool_call not in current_tool_calls:
                                             current_tool_calls.append(current_tool_call)
                                     elif current_tool_call and 'function' in tool_call:
@@ -1183,11 +1195,11 @@ class Agent(Model):
                                         if 'name' in tool_call['function'] and tool_call['function']['name']:
                                             current_tool_call['function']['name'] = tool_call['function']['name']
                                         if 'arguments' in tool_call['function']:
-                                            if not current_tool_call['function']['arguments'].strip('{}').strip():
-                                                current_tool_call['function']['arguments'] = tool_call['function']['arguments']
-                                            else:
-                                                # Append to existing arguments, handling JSON chunks
-                                                current_tool_call['function']['arguments'] = current_tool_call['function']['arguments'].rstrip('}') + tool_call['function']['arguments'].lstrip('{')
+                                            buf_id = current_tool_call['id']
+                                            # Append raw fragment; repair/parse later
+                                            current_tool_args.setdefault(buf_id, "")
+                                            current_tool_args[buf_id] += tool_call['function']['arguments'] or ''
+                                            current_tool_call['function']['arguments'] = current_tool_args[buf_id]
                                 else:
                                     # Handle object format
                                     if hasattr(tool_call, 'id') and tool_call.id:
@@ -1197,9 +1209,11 @@ class Agent(Model):
                                             "type": "function",
                                             "function": {
                                                 "name": getattr(tool_call.function, 'name', ''),
-                                                "arguments": getattr(tool_call.function, 'arguments', '{}')
+                                                "arguments": getattr(tool_call.function, 'arguments', '') or ''
                                             }
                                         }
+                                        # Initialize buffer for this tool_call id only once (object format).
+                                        _init_tool_arg_buffer(current_tool_call['id'], current_tool_call['function']['arguments'], current_tool_args)
                                         if current_tool_call not in current_tool_calls:
                                             current_tool_calls.append(current_tool_call)
                                     elif current_tool_call and hasattr(tool_call, 'function'):
@@ -1207,11 +1221,10 @@ class Agent(Model):
                                         if hasattr(tool_call.function, 'name') and tool_call.function.name:
                                             current_tool_call['function']['name'] = tool_call.function.name
                                         if hasattr(tool_call.function, 'arguments'):
-                                            if not current_tool_call['function']['arguments'].strip('{}').strip():
-                                                current_tool_call['function']['arguments'] = tool_call.function.arguments
-                                            else:
-                                                # Append to existing arguments, handling JSON chunks
-                                                current_tool_call['function']['arguments'] = current_tool_call['function']['arguments'].rstrip('}') + tool_call.function.arguments.lstrip('{')
+                                            buf_id = current_tool_call['id']
+                                            current_tool_args.setdefault(buf_id, "")
+                                            current_tool_args[buf_id] += getattr(tool_call.function, 'arguments', '') or ''
+                                            current_tool_call['function']['arguments'] = current_tool_args[buf_id]
                     
                     # After streaming completes, process the accumulated data
                     content = ''.join(current_content)
@@ -1265,19 +1278,18 @@ class Agent(Model):
                             args = tool_call['function']['arguments']
                             
                             # Parse arguments
+                            # args may be a string (typical) or already a dict if upstream parsed it.
+                            # Parse only when it's a non-empty string; otherwise use as-is or fallback to {}.
                             try:
-                                parsed_args = json.loads(args) if args.strip() else {}
-                            except json.JSONDecodeError:
-                                # Try to fix JSON
-                                try:
-                                    args = args.strip().rstrip(',').rstrip('"')
-                                    if not args.endswith('}'):
-                                        args += '}'
-                                    if not args.startswith('{'):
-                                        args = '{' + args
+                                if isinstance(args, str) and args.strip():
                                     parsed_args = json.loads(args)
-                                except (json.JSONDecodeError, ValueError):
+                                elif isinstance(args, dict):
+                                    parsed_args = args
+                                else:
                                     parsed_args = {}
+                            except json.JSONDecodeError:
+                                # On invalid JSON, do not guess; fall back to empty dict
+                                parsed_args = {}
                             
                             tool_call['function']['arguments'] = json.dumps(parsed_args)
                             

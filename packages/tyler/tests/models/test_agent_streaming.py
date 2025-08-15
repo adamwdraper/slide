@@ -523,7 +523,7 @@ async def test_go_stream_object_format_tool_call_updates():
         )
     )
     
-    # Second chunk with continuation of arguments
+    # Second chunk with continuation of arguments (split JSON across deltas)
     continuation_tool_call = SimpleNamespace(
         function=SimpleNamespace(
             arguments='"value"}'
@@ -556,9 +556,97 @@ async def test_go_stream_object_format_tool_call_updates():
             None
         )
         
-        # Verify arguments were concatenated correctly
+        # Verify arguments were concatenated and parsed into {}
         assert assistant_message is not None
         assert assistant_message.tool_calls[0]["function"]["arguments"] == '{"param": "value"}'
+
+@pytest.mark.asyncio
+async def test_go_stream_dict_arguments_in_delta():
+    """Streaming delta provides arguments as a dict; ensure selection uses dict but execution uses JSON string."""
+    agent = Agent(stream=True)
+    thread = Thread()
+    thread.add_message(Message(role="user", content="Test dict args"))
+
+    arg_dict = {"a": 1, "b": "x"}
+    chunks = [
+        create_streaming_chunk(tool_calls=[{
+            "id": "call_dict",
+            "type": "function",
+            "function": {
+                "name": "test_tool",
+                "arguments": arg_dict  # dict, not string
+            }
+        }])
+    ]
+
+    mock_weave_call = MagicMock()
+
+    with patch.object(agent, '_get_completion') as mock_get_completion, \
+         patch('tyler.models.agent.tool_runner') as mock_tool_runner:
+        mock_get_completion.call.return_value = (async_generator(chunks), mock_weave_call)
+        mock_tool_runner.execute_tool_call = AsyncMock(return_value={"ok": True})
+
+        updates = []
+        async for event in agent.go(thread, stream=True):
+            updates.append(event)
+
+        # TOOL_SELECTED should carry dict arguments
+        tool_selected = next(e for e in updates if e.type == EventType.TOOL_SELECTED)
+        assert tool_selected.data["arguments"] == arg_dict
+
+        # Execution should receive normalized wrapper with JSON string arguments
+        called_arg = mock_tool_runner.execute_tool_call.call_args[0][0]
+        assert isinstance(getattr(called_arg.function, 'arguments', None), str)
+        assert json.loads(called_arg.function.arguments) == arg_dict
+
+@pytest.mark.asyncio
+async def test_go_stream_dict_format_tool_call_updates():
+    """Split JSON arguments across multiple dict-format deltas should concatenate and parse."""
+    agent = Agent(stream=True)
+    thread = Thread()
+    thread.add_message(Message(role="user", content="Test dict format split"))
+
+    first = {
+        "id": "split1",
+        "type": "function",
+        "function": {
+            "name": "test_tool",
+            "arguments": '{"x": '
+        }
+    }
+    second = {
+        # continuation without id
+        "function": {
+            "arguments": '1, "y": "z"}'
+        }
+    }
+
+    chunks = [
+        create_streaming_chunk(tool_calls=[first]),
+        create_streaming_chunk(tool_calls=[second])
+    ]
+
+    mock_weave_call = MagicMock()
+
+    with patch.object(agent, '_get_completion') as mock_get_completion, \
+         patch('tyler.models.agent.tool_runner') as mock_tool_runner:
+        mock_get_completion.call.return_value = (async_generator(chunks), mock_weave_call)
+        mock_tool_runner.execute_tool_call = AsyncMock(return_value={"ok": True})
+
+        updates = []
+        async for event in agent.go(thread, stream=True):
+            updates.append(event)
+
+        # Assistant message should include reconstructed tool_calls
+        assistant_msg = next(
+            e.data['message'] for e in updates
+            if e.type == EventType.MESSAGE_CREATED and e.data.get('message') and e.data['message'].role == 'assistant'
+        )
+        args_str = assistant_msg.tool_calls[0]['function']['arguments']
+        assert args_str == '{"x": 1, "y": "z"}'
+        # TOOL_SELECTED event should contain parsed dict
+        tool_selected = next(e for e in updates if e.type == EventType.TOOL_SELECTED)
+        assert tool_selected.data['arguments'] == {"x": 1, "y": "z"}
 
 @pytest.mark.asyncio
 async def test_go_stream_missing_tool_call_id():

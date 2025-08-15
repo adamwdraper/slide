@@ -471,6 +471,30 @@ async def test_step_error(agent):
     assert "API Error" in error_metrics
 
 @pytest.mark.asyncio
+async def test_step_raises_when_configured(agent):
+    """When step_errors_raise is True, step() should raise and not append a message."""
+    thread = Thread(id="test-thread")
+    thread.messages = []
+
+    # Configure agent to raise on step errors
+    agent.step_errors_raise = True
+
+    # Create a mock error that will be raised
+    api_error = Exception("API Error")
+
+    class DummyFail:
+        async def call(self, s, **kwargs):
+            raise api_error
+
+    agent._get_completion = DummyFail()
+
+    with pytest.raises(Exception, match="API Error"):
+        await agent.step(thread)
+
+    # Ensure no error message was appended by step()
+    assert len(thread.messages) == 0
+
+@pytest.mark.asyncio
 async def test_step_no_weave(agent):
     """Test step metrics when weave call info is not available"""
     thread = Thread(id="test-thread")
