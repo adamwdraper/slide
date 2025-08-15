@@ -555,6 +555,11 @@ class SQLBackend(StorageBackend):
             parts = [_sanitize_key(p) for p in parts]
             if not parts:
                 return []
+            # Support paths prefixed with 'source.' by stripping the leading component
+            if parts and parts[0] == 'source':
+                parts = parts[1:]
+                if not parts:
+                    return []
             if self.database_url.startswith('sqlite'):
                 # Use SQLite json_extract with a proper JSON path: $.a.b.c
                 json_path = '$.' + '.'.join(parts)
