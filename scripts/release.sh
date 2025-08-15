@@ -46,7 +46,7 @@ git checkout main
 git pull origin main
 
 # Get the new version number without making changes yet
-NEW_VERSION=$(python ../../scripts/bump_version.py "$PACKAGE" "$VERSION_TYPE" --dry-run --quiet)
+NEW_VERSION=$(uv run python ../../scripts/bump_version.py "$PACKAGE" "$VERSION_TYPE" --dry-run --quiet)
 if [ $? -ne 0 ]; then
     echo "Failed to determine new version number"
     exit 1
@@ -57,12 +57,12 @@ BRANCH_NAME="release/$PACKAGE-v$NEW_VERSION"
 git checkout -b "$BRANCH_NAME"
 
 # Now actually bump the version
-python ../../scripts/bump_version.py "$PACKAGE" "$VERSION_TYPE"
+uv run python ../../scripts/bump_version.py "$PACKAGE" "$VERSION_TYPE"
 
 # Update constraints in dependent packages
 echo "Updating constraints in dependent packages..."
 cd ../..  # Go back to project root
-python scripts/update_dependent_constraints.py "$PACKAGE" "$NEW_VERSION"
+uv run python scripts/update_dependent_constraints.py "$PACKAGE" "$NEW_VERSION"
 
 # Go back to package directory for git operations
 cd "$PACKAGE_DIR"

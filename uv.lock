@@ -5220,7 +5220,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "slide-tyler"
-version = "2.0.4"
+version = "2.0.5"
 source = { editable = "packages/tyler" }
 dependencies = [
     { name = "aiohappyeyeballs" },
