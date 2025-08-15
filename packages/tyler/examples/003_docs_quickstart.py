@@ -4,6 +4,9 @@ This demonstrates building a research assistant agent with multiple tool types.
 Now with execution observability!
 """
 
+from dotenv import load_dotenv
+load_dotenv()
+
 import asyncio
 from tyler import Agent, Thread, Message, EventType
 from lye import WEB_TOOLS, IMAGE_TOOLS, FILES_TOOLS

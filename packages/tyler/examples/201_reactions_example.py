@@ -9,6 +9,9 @@ This example shows how to:
 4. Save/load threads with reactions to/from the database
 """
 
+from dotenv import load_dotenv
+load_dotenv()
+
 import asyncio
 from typing import Dict, List
 from tyler import Thread, Message, ThreadStore
