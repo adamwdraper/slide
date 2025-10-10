@@ -34,15 +34,13 @@ def test_slack_client_init(mock_env_token):
     client = SlackClient()
     assert client.token == "mock-token"
 
-@patch('lye.slack.SlackClient')
-def test_post_to_slack(mock_slack_client_class, mock_env_token):
+@patch('slack_sdk.WebClient')
+def test_post_to_slack(mock_web_client_class, mock_env_token):
     """Test posting messages to Slack"""
-    # Create a mock instance with a client attribute
-    mock_slack_instance = MagicMock()
+    # Create a mock client
     mock_client = MagicMock()
     mock_client.chat_postMessage.return_value = {"ok": True}
-    mock_slack_instance.client = mock_client
-    mock_slack_client_class.return_value = mock_slack_instance
+    mock_web_client_class.return_value = mock_client
 
     blocks = [{"type": "section", "text": {"type": "mrkdwn", "text": "Test message"}}]
 
@@ -107,15 +105,13 @@ async def test_generate_slack_blocks(mock_acompletion):
     assert "text" in result["blocks"][0]
     assert "Error" in result["blocks"][0]["text"]["text"]
 
-@patch('lye.slack.SlackClient')
-def test_send_ephemeral_message(mock_slack_client_class, mock_env_token):
+@patch('slack_sdk.WebClient')
+def test_send_ephemeral_message(mock_web_client_class, mock_env_token):
     """Test sending ephemeral messages"""
-    # Create a mock instance with a client attribute
-    mock_slack_instance = MagicMock()
+    # Create a mock client
     mock_client = MagicMock()
     mock_client.chat_postEphemeral.return_value = {"ok": True}
-    mock_slack_instance.client = mock_client
-    mock_slack_client_class.return_value = mock_slack_instance
+    mock_web_client_class.return_value = mock_client
 
     result = send_ephemeral_message(
         channel="general",
@@ -130,15 +126,13 @@ def test_send_ephemeral_message(mock_slack_client_class, mock_env_token):
         text="Test message"
     )
 
-@patch('lye.slack.SlackClient')
-def test_reply_in_thread(mock_slack_client_class, mock_env_token):
+@patch('slack_sdk.WebClient')
+def test_reply_in_thread(mock_web_client_class, mock_env_token):
     """Test replying in threads"""
-    # Create a mock instance with a client attribute
-    mock_slack_instance = MagicMock()
+    # Create a mock client
     mock_client = MagicMock()
     mock_client.chat_postMessage.return_value = {"ok": True}
-    mock_slack_instance.client = mock_client
-    mock_slack_client_class.return_value = mock_slack_instance
+    mock_web_client_class.return_value = mock_client
 
     result = reply_in_thread(
         channel="general",
