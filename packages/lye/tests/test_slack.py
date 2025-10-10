@@ -34,19 +34,20 @@ def test_slack_client_init(mock_env_token):
     client = SlackClient()
     assert client.token == "mock-token"
 
-@patch('lye.slack.SlackClient')
-def test_post_to_slack(mock_slack_client):
+@patch('slack_sdk.WebClient')
+def test_post_to_slack(mock_web_client_class, mock_env_token):
     """Test posting messages to Slack"""
-    mock_instance = MagicMock()
-    mock_instance.client.chat_postMessage.return_value = {"ok": True}
-    mock_slack_client.return_value = mock_instance
+    # Create a mock client
+    mock_client = MagicMock()
+    mock_client.chat_postMessage.return_value = {"ok": True}
+    mock_web_client_class.return_value = mock_client
 
     blocks = [{"type": "section", "text": {"type": "mrkdwn", "text": "Test message"}}]
 
     # Test with channel name without #
     result = post_to_slack(channel="general", blocks=blocks)
     assert result is True
-    mock_instance.client.chat_postMessage.assert_called_with(
+    mock_client.chat_postMessage.assert_called_with(
         channel="#general",
         blocks=blocks,
         text="Test message"
@@ -55,7 +56,7 @@ def test_post_to_slack(mock_slack_client):
     # Test with channel name with #
     result = post_to_slack(channel="#random", blocks=blocks)
     assert result is True
-    mock_instance.client.chat_postMessage.assert_called_with(
+    mock_client.chat_postMessage.assert_called_with(
         channel="#random",
         blocks=blocks,
         text="Test message"
@@ -64,7 +65,7 @@ def test_post_to_slack(mock_slack_client):
     # Test with channel ID and explicit text
     result = post_to_slack(channel="C1234567890", blocks=blocks, text="Custom text")
     assert result is True
-    mock_instance.client.chat_postMessage.assert_called_with(
+    mock_client.chat_postMessage.assert_called_with(
         channel="C1234567890",
         blocks=blocks,
         text="Custom text"
@@ -104,12 +105,13 @@ async def test_generate_slack_blocks(mock_acompletion):
     assert "text" in result["blocks"][0]
     assert "Error" in result["blocks"][0]["text"]["text"]
 
-@patch('lye.slack.SlackClient')
-def test_send_ephemeral_message(mock_slack_client):
+@patch('slack_sdk.WebClient')
+def test_send_ephemeral_message(mock_web_client_class, mock_env_token):
     """Test sending ephemeral messages"""
-    mock_instance = MagicMock()
-    mock_instance.client.chat_postEphemeral.return_value = {"ok": True}
-    mock_slack_client.return_value = mock_instance
+    # Create a mock client
+    mock_client = MagicMock()
+    mock_client.chat_postEphemeral.return_value = {"ok": True}
+    mock_web_client_class.return_value = mock_client
 
     result = send_ephemeral_message(
         channel="general",
@@ -118,18 +120,19 @@ def test_send_ephemeral_message(mock_slack_client):
     )
     
     assert result is True
-    mock_instance.client.chat_postEphemeral.assert_called_with(
+    mock_client.chat_postEphemeral.assert_called_with(
         channel="general",
         user="U123",
         text="Test message"
     )
 
-@patch('lye.slack.SlackClient')
-def test_reply_in_thread(mock_slack_client):
+@patch('slack_sdk.WebClient')
+def test_reply_in_thread(mock_web_client_class, mock_env_token):
     """Test replying in threads"""
-    mock_instance = MagicMock()
-    mock_instance.client.chat_postMessage.return_value = {"ok": True}
-    mock_slack_client.return_value = mock_instance
+    # Create a mock client
+    mock_client = MagicMock()
+    mock_client.chat_postMessage.return_value = {"ok": True}
+    mock_web_client_class.return_value = mock_client
 
     result = reply_in_thread(
         channel="general",
@@ -139,7 +142,7 @@ def test_reply_in_thread(mock_slack_client):
     )
     
     assert result is True
-    mock_instance.client.chat_postMessage.assert_called_with(
+    mock_client.chat_postMessage.assert_called_with(
         channel="general",
         thread_ts="1234567890.123",
         text="Test reply",
