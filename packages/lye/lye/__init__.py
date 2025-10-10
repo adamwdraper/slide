@@ -13,22 +13,19 @@ from lye.utils.logging import get_logger
 # Get configured logger
 logger = get_logger(__name__)
 
-# Initialize empty tool lists for each module
-WEB_TOOLS = []
-SLACK_TOOLS = []
-COMMAND_LINE_TOOLS = []
-NOTION_TOOLS = []
-IMAGE_TOOLS = []
-AUDIO_TOOLS = []
-FILES_TOOLS = []
-BROWSER_TOOLS = []
-WANDB_TOOLS = []
-
-# Combined tools list
-TOOLS = []
-
 # Lazy-load tool modules to avoid import errors for optional dependencies
 _MODULES_LOADED = {}
+
+# Internal storage for tool lists (populated on first access)
+_WEB_TOOLS = []
+_SLACK_TOOLS = []
+_COMMAND_LINE_TOOLS = []
+_NOTION_TOOLS = []
+_IMAGE_TOOLS = []
+_AUDIO_TOOLS = []
+_FILES_TOOLS = []
+_BROWSER_TOOLS = []
+_WANDB_TOOLS = []
 
 def _load_module_tools(module_name: str) -> List:
     """Lazy load tools from a module"""
@@ -51,49 +48,49 @@ def _load_module_tools(module_name: str) -> List:
 
 # Lazy-load tools on access
 def _get_web_tools():
-    if not WEB_TOOLS:
-        WEB_TOOLS.extend(_load_module_tools("web"))
-    return WEB_TOOLS
+    if not _WEB_TOOLS:
+        _WEB_TOOLS.extend(_load_module_tools("web"))
+    return _WEB_TOOLS
 
 def _get_slack_tools():
-    if not SLACK_TOOLS:
-        SLACK_TOOLS.extend(_load_module_tools("slack"))
-    return SLACK_TOOLS
+    if not _SLACK_TOOLS:
+        _SLACK_TOOLS.extend(_load_module_tools("slack"))
+    return _SLACK_TOOLS
 
 def _get_command_line_tools():
-    if not COMMAND_LINE_TOOLS:
-        COMMAND_LINE_TOOLS.extend(_load_module_tools("command_line"))
-    return COMMAND_LINE_TOOLS
+    if not _COMMAND_LINE_TOOLS:
+        _COMMAND_LINE_TOOLS.extend(_load_module_tools("command_line"))
+    return _COMMAND_LINE_TOOLS
 
 def _get_notion_tools():
-    if not NOTION_TOOLS:
-        NOTION_TOOLS.extend(_load_module_tools("notion"))
-    return NOTION_TOOLS
+    if not _NOTION_TOOLS:
+        _NOTION_TOOLS.extend(_load_module_tools("notion"))
+    return _NOTION_TOOLS
 
 def _get_image_tools():
-    if not IMAGE_TOOLS:
-        IMAGE_TOOLS.extend(_load_module_tools("image"))
-    return IMAGE_TOOLS
+    if not _IMAGE_TOOLS:
+        _IMAGE_TOOLS.extend(_load_module_tools("image"))
+    return _IMAGE_TOOLS
 
 def _get_audio_tools():
-    if not AUDIO_TOOLS:
-        AUDIO_TOOLS.extend(_load_module_tools("audio"))
-    return AUDIO_TOOLS
+    if not _AUDIO_TOOLS:
+        _AUDIO_TOOLS.extend(_load_module_tools("audio"))
+    return _AUDIO_TOOLS
 
 def _get_files_tools():
-    if not FILES_TOOLS:
-        FILES_TOOLS.extend(_load_module_tools("files"))
-    return FILES_TOOLS
+    if not _FILES_TOOLS:
+        _FILES_TOOLS.extend(_load_module_tools("files"))
+    return _FILES_TOOLS
 
 def _get_browser_tools():
-    if not BROWSER_TOOLS:
-        BROWSER_TOOLS.extend(_load_module_tools("browser"))
-    return BROWSER_TOOLS
+    if not _BROWSER_TOOLS:
+        _BROWSER_TOOLS.extend(_load_module_tools("browser"))
+    return _BROWSER_TOOLS
 
 def _get_wandb_tools():
-    if not WANDB_TOOLS:
-        WANDB_TOOLS.extend(_load_module_tools("wandb_workspaces"))
-    return WANDB_TOOLS
+    if not _WANDB_TOOLS:
+        _WANDB_TOOLS.extend(_load_module_tools("wandb_workspaces"))
+    return _WANDB_TOOLS
 
 # Custom dict class that lazy loads tools on access
 class LazyToolModules(dict):
@@ -156,3 +153,34 @@ __all__ = [
     'WANDB_TOOLS',
     'TOOL_MODULES',
 ]
+
+# Module-level __getattr__ to make tool list imports trigger lazy loading
+def __getattr__(name):
+    """Intercept attribute access to trigger lazy loading for tool lists"""
+    if name == 'WEB_TOOLS':
+        return _get_web_tools()
+    elif name == 'SLACK_TOOLS':
+        return _get_slack_tools()
+    elif name == 'COMMAND_LINE_TOOLS':
+        return _get_command_line_tools()
+    elif name == 'NOTION_TOOLS':
+        return _get_notion_tools()
+    elif name == 'IMAGE_TOOLS':
+        return _get_image_tools()
+    elif name == 'AUDIO_TOOLS':
+        return _get_audio_tools()
+    elif name == 'FILES_TOOLS':
+        return _get_files_tools()
+    elif name == 'BROWSER_TOOLS':
+        return _get_browser_tools()
+    elif name == 'WANDB_TOOLS':
+        return _get_wandb_tools()
+    elif name == 'TOOLS':
+        # TOOLS is a combined list of all tools - load everything
+        all_tools = []
+        for getter in [_get_web_tools, _get_files_tools, _get_command_line_tools,
+                      _get_audio_tools, _get_image_tools, _get_browser_tools,
+                      _get_slack_tools, _get_notion_tools, _get_wandb_tools]:
+            all_tools.extend(getter())
+        return all_tools
+    raise AttributeError(f"module 'lye' has no attribute '{name}'")
