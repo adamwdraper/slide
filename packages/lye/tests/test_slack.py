@@ -35,7 +35,7 @@ def test_slack_client_init(mock_env_token):
     assert client.token == "mock-token"
 
 @patch('lye.slack.SlackClient')
-def test_post_to_slack(mock_slack_client_class):
+def test_post_to_slack(mock_slack_client_class, mock_env_token):
     """Test posting messages to Slack"""
     # Create a mock instance with a client attribute
     mock_slack_instance = MagicMock()
@@ -108,7 +108,7 @@ async def test_generate_slack_blocks(mock_acompletion):
     assert "Error" in result["blocks"][0]["text"]["text"]
 
 @patch('lye.slack.SlackClient')
-def test_send_ephemeral_message(mock_slack_client_class):
+def test_send_ephemeral_message(mock_slack_client_class, mock_env_token):
     """Test sending ephemeral messages"""
     # Create a mock instance with a client attribute
     mock_slack_instance = MagicMock()
@@ -131,7 +131,7 @@ def test_send_ephemeral_message(mock_slack_client_class):
     )
 
 @patch('lye.slack.SlackClient')
-def test_reply_in_thread(mock_slack_client_class):
+def test_reply_in_thread(mock_slack_client_class, mock_env_token):
     """Test replying in threads"""
     # Create a mock instance with a client attribute
     mock_slack_instance = MagicMock()
