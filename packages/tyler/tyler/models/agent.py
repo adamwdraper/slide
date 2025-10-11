@@ -1267,19 +1267,7 @@ class Agent(Model):
 
     def _create_error_message(self, error_msg: str, source: Optional[Dict] = None) -> Message:
         """Create a standardized error message."""
-        timestamp = self._get_timestamp()
-        return Message(
-            role="assistant",
-            content=f"I encountered an error: {error_msg}. Please try again.",
-            source=source or self._create_assistant_source(include_version=False),
-            metrics={
-                "timing": {
-                    "started_at": timestamp,
-                    "ended_at": timestamp,
-                    "latency": 0
-                }
-            }
-        )
+        return self.message_factory.create_error_message(error_msg, source=source)
     
     def _process_tool_result(self, result: Any, tool_call: Any, tool_name: str) -> Tuple[Message, bool]:
         """
