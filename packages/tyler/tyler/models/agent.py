@@ -20,6 +20,7 @@ from tyler.models.execution import (
 )
 from tyler.models.tool_manager import ToolManager
 from tyler.models.message_factory import MessageFactory
+from tyler.models.completion_handler import CompletionHandler
 import asyncio
 from functools import partial
 
@@ -195,10 +196,19 @@ class Agent(Model):
         # Initialize MessageFactory for creating standardized messages
         self.message_factory = MessageFactory(self.name, self.model_name)
         
+        # Initialize CompletionHandler for LLM communication
+        self.completion_handler = CompletionHandler(
+            model_name=self.model_name,
+            temperature=self.temperature,
+            api_base=self.api_base,
+            extra_headers=self.extra_headers,
+            drop_params=self.drop_params
+        )
+        
         # Use ToolManager to register all tools and delegation
         tool_manager = ToolManager(tools=self.tools, agents=self.agents)
         self._processed_tools = tool_manager.register_all_tools()
-        
+
         # Create default stores if not provided
         if self.thread_store is None:
             logger.info(f"Creating default in-memory thread store for agent {self.name}")
@@ -268,16 +278,17 @@ class Agent(Model):
         """
         normalized_tool_call = self._normalize_tool_call(tool_call)
         return await tool_runner.execute_tool_call(normalized_tool_call)
-
+    
     @weave.op()
     async def _get_completion(self, **completion_params) -> Any:
         """Get a completion from the LLM with weave tracing.
         
+        This is a thin wrapper around acompletion for backward compatibility
+        with tests that mock this method.
+        
         Returns:
-            Any: The completion response. When called with .call(), also returns weave_call info.
-            If streaming is enabled, returns an async generator of completion chunks.
+            Any: The completion response.
         """
-        # Call completion directly first to get the response
         response = await acompletion(**completion_params)
         return response
     
@@ -300,82 +311,24 @@ class Agent(Model):
         # Get thread messages (these won't include system messages as they're filtered out)
         thread_messages = await thread.get_messages_for_chat_completion(file_store=self.file_store)
         
-        # Create completion messages with ephemeral system prompt at the beginning
+        # Use CompletionHandler to build parameters
         completion_messages = [{"role": "system", "content": self._system_prompt}] + thread_messages
-        
-        completion_params = {
-            "model": self.model_name,
-            "messages": completion_messages,
-            "temperature": self.temperature,
-            "stream": stream
-        }
-        
-        # Add custom API base URL if specified
-        if self.api_base:
-            completion_params["api_base"] = self.api_base
-            
-        # Add extra headers if specified
-        if self.extra_headers:
-            completion_params["extra_headers"] = self.extra_headers
-        
-        # Add drop_params to handle model-specific restrictions
-        completion_params["drop_params"] = self.drop_params
-        
-        if len(self._processed_tools) > 0:
-            # Check if using Gemini model and modify tools accordingly
-            if "gemini" in self.model_name.lower():
-                # Create a deep copy of the tools to avoid modifying the originals
-                import copy
-                modified_tools = copy.deepcopy(self._processed_tools)
-                
-                # Remove additionalProperties from all tool parameters
-                for tool in modified_tools:
-                    if "function" in tool and "parameters" in tool["function"]:
-                        params = tool["function"]["parameters"]
-                        if "properties" in params:
-                            for prop_name, prop in params["properties"].items():
-                                if isinstance(prop, dict) and "additionalProperties" in prop:
-                                    del prop["additionalProperties"]
-                
-                completion_params["tools"] = modified_tools
-            else:
-                completion_params["tools"] = self._processed_tools
+        completion_params = self.completion_handler._build_completion_params(
+            messages=completion_messages,
+            tools=self._processed_tools,
+            stream=stream
+        )
         
         # Track API call time
         api_start_time = datetime.now(UTC)
         
         try:
-            # Get completion with weave call tracking
+            # Get completion with weave call tracking (kept for backward compatibility)
             response, call = await self._get_completion.call(self, **completion_params)
             
-            # Create metrics dict with essential data
-            metrics = {
-                "model": self.model_name,  # Use model_name since streaming responses don't include model
-                "timing": {
-                    "started_at": api_start_time.isoformat(),
-                    "ended_at": datetime.now(UTC).isoformat(),
-                    "latency": (datetime.now(UTC) - api_start_time).total_seconds() * 1000
-                }
-            }
-
-            # Add weave-specific metrics if available
-            try:
-                if hasattr(call, 'id') and call.id:
-                    metrics["weave_call"] = {
-                        "id": str(call.id),
-                        "ui_url": str(call.ui_url)
-                    }
-            except (AttributeError, ValueError):
-                pass
+            # Use CompletionHandler to build metrics
+            metrics = self.completion_handler._build_metrics(api_start_time, response, call)
             
-            # Get usage metrics if available
-            if hasattr(response, 'usage'):
-                metrics["usage"] = {
-                    "completion_tokens": getattr(response.usage, "completion_tokens", 0),
-                    "prompt_tokens": getattr(response.usage, "prompt_tokens", 0),
-                    "total_tokens": getattr(response.usage, "total_tokens", 0)
-                }
-                    
             return response, metrics
         except Exception as e:
             if self.step_errors_raise:
