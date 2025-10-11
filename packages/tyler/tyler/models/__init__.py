@@ -8,5 +8,6 @@ from tyler.models.execution import (
     EventType
 )
 from tyler.models.tool_call import ToolCall
+from tyler.models.message_factory import MessageFactory
 
-__all__ = ['Agent', 'AgentResult', 'ExecutionEvent', 'EventType', 'ToolCall']
+__all__ = ['Agent', 'AgentResult', 'ExecutionEvent', 'EventType', 'ToolCall', 'MessageFactory']
