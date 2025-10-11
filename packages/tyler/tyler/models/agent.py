@@ -490,11 +490,7 @@ class Agent(Model):
     @weave.op()
     async def _handle_max_iterations(self, thread: Thread, new_messages: List[Message]) -> Tuple[Thread, List[Message]]:
         """Handle the case when max iterations is reached."""
-        message = Message(
-            role="assistant",
-            content="Maximum tool iteration count reached. Stopping further tool calls.",
-            source=self._create_assistant_source(include_version=False)
-        )
+        message = self.message_factory.create_max_iterations_message()
         thread.add_message(message)
         new_messages.append(message)
         if self.thread_store:
@@ -777,11 +773,7 @@ class Agent(Model):
                 
                 # Check for max iterations
                 if self._iteration_count >= self.max_tool_iterations:
-                    message = Message(
-                        role="assistant",
-                        content="Maximum tool iteration count reached. Stopping further tool calls.",
-                        source=self._create_assistant_source(include_version=False)
-                    )
+                    message = self.message_factory.create_max_iterations_message()
                     thread.add_message(message)
                     new_messages.append(message)
                     record_event(EventType.MESSAGE_CREATED, {"message": message})
@@ -889,11 +881,7 @@ class Agent(Model):
             
             # Check if we've already hit max iterations
             if self._iteration_count >= self.max_tool_iterations:
-                message = Message(
-                    role="assistant",
-                    content="Maximum tool iteration count reached. Stopping further tool calls.",
-                    source=self._create_assistant_source(include_version=False)
-                )
+                message = self.message_factory.create_max_iterations_message()
                 thread.add_message(message)
                 new_messages.append(message)
                 yield ExecutionEvent(
