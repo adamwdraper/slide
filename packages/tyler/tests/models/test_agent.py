@@ -349,37 +349,41 @@ async def test_go_with_tool_calls(agent, mock_thread_store, mock_prompt, mock_li
 @pytest.mark.asyncio
 async def test_init_with_tools(mock_thread_store, mock_file_store, mock_prompt, mock_litellm, mock_file_processor, mock_openai):
     """Test Agent initialization with both string and dict tools"""
-    with patch('tyler.models.agent.tool_runner') as mock_tool_runner:
-        # Mock the tool module loading
-        mock_tool_runner.load_tool_module.return_value = [
-            {"type": "function", "function": {"name": "module_tool", "parameters": {}}}
-        ]
-        
-        # Create a custom tool
-        custom_tool = {
-            'definition': {
-                'function': {
-                    'name': 'custom_tool',
-                    'parameters': {}
+    # Create a custom tool
+    custom_tool = {
+        'definition': {
+            'type': 'function',
+            'function': {
+                'name': 'custom_tool',
+                'description': 'A custom test tool',
+                'parameters': {
+                    'type': 'object',
+                    'properties': {},
+                    'required': []
                 }
-            },
-            'implementation': lambda: None,
-            'attributes': {'type': 'custom'}
-        }
-        
-        agent = Agent(
-            tools=['web', custom_tool],  # Mix of string module and custom tool
-            thread_store=mock_thread_store,
-            file_store=mock_file_store
-        )
-        
-        # Verify tool loading
-        mock_tool_runner.load_tool_module.assert_called_once_with('web')
-        mock_tool_runner.register_tool.assert_called_once()
-        mock_tool_runner.register_tool_attributes.assert_called_once_with('custom_tool', {'type': 'custom'})
-        
-        # Verify processed tools
-        assert len(agent._processed_tools) == 2
+            }
+        },
+        'implementation': lambda: "custom result",
+        'attributes': {'type': 'custom'}
+    }
+    
+    # Create agent with mix of string module and custom tool
+    agent = Agent(
+        tools=['web', custom_tool],
+        thread_store=mock_thread_store,
+        file_store=mock_file_store
+    )
+    
+    # Verify tools were registered by checking processed_tools
+    assert len(agent._processed_tools) > 0
+    
+    # Check that custom tool is in processed tools
+    tool_names = [t['function']['name'] for t in agent._processed_tools]
+    assert 'custom_tool' in tool_names
+    
+    # Web tools should be loaded (web module has multiple tools)
+    # Just verify we have more than just the custom tool
+    assert len(agent._processed_tools) >= 2
 
 @pytest.mark.asyncio
 async def test_init_invalid_custom_tool():

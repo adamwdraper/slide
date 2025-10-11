@@ -139,12 +139,8 @@ class DictToolStrategy(ToolRegistrationStrategy):
     """
     
     def can_handle(self, tool: Any) -> bool:
-        """Check if tool is a dict with required keys."""
-        return (
-            isinstance(tool, dict) and
-            'definition' in tool and
-            'implementation' in tool
-        )
+        """Check if tool is a dict (regardless of keys - we'll validate in register)."""
+        return isinstance(tool, dict)
     
     def register(self, tool: Dict, tool_runner) -> List[Dict]:
         """Register a custom tool from dict format.
@@ -155,7 +151,14 @@ class DictToolStrategy(ToolRegistrationStrategy):
             
         Returns:
             List with single tool definition
+            
+        Raises:
+            ValueError: If dict is missing required keys
         """
+        # Validate required keys
+        if 'definition' not in tool or 'implementation' not in tool:
+            raise ValueError("Custom tools must have 'definition' and 'implementation' keys")
+        
         tool_name = tool['definition']['function']['name']
         logger.debug(f"Registering dict tool: {tool_name}")
         

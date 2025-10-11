@@ -18,6 +18,8 @@ from tyler.models.execution import (
     EventType, ExecutionEvent,
     AgentResult
 )
+from tyler.models.tool_manager import ToolManager
+from tyler.models.message_factory import MessageFactory
 import asyncio
 from functools import partial
 
@@ -190,169 +192,13 @@ class Agent(Model):
         # Initialize the tool attributes cache
         self._tool_attributes_cache = {}
         
-        # Load tools first as they are needed for the system prompt
-        self._processed_tools = []
-        for tool in self.tools:
-            if isinstance(tool, str):
-                # Load built-in tool module
-                loaded_tools = tool_runner.load_tool_module(tool)
-                if loaded_tools:
-                    self._processed_tools.extend(loaded_tools)
-            elif hasattr(tool, 'TOOLS'):
-                # Handle module objects (e.g., lye.web, lye.files)
-                # This allows passing entire modules like: tools=[web, files]
-                module_tools = getattr(tool, 'TOOLS', [])
-                for module_tool in module_tools:
-                    if isinstance(module_tool, dict) and 'definition' in module_tool and 'implementation' in module_tool:
-                        tool_name = module_tool['definition']['function']['name']
-                        tool_runner.register_tool(
-                            name=tool_name,
-                            implementation=module_tool['implementation'],
-                            definition=module_tool['definition']['function']
-                        )
-                        
-                        # Register any tool attributes
-                        if 'attributes' in module_tool:
-                            tool_runner.register_tool_attributes(tool_name, module_tool['attributes'])
-                            
-                        self._processed_tools.append(module_tool['definition'])
-            elif isinstance(tool, dict):
-                # Add custom tool or tool from a group (e.g., from WEB_TOOLS)
-                if 'definition' in tool and 'implementation' in tool:
-                    # This is a complete tool definition (like from Lye's TOOLS lists)
-                    tool_name = tool['definition']['function']['name']
-                    tool_runner.register_tool(
-                        name=tool_name,
-                        implementation=tool['implementation'],
-                        definition=tool['definition']['function']
-                    )
-                    
-                    # Register any tool attributes
-                    if 'attributes' in tool:
-                        tool_runner.register_tool_attributes(tool_name, tool['attributes'])
-                        
-                    self._processed_tools.append(tool['definition'])
-                elif 'definition' not in tool or 'implementation' not in tool:
-                    # This is a custom tool definition without proper structure
-                    raise ValueError("Custom tools must have 'definition' and 'implementation' keys")
-            elif callable(tool):
-                # Handle direct function references
-                # Try to get tool info from Lye's TOOLS registry
-                tool_def = self._get_tool_definition_from_function(tool)
-                if tool_def:
-                    self._processed_tools.append(tool_def['definition'])
-                    # Register the tool with tool_runner
-                    tool_runner.register_tool(
-                        name=tool_def['definition']['function']['name'],
-                        implementation=tool_def['implementation'],
-                        definition=tool_def['definition']['function']
-                    )
-                else:
-                    # If not a Lye tool, create a basic definition from the function
-                    tool_name = getattr(tool, '__name__', str(tool))
-                    logger.warning(f"Tool '{tool_name}' not found in Lye registry. Creating basic definition.")
-                    
-                    # Create a minimal tool definition
-                    tool_def = {
-                        "type": "function",
-                        "function": {
-                            "name": tool_name,
-                            "description": getattr(tool, '__doc__', f"Function {tool_name}"),
-                            "parameters": {
-                                "type": "object",
-                                "properties": {},
-                                "required": []
-                            }
-                        }
-                    }
-                    
-                    self._processed_tools.append(tool_def)
-                    tool_runner.register_tool(
-                        name=tool_name,
-                        implementation=tool,
-                        definition=tool_def['function']
-                    )
-            else:
-                raise ValueError(f"Invalid tool type: {type(tool)}")
+        # Initialize MessageFactory for creating standardized messages
+        self.message_factory = MessageFactory(self.name, self.model_name)
         
-        # Create delegation tools for agents
-        if self.agents:
-            for agent in self.agents:
-                # Define delegation handler function that calls the agent directly
-                async def delegation_handler(task, context=None, child_agent=agent, **kwargs):
-                    # Create a new thread for the delegated task
-                    thread = Thread()
-                    
-                    # Add context as a system message if provided
-                    if context:
-                        context_content = "Context information:\n"
-                        for key, value in context.items():
-                            context_content += f"- {key}: {value}\n"
-                        thread.add_message(Message(
-                            role="system",
-                            content=context_content
-                        ))
-                    
-                    # Add the task as a user message
-                    thread.add_message(Message(
-                        role="user",
-                        content=task
-                    ))
-                    
-                    # Execute the child agent directly
-                    logger.info(f"Delegating task to {child_agent.name}: {task}")
-                    try:
-                        result_thread, messages = await child_agent.go(thread)
-                        
-                        # Extract response from assistant messages
-                        response = "\n\n".join([
-                            m.content for m in messages 
-                            if m.role == "assistant" and m.content
-                        ])
-                        
-                        logger.info(f"Agent {child_agent.name} completed delegated task")
-                        return response
-                        
-                    except Exception as e:
-                        logger.error(f"Error in delegated agent {child_agent.name}: {str(e)}")
-                        return f"Error in delegated agent '{child_agent.name}': {str(e)}"
-                
-                # Create a tool definition for this agent
-                tool_def = {
-                    "type": "function",
-                    "function": {
-                        "name": f"delegate_to_{agent.name}",
-                        "description": f"Delegate task to {agent.name}: {str(agent.purpose) if isinstance(agent.purpose, Prompt) else agent.purpose}",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "task": {
-                                    "type": "string",
-                                    "description": f"The task or question to delegate to the {agent.name} agent"
-                                },
-                                "context": {
-                                    "type": "object",
-                                    "description": "Additional context to provide to the agent (optional)",
-                                    "additionalProperties": True
-                                }
-                            },
-                            "required": ["task"]
-                        }
-                    }
-                }
-                
-                # Add to processed tools so it's available to the LLM
-                self._processed_tools.append(tool_def)
-                
-                # Register the tool implementation with direct closure over the agent instance
-                tool_runner.register_tool(
-                    name=f"delegate_to_{agent.name}",
-                    implementation=delegation_handler,
-                    definition=tool_def["function"]
-                )
-                
-                logger.info(f"Registered delegation tool: delegate_to_{agent.name}")
-
+        # Use ToolManager to register all tools and delegation
+        tool_manager = ToolManager(tools=self.tools, agents=self.agents)
+        self._processed_tools = tool_manager.register_all_tools()
+        
         # Create default stores if not provided
         if self.thread_store is None:
             logger.info(f"Creating default in-memory thread store for agent {self.name}")
@@ -1568,31 +1414,3 @@ class Agent(Model):
         should_break = tool_attributes and tool_attributes.get('type') == 'interrupt'
         
         return tool_message, should_break 
-
-    def _get_tool_definition_from_function(self, func: Callable) -> Optional[Dict]:
-        """Look up a tool definition from a function reference using Lye's registry."""
-        try:
-            # Import Lye to access the TOOLS registry
-            import lye
-            
-            # Check each module's tools
-            for module_name, tools_list in lye.TOOL_MODULES.items():
-                for tool_info in tools_list:
-                    if (isinstance(tool_info, dict) and 
-                        'implementation' in tool_info and 
-                        tool_info['implementation'] == func):
-                        return tool_info
-                        
-            # Also check the combined TOOLS list
-            for tool_info in lye.TOOLS:
-                if (isinstance(tool_info, dict) and 
-                    'implementation' in tool_info and 
-                    tool_info['implementation'] == func):
-                    return tool_info
-                    
-        except ImportError:
-            logger.warning("Could not import lye to look up tool definitions")
-        except Exception as e:
-            logger.warning(f"Error looking up tool definition: {e}")
-            
-        return None 
