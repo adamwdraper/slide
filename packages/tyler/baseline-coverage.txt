@@ -1,0 +1,120 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.13.5, pytest-8.4.1, pluggy-1.6.0
+rootdir: /Users/adamdraper/Documents/Code/slide/packages/tyler
+configfile: pytest.ini
+plugins: asyncio-1.1.0, timeout-2.4.0, anyio-4.10.0, cov-6.2.1, mock-3.14.1, langsmith-0.4.13
+asyncio: mode=Mode.AUTO, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 247 items
+
+tests/a2a/test_adapter.py .sssssssssssssssss                             [  7%]
+tests/a2a/test_client.py .sssssssssssssss..                              [ 14%]
+tests/eval/test_eval_framework.py .................                      [ 21%]
+tests/integration/test_agent_delegation_integration.py ..                [ 22%]
+tests/integration/test_direct_imports_integration.py ..                  [ 23%]
+tests/mcp/test_adapter.py ..........                                     [ 27%]
+tests/mcp/test_client.py ........                                        [ 30%]
+tests/models/test_agent.py ............................................. [ 48%]
+...........                                                              [ 53%]
+tests/models/test_agent_delegation.py .....                              [ 55%]
+tests/models/test_agent_observability.py .........                       [ 58%]
+tests/models/test_agent_streaming.py ...........................         [ 69%]
+tests/models/test_agent_tools.py ............                            [ 74%]
+tests/models/test_agent_tools_direct.py ......                           [ 76%]
+tests/test_examples.py ........................                          [ 86%]
+tests/test_imports.py .                                                  [ 87%]
+tests/utils/test_tool_runner.py ................................         [100%]
+
+=============================== warnings summary ===============================
+../../.venv/lib/python3.13/site-packages/weave/trace/trace_sentry.py:99
+  /Users/adamdraper/Documents/Code/slide/.venv/lib/python3.13/site-packages/weave/trace/trace_sentry.py:99: SentryHubDeprecationWarning: `sentry_sdk.Hub` is deprecated and will be removed in a future major release. Please consult our 1.x to 2.x migration guide for details on how to migrate `Hub` usage to the new API: https://docs.sentry.io/platforms/python/migration/1.x-to-2.x
+    self.hub = sentry_sdk.Hub(client)
+
+<frozen importlib._bootstrap>:488
+<frozen importlib._bootstrap>:488
+  <frozen importlib._bootstrap>:488: DeprecationWarning: builtin type SwigPyPacked has no __module__ attribute
+
+<frozen importlib._bootstrap>:488
+<frozen importlib._bootstrap>:488
+  <frozen importlib._bootstrap>:488: DeprecationWarning: builtin type SwigPyObject has no __module__ attribute
+
+<frozen importlib._bootstrap>:488
+  <frozen importlib._bootstrap>:488: DeprecationWarning: builtin type swigvarlink has no __module__ attribute
+
+tests/eval/test_eval_framework.py::TestMockTools::test_mock_tool_creation
+  /Users/adamdraper/Documents/Code/slide/.venv/lib/python3.13/site-packages/weave/trace/util.py:36: DeprecationWarning: The 'warn' method is deprecated, use 'warning' instead
+    log_method(message + LOG_ONCE_MESSAGE_SUFFIX)
+
+tests/eval/test_eval_framework.py: 134 warnings
+tests/integration/test_agent_delegation_integration.py: 426 warnings
+tests/integration/test_direct_imports_integration.py: 52 warnings
+tests/models/test_agent.py: 2553 warnings
+tests/models/test_agent_delegation.py: 738 warnings
+tests/models/test_agent_observability.py: 772 warnings
+tests/models/test_agent_streaming.py: 2311 warnings
+tests/models/test_agent_tools.py: 256 warnings
+tests/models/test_agent_tools_direct.py: 129 warnings
+tests/test_examples.py: 3208 warnings
+  /Users/adamdraper/Documents/Code/slide/.venv/lib/python3.13/site-packages/weave/trace/vals.py:161: PydanticDeprecatedSince211: Accessing the 'model_fields' attribute on the instance is deprecated. Instead, you should access this attribute from the model class. Deprecated in Pydantic V2.11 to be removed in V3.0.
+    if name not in object.__getattribute__(self, "model_fields"):
+
+tests/test_examples.py: 20 warnings
+  /Users/adamdraper/Documents/Code/slide/.venv/lib/python3.13/site-packages/weave/trace/settings.py:184: PydanticDeprecatedSince211: Accessing the 'model_fields' attribute on the instance is deprecated. Instead, you should access this attribute from the model class. Deprecated in Pydantic V2.11 to be removed in V3.0.
+    for name in self.model_fields:
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+================================ tests coverage ================================
+_______________ coverage: platform darwin, python 3.13.5-final-0 _______________
+
+Name                                      Stmts   Miss Branch BrPart  Cover   Missing
+-------------------------------------------------------------------------------------
+examples/001_docs_introduction.py            15      0      0      0   100%
+examples/002_basic.py                        39      4     10      3    82%   21->28, 23, 64->71, 77-79
+examples/003_docs_quickstart.py              20      3      8      2    82%   45-46, 49
+examples/004_streaming.py                    56     13     24      6    74%   21->28, 23, 56-59, 66-69, 72-73, 76, 82-83
+examples/005_thread_persistence.py           41      0      0      0   100%
+examples/100_tools_basic.py                  44     16     14      1    53%   23-39, 73->80, 75
+examples/101_tools_streaming.py              58     20     30      5    60%   23-39, 73->80, 75, 113, 115-116, 118, 121->110
+examples/102_selective_tools.py              28      1      4      1    94%   21->29, 23
+examples/103_tools_files.py                  83     24     30      6    66%   27->34, 29, 54, 86, 94-95, 141-145, 147-170
+examples/104_tools_image.py                  78     42     28      4    40%   22->29, 24, 81-85, 87-116, 122-167
+examples/105_tools_audio.py                  89     44     24      4    45%   24->31, 26, 82-103, 111-150, 162-167
+examples/106_tools_wandb.py                  70     28      8      2    59%   35->42, 37, 56-59, 122-124, 141-175
+examples/107_tools_group_import.py           43      1      2      1    96%   20->27, 22
+examples/200_attachments.py                  69      9      8      2    83%   19->25, 21, 105-109, 149-151
+examples/201_reactions_example.py            50      0     20      0   100%
+examples/300_mcp_basic.py                    47      8     16      5    79%   33->39, 35, 58-60, 67-68, 92, 96
+examples/301_mcp_connect_existing.py         76     46     22      5    36%   21->28, 23, 35-50, 56-75, 85-117, 128-151, 158-175
+examples/302_execution_observability.py      82     22     22      6    71%   23-28, 31->38, 33, 90-93, 123-125, 131-134, 137-138, 148-151
+examples/400_agent_delegation.py             46      9     20      4    71%   20->26, 22, 93-97, 107-109
+examples/401_a2a_basic_server.py             56     29      4      2    48%   37->44, 39, 95-131
+examples/402_a2a_basic_client.py             67     43     20      2    30%   35->42, 37, 52-136
+examples/403_a2a_multi_agent.py             152     92     38      8    36%   39->46, 41, 79-85, 119-125, 132-183, 188-249, 265, 270, 277-287, 295, 298-301, 308-310
+examples/500_eval_example.py                 48      1     12      4    92%   30->36, 177->192, 186, 199->207
+examples/501_eval_mock_example.py            46      5      8      2    83%   28->35, 38, 108, 130-132
+migration_helpers.py                          0      0      0      0   100%
+test_rename_changes.py                        0      0      0      0   100%
+test_tool_duration.py                         0      0      0      0   100%
+tyler/a2a/adapter.py                        122    101     40      0    13%   36-37, 51-62, 66-90, 103-153, 165-174, 185-219, 232-250, 268-274, 285-300, 309-319, 323-324, 332-337, 348-359
+tyler/a2a/client.py                         152    113     34      0    21%   15-16, 56-57, 70-98, 106-131, 135-137, 148, 156, 167-169, 182-207, 221-246, 258-276, 288-306, 322-340, 351-361, 372-378
+tyler/a2a/server.py                         176    131     46      0    20%   18-20, 56-61, 79-83, 96-118, 130-159, 168-195, 206-247, 259-284, 293-318, 329-345, 363-377, 388-398, 403-411, 419, 427
+tyler/cli/chat.py                           300    300    112      0     0%   2-602
+tyler/cli/init.py                            60     60      2      0     0%   2-293
+tyler/cli/main.py                            19     19      0      0     0%   2-41
+tyler/eval/agent_eval.py                    105     12     36     11    84%   53, 57, 73, 104->103, 116, 139, 143->137, 151->159, 183, 187-188, 259, 291, 298, 302
+tyler/eval/conversations.py                  78     20     42      9    71%   20, 23, 30-38, 70, 73, 89-93, 98, 102, 112, 144, 146, 152, 156
+tyler/eval/expectations.py                   68     15     28     11    73%   58, 78->82, 83-84, 86->90, 90->95, 96, 99, 102, 107-109, 112, 116-120
+tyler/eval/mock_tools.py                     76     13     28      3    77%   49, 57, 65-68, 72-74, 127-129, 160->159, 163
+tyler/eval/results.py                        81      8     20      4    84%   40-42, 47->46, 49, 88-90, 97, 153->161
+tyler/eval/scorers.py                        96      4     26      1    96%   91, 251-254, 327
+tyler/mcp/adapter.py                         80     10     22      3    87%   52-55, 73->77, 161, 166-171
+tyler/mcp/client.py                          94     13     30      8    81%   18-19, 63, 79, 86-90, 96, 117->120, 129-131, 171->175, 175->178, 178->181, 195
+tyler/models/agent.py                       631     79    254     38    84%   123, 204-218, 235->195, 276, 284-318, 487->486, 489->486, 491->490, 522, 587, 625->632, 701->703, 711, 719, 809-819, 823->980, 846->848, 948, 951->954, 955, 975->977, 992->996, 1010->1015, 1011->1010, 1024-1053, 1078->exit, 1110->1112, 1115->1427, 1150->1152, 1191->1176, 1196, 1197->1176, 1217->1176, 1219->1176, 1222, 1223->1176, 1233->1240, 1269->1271, 1330, 1371->1374, 1377-1396, 1422->1424, 1443-1455, 1532->1539, 1591-1596
+tyler/models/execution.py                    29      0      0      0   100%
+tyler/utils/files.py                         40     40     18      0     0%   1-85
+tyler/utils/logging.py                       20      3      2      0    86%   20-22
+tyler/utils/tool_runner.py                  177     25     54     12    84%   114, 118, 127-128, 176-177, 180-181, 187-188, 200->204, 228-229, 232-233, 262-264, 271-273, 319, 322, 343-345
+-------------------------------------------------------------------------------------
+TOTAL                                      3807   1426   1166    175    59%
+Coverage HTML written to dir htmlcov
+=============== 215 passed, 32 skipped, 10606 warnings in 23.16s ===============
+<sys>:0: DeprecationWarning: builtin type swigvarlink has no __module__ attribute

@@ -1,0 +1,86 @@
+Tyler Refactoring - Baseline Metrics
+=====================================
+Captured: 2025-01-11
+Branch: refactor/tyler-code-organization
+Commit: 72ba3b3
+
+TEST RESULTS
+------------
+Status: ✅ ALL TESTS PASSING
+Tests Passed: 215
+Tests Skipped: 32
+Warnings: 10,606 (mostly deprecation warnings from dependencies)
+Execution Time: 20.90s
+Environment: Python 3.13.5, pytest 8.4.1, uv
+
+COVERAGE METRICS
+----------------
+Overall Coverage: 59%
+
+Key Modules to Refactor:
+- tyler/models/agent.py: 84% ✅ (Target: maintain ≥80%)
+- tyler/utils/tool_runner.py: 84% ✅ (Target: maintain ≥80%)
+- tyler/models/execution.py: 100% ✅ (Target: maintain 100%)
+- tyler/mcp/adapter.py: 87% ✅ (Target: maintain ≥80%)
+
+Note: Overall coverage is lower due to:
+- CLI tools (0% - not run in automated tests)
+- A2A modules (13-21% - limited test coverage)
+- Example files (varying coverage)
+- Some utility modules (0%)
+
+Core modules have excellent coverage for safe refactoring!
+
+FILE SIZE METRICS
+-----------------
+tyler/models/agent.py: 1598 lines ⚠️ (Target: <500 lines)
+tyler/utils/tool_runner.py: 348 lines (Target: maintain or reduce)
+tyler/models/execution.py: 52 lines ✅ (No change planned)
+tyler/mcp/adapter.py: 227 lines (Minor improvements)
+tyler/a2a/adapter.py: 359 lines (Minor improvements)
+
+CODE QUALITY OBSERVATIONS
+--------------------------
+✅ All tests passing - clean baseline
+✅ Core modules well-tested (≥84% coverage)
+⚠️ Large Agent class (1598 lines) - primary refactor target
+⚠️ Duplication in streaming logic (~70% overlap)
+⚠️ Complex tool registration logic (nested conditionals)
+
+PERFORMANCE BASELINE
+--------------------
+Test Suite Execution: 20.90s
+Status: ⏳ Need to create detailed performance benchmarks
+
+To create:
+- Agent initialization time
+- Tool registration time  
+- Message creation time
+- Tool execution time
+- Streaming vs non-streaming performance
+- Memory usage metrics
+
+FILES GENERATED
+---------------
+✅ baseline-test-results.txt - Full pytest output
+✅ baseline-coverage.txt - Coverage report  
+✅ htmlcov/ - HTML coverage report
+✅ baseline-summary.txt - This file
+
+NEXT STEPS
+----------
+1. ✅ Tests baseline captured
+2. ✅ Coverage metrics documented
+3. ⏳ Create performance benchmarks (Phase 1 remaining)
+4. ⏳ Begin Phase 2: ToolCall normalization
+
+APPROVAL STATUS
+---------------
+✅ Spec reviewed and approved
+✅ Impact analysis reviewed and approved  
+✅ TDR reviewed and approved
+✅ Clean test baseline established
+✅ Coverage meets requirements (core modules ≥80%)
+
+Ready to proceed with refactoring! 🚀
+
