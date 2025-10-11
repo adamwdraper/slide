@@ -1,0 +1,9 @@
+# Ignore benchmark output files
+baseline-*.txt
+performance-*.txt
+*.log
+
+# Keep the benchmark scripts
+!baseline.py
+!*.py
+
