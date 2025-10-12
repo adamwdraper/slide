@@ -1237,3 +1237,271 @@ async def test_go_stream_usage_metrics_from_final_chunk():
         assert assistant_msg.metrics["usage"]["completion_tokens"] == 10
         assert assistant_msg.metrics["usage"]["prompt_tokens"] == 5
         assert assistant_msg.metrics["usage"]["total_tokens"] == 15
+
+
+# ========== New Tests for Raw Streaming Mode ==========
+
+@pytest.mark.asyncio
+async def test_invalid_stream_value_raises_error():
+    """Test that invalid stream parameter values raise ValueError"""
+    agent = Agent(name="Tyler")
+    thread = Thread()
+    thread.add_message(Message(role="user", content="Test"))
+    
+    # Test with invalid string value
+    with pytest.raises(ValueError, match="Invalid stream value"):
+        async for _ in agent.go(thread, stream="invalid"):
+            pass
+
+
+@pytest.mark.asyncio
+async def test_stream_events_explicit():
+    """Test that stream='events' works the same as stream=True"""
+    agent = Agent(name="Tyler")
+    thread = Thread()
+    thread.add_message(Message(role="user", content="Test"))
+    
+    chunks = [
+        MockChunk([MockChoiceDelta(MockDelta(content="Hello"))]),
+        MockChunk([MockChoiceDelta(MockDelta(content=" world"))]),
+        MockChunk([MockChoiceDelta(MockDelta())], usage=SimpleNamespace(
+            completion_tokens=5, prompt_tokens=10, total_tokens=15
+        ))
+    ]
+    
+    async def mock_stream():
+        for chunk in chunks:
+            yield chunk
+    
+    with patch.object(agent, 'step') as mock_step:
+        mock_step.return_value = (mock_stream(), {"model": "gpt-4"})
+        
+        updates = []
+        async for event in agent.go(thread, stream="events"):
+            updates.append(event)
+        
+        # Should yield ExecutionEvent objects
+        assert all(isinstance(u, ExecutionEvent) for u in updates)
+        
+        # Should have LLM_STREAM_CHUNK events
+        stream_chunks = [u for u in updates if u.type == EventType.LLM_STREAM_CHUNK]
+        assert len(stream_chunks) == 2
+        assert stream_chunks[0].data["content_chunk"] == "Hello"
+        assert stream_chunks[1].data["content_chunk"] == " world"
+
+
+@pytest.mark.asyncio
+async def test_raw_mode_yields_chunks_with_openai_fields():
+    """Test that stream='raw' yields raw LiteLLM chunks with OpenAI-compatible fields"""
+    agent = Agent(name="Tyler")
+    thread = Thread()
+    thread.add_message(Message(role="user", content="Test"))
+    
+    # Create chunks with OpenAI-compatible structure
+    chunks = [
+        {
+            "id": "chatcmpl-123",
+            "object": "chat.completion.chunk",
+            "created": 1677652288,
+            "model": "gpt-4",
+            "choices": [{
+                "index": 0,
+                "delta": {"content": "Hello"},
+                "finish_reason": None
+            }]
+        },
+        {
+            "id": "chatcmpl-123",
+            "object": "chat.completion.chunk",
+            "created": 1677652288,
+            "model": "gpt-4",
+            "choices": [{
+                "index": 0,
+                "delta": {"content": " world"},
+                "finish_reason": None
+            }]
+        }
+    ]
+    
+    async def mock_stream():
+        for chunk_dict in chunks:
+            yield ModelResponse(**chunk_dict)
+    
+    with patch.object(agent, 'step') as mock_step:
+        mock_step.return_value = (mock_stream(), {"model": "gpt-4"})
+        
+        raw_chunks = []
+        async for chunk in agent.go(thread, stream="raw"):
+            raw_chunks.append(chunk)
+        
+        # Should NOT be ExecutionEvent objects
+        assert not any(isinstance(c, ExecutionEvent) for c in raw_chunks)
+        
+        # Should have OpenAI-compatible fields
+        assert len(raw_chunks) == 2
+        assert hasattr(raw_chunks[0], 'id')
+        assert hasattr(raw_chunks[0], 'object')
+        assert hasattr(raw_chunks[0], 'created')
+        assert hasattr(raw_chunks[0], 'model')
+        assert hasattr(raw_chunks[0], 'choices')
+        
+        # Delta can be dict or object depending on LiteLLM version
+        delta_0 = raw_chunks[0].choices[0].delta
+        delta_1 = raw_chunks[1].choices[0].delta
+        
+        if isinstance(delta_0, dict):
+            assert delta_0["content"] == "Hello"
+            assert delta_1["content"] == " world"
+        else:
+            assert delta_0.content == "Hello"
+            assert delta_1.content == " world"
+
+
+@pytest.mark.asyncio
+async def test_raw_mode_includes_usage_in_final_chunk():
+    """Test that stream='raw' includes usage information in the final chunk"""
+    agent = Agent(name="Tyler")
+    thread = Thread()
+    thread.add_message(Message(role="user", content="Test"))
+    
+    usage = SimpleNamespace(
+        completion_tokens=10,
+        prompt_tokens=5,
+        total_tokens=15
+    )
+    
+    chunks = [
+        MockChunk([MockChoiceDelta(MockDelta(content="Response"))]),
+        MockChunk([MockChoiceDelta(MockDelta())], usage=usage)
+    ]
+    
+    async def mock_stream():
+        for chunk in chunks:
+            yield chunk
+    
+    with patch.object(agent, 'step') as mock_step:
+        mock_step.return_value = (mock_stream(), {"model": "gpt-4"})
+        
+        raw_chunks = []
+        async for chunk in agent.go(thread, stream="raw"):
+            raw_chunks.append(chunk)
+        
+        # Final chunk should have usage
+        assert hasattr(raw_chunks[-1], 'usage')
+        assert raw_chunks[-1].usage.completion_tokens == 10
+        assert raw_chunks[-1].usage.prompt_tokens == 5
+        assert raw_chunks[-1].usage.total_tokens == 15
+
+
+@pytest.mark.asyncio
+async def test_raw_mode_tool_call_deltas():
+    """Test that stream='raw' passes through tool call deltas unmodified"""
+    agent = Agent(name="Tyler")
+    thread = Thread()
+    thread.add_message(Message(role="user", content="Test"))
+    
+    # Create chunks with tool call deltas
+    chunks = [
+        {
+            "id": "chatcmpl-123",
+            "object": "chat.completion.chunk",
+            "created": 1677652288,
+            "model": "gpt-4",
+            "choices": [{
+                "index": 0,
+                "delta": {
+                    "tool_calls": [{
+                        "id": "call_123",
+                        "type": "function",
+                        "function": {"name": "get_weather", "arguments": ""}
+                    }]
+                },
+                "finish_reason": None
+            }]
+        },
+        {
+            "id": "chatcmpl-123",
+            "object": "chat.completion.chunk",
+            "created": 1677652288,
+            "model": "gpt-4",
+            "choices": [{
+                "index": 0,
+                "delta": {
+                    "tool_calls": [{
+                        "function": {"arguments": '{"location"'}
+                    }]
+                },
+                "finish_reason": None
+            }]
+        },
+        {
+            "id": "chatcmpl-123",
+            "object": "chat.completion.chunk",
+            "created": 1677652288,
+            "model": "gpt-4",
+            "choices": [{
+                "index": 0,
+                "delta": {
+                    "tool_calls": [{
+                        "function": {"arguments": ': "Chicago"}'}
+                    }]
+                },
+                "finish_reason": None
+            }]
+        }
+    ]
+    
+    async def mock_stream():
+        for chunk_dict in chunks:
+            yield ModelResponse(**chunk_dict)
+    
+    with patch.object(agent, 'step') as mock_step:
+        mock_step.return_value = (mock_stream(), {"model": "gpt-4"})
+        
+        raw_chunks = []
+        async for chunk in agent.go(thread, stream="raw"):
+            raw_chunks.append(chunk)
+        
+        # Should have tool call deltas in raw format
+        assert len(raw_chunks) == 3
+        
+        # Delta can be dict or object depending on LiteLLM version
+        delta_0 = raw_chunks[0].choices[0].delta
+        
+        if isinstance(delta_0, dict):
+            assert "tool_calls" in delta_0
+            assert delta_0["tool_calls"][0]["id"] == "call_123"
+            assert delta_0["tool_calls"][0]["function"]["name"] == "get_weather"
+        else:
+            assert hasattr(delta_0, 'tool_calls')
+            assert delta_0.tool_calls[0]["id"] == "call_123"
+            assert delta_0.tool_calls[0]["function"]["name"] == "get_weather"
+
+
+@pytest.mark.asyncio
+async def test_stream_true_backward_compatibility():
+    """Test that stream=True still works as before (backward compatibility)"""
+    agent = Agent(name="Tyler")
+    thread = Thread()
+    thread.add_message(Message(role="user", content="Test"))
+    
+    chunks = [
+        MockChunk([MockChoiceDelta(MockDelta(content="Hello"))]),
+        MockChunk([MockChoiceDelta(MockDelta(content=" world"))]),
+    ]
+    
+    async def mock_stream():
+        for chunk in chunks:
+            yield chunk
+    
+    with patch.object(agent, 'step') as mock_step:
+        mock_step.return_value = (mock_stream(), {"model": "gpt-4"})
+        
+        updates = []
+        async for event in agent.go(thread, stream=True):
+            updates.append(event)
+        
+        # Should still yield ExecutionEvent objects
+        assert all(isinstance(u, ExecutionEvent) for u in updates)
+        stream_chunks = [u for u in updates if u.type == EventType.LLM_STREAM_CHUNK]
+        assert len(stream_chunks) == 2

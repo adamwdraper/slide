@@ -18,9 +18,19 @@ Streaming approach:
 - Better user experience
 - Can see tool usage in real-time
 
-## Basic Streaming
+## Streaming Modes
 
-The simplest way to stream responses:
+Tyler supports three streaming modes via the `stream` parameter:
+
+| Mode | Value | Output Type | Use Case |
+|------|-------|-------------|----------|
+| **Non-Streaming** | `False` (default) | `AgentResult` | Simple request/response |
+| **Event Streaming** | `True` or `"events"` | `ExecutionEvent` | Rich observability, tool tracking |
+| **Raw Streaming** | `"raw"` | Raw LiteLLM chunks | OpenAI compatibility, proxying |
+
+### Event Streaming (Recommended)
+
+The default streaming mode with full observability:
 
 ```python
 import asyncio
@@ -40,6 +50,7 @@ async def stream_response():
     
     print("🤖 Assistant: ", end="", flush=True)
     
+    # Use stream=True or stream="events" (both work identically)
     async for event in agent.go(thread, stream=True):
         if event.type == EventType.LLM_STREAM_CHUNK:
             print(event.data.get("content_chunk", ""), end="", flush=True)
@@ -48,6 +59,132 @@ async def stream_response():
 
 asyncio.run(stream_response())
 ```
+
+### Raw Streaming (Advanced)
+
+<Warning>
+Raw mode is for advanced use cases. Tools ARE executed for full agentic behavior, but you only receive raw chunks (no ExecutionEvents).
+</Warning>
+
+Stream raw LiteLLM chunks for OpenAI compatibility:
+
+```python
+import asyncio
+from tyler import Agent, Thread, Message
+
+agent = Agent(
+    name="proxy-assistant",
+    model_name="gpt-4o",
+    purpose="OpenAI-compatible streaming"
+)
+
+async def raw_stream_response():
+    thread = Thread()
+    message = Message(role="user", content="Hello!")
+    thread.add_message(message)
+    
+    # Get raw OpenAI-compatible chunks
+    async for chunk in agent.go(thread, stream="raw"):
+        # chunk is a raw LiteLLM object
+        if hasattr(chunk, 'choices') and chunk.choices:
+            delta = chunk.choices[0].delta
+            
+            # Delta can be dict or object depending on LiteLLM version
+            if isinstance(delta, dict):
+                content = delta.get('content')
+            else:
+                content = getattr(delta, 'content', None)
+            
+            if content:
+                print(content, end="", flush=True)
+        
+        # Usage info in final chunk
+        if hasattr(chunk, 'usage') and chunk.usage:
+            print(f"\n\nTokens: {chunk.usage.total_tokens}")
+
+asyncio.run(raw_stream_response())
+```
+
+**When to use raw mode:**
+- Building OpenAI API proxies or gateways
+- Direct integration with OpenAI-compatible clients
+- Minimal latency requirements (no transformation overhead)
+
+**How it works:**
+- ✅ Tools ARE executed (fully agentic behavior)
+- ✅ Multi-turn iteration supported
+- ✅ Frontend sees `finish_reason: "tool_calls"` in chunks
+- ⚠️ No ExecutionEvent telemetry (only raw chunks)
+- ⚠️ Silent during tool execution (brief pauses expected)
+- ⚠️ Consumer must handle chunk formatting (SSE serialization)
+
+Matches the pattern from [OpenAI's Agents SDK](https://openai.github.io/openai-agents-python/streaming/):
+Raw chunks → finish_reason="tool_calls" → [agent executes tools] → more raw chunks → repeat
+
+**SSE Serialization Example:**
+
+```python
+import json
+
+def serialize_chunk_to_sse(chunk) -> str:
+    """Convert raw chunk to Server-Sent Events format"""
+    chunk_dict = {
+        "id": getattr(chunk, 'id', 'unknown'),
+        "object": getattr(chunk, 'object', 'chat.completion.chunk'),
+        "created": getattr(chunk, 'created', 0),
+        "model": getattr(chunk, 'model', 'unknown'),
+        "choices": []
+    }
+    
+    if hasattr(chunk, 'choices') and chunk.choices:
+        for choice in chunk.choices:
+            choice_dict = {
+                "index": getattr(choice, 'index', 0),
+                "delta": {},
+                "finish_reason": getattr(choice, 'finish_reason', None)
+            }
+            
+            if hasattr(choice, 'delta'):
+                delta = choice.delta
+                if isinstance(delta, dict):
+                    choice_dict["delta"] = delta
+                else:
+                    if hasattr(delta, 'content') and delta.content:
+                        choice_dict["delta"]["content"] = delta.content
+                    if hasattr(delta, 'role') and delta.role:
+                        choice_dict["delta"]["role"] = delta.role
+            
+            chunk_dict["choices"].append(choice_dict)
+    
+    if hasattr(chunk, 'usage') and chunk.usage:
+        chunk_dict["usage"] = {
+            "prompt_tokens": chunk.usage.prompt_tokens,
+            "completion_tokens": chunk.usage.completion_tokens,
+            "total_tokens": chunk.usage.total_tokens
+        }
+    
+    return f"data: {json.dumps(chunk_dict)}\n\n"
+
+# Use in a FastAPI endpoint
+from fastapi import FastAPI
+from fastapi.responses import StreamingResponse
+
+app = FastAPI()
+
+@app.get("/v1/chat/completions")
+async def openai_compatible_endpoint(messages: list):
+    thread = Thread()
+    for msg in messages:
+        thread.add_message(Message(role=msg["role"], content=msg["content"]))
+    
+    async def generate():
+        async for chunk in agent.go(thread, stream="raw"):
+            yield serialize_chunk_to_sse(chunk)
+    
+    return StreamingResponse(generate(), media_type="text/event-stream")
+```
+
+See `examples/005_raw_streaming.py` for a complete working example.
 
 ## Understanding Execution Events
 
