@@ -1387,11 +1387,18 @@ class Agent(Model):
     @weave.op()
     async def _go_stream_raw(self, thread_or_id: Union[Thread, str]) -> AsyncGenerator[Any, None]:
         """
-        Raw streaming implementation that yields unmodified LiteLLM chunks.
+        Raw streaming implementation that yields unmodified LiteLLM chunks while executing tools.
         
         This mode is designed for OpenAI compatibility and passes through raw chunks
-        without transformation. Tool calls are NOT executed in this mode - tool call
-        deltas are simply passed through in the chunks.
+        without transformation. Unlike event streaming mode, this yields raw LiteLLM
+        chunks instead of ExecutionEvents, but DOES execute tools and iterate like
+        a full agent.
+        
+        The pattern matches OpenAI's Agents SDK:
+        - Stream raw chunks from LLM response
+        - When finish_reason is "tool_calls", execute tools silently
+        - Stream raw chunks from next LLM response
+        - Continue until finish_reason is "stop" or max iterations
         
         Args:
             thread_or_id: Thread object or thread ID to process
@@ -1400,48 +1407,212 @@ class Agent(Model):
             Raw LiteLLM chunk objects in OpenAI-compatible format
             
         Note:
-            This mode does NOT support:
-            - Tool execution (only passes through tool call deltas)
-            - Multiple iterations
-            - ExecutionEvent telemetry
+            - Tools ARE executed (fully agentic behavior)
+            - Multi-turn iteration supported
+            - No ExecutionEvent telemetry (raw chunks only)
+            - Silent during tool execution (no events yielded)
         """
         try:
             # Get thread
             thread = await self._get_thread(thread_or_id)
             
+            # Initialize tracking
+            self._iteration_count = 0
+            self._tool_attributes_cache.clear()
+            new_messages = []
+            
             logger.debug(f"Starting raw streaming for thread {thread.id}")
             
-            # Get streaming response (single iteration only)
-            streaming_response, metrics = await self.step(thread, stream=True)
+            # Helper: initialize per-tool_call argument buffer only once
+            def _init_tool_arg_buffer(tool_call_id: str, initial_value: Optional[str], buffers: Dict[str, str]) -> None:
+                if tool_call_id not in buffers:
+                    buffers[tool_call_id] = initial_value or ""
             
-            # Check if step() returned an error (thread, [error_msg]) instead of (response, metrics)
-            # This happens when there's an API error and step_errors_raise is False
-            if isinstance(streaming_response, Thread):
-                # step() encountered an error and returned the thread with error message
-                error_msg = "Error during LLM request"
-                if isinstance(metrics, list) and metrics:
-                    error_msg = metrics[0].content if hasattr(metrics[0], 'content') else str(metrics[0])
-                logger.error(error_msg)
-                raise RuntimeError(error_msg)
+            # Main iteration loop (like _go_stream but yielding raw chunks)
+            while self._iteration_count < self.max_tool_iterations:
+                try:
+                    # Get streaming response
+                    streaming_response, metrics = await self.step(thread, stream=True)
+                    
+                    # Check if step() returned an error
+                    if isinstance(streaming_response, Thread):
+                        error_msg = "Error during LLM request"
+                        if isinstance(metrics, list) and metrics:
+                            error_msg = metrics[0].content if hasattr(metrics[0], 'content') else str(metrics[0])
+                        logger.error(error_msg)
+                        raise RuntimeError(error_msg)
+                    
+                    if not streaming_response:
+                        error_msg = "No response received from chat completion"
+                        logger.error(error_msg)
+                        raise RuntimeError(error_msg)
+                    
+                    # Verify we got an async generator
+                    if not hasattr(streaming_response, '__aiter__'):
+                        error_msg = f"Expected async generator from step(), got {type(streaming_response).__name__}"
+                        logger.error(error_msg)
+                        raise RuntimeError(error_msg)
+                    
+                    # Yield all raw chunks and accumulate tool calls
+                    current_content = []
+                    current_tool_calls = []
+                    current_tool_call = None
+                    current_tool_args: Dict[str, str] = {}
+                    
+                    async for chunk in streaming_response:
+                        # Yield raw chunk unmodified
+                        yield chunk
+                        
+                        if not hasattr(chunk, 'choices') or not chunk.choices:
+                            continue
+                        
+                        delta = chunk.choices[0].delta
+                        
+                        # Track content for message creation
+                        if hasattr(delta, 'content') and delta.content is not None:
+                            current_content.append(delta.content)
+                        
+                        # Track tool calls for execution (same logic as _go_stream)
+                        if hasattr(delta, 'tool_calls') and delta.tool_calls:
+                            for tool_call in delta.tool_calls:
+                                # Handle both dict and object formats
+                                if isinstance(tool_call, dict):
+                                    if 'id' in tool_call and tool_call['id']:
+                                        current_tool_call = {
+                                            "id": str(tool_call['id']),
+                                            "type": "function",
+                                            "function": {
+                                                "name": tool_call.get('function', {}).get('name', ''),
+                                                "arguments": tool_call.get('function', {}).get('arguments', '') or ''
+                                            }
+                                        }
+                                        _init_tool_arg_buffer(current_tool_call['id'], current_tool_call['function']['arguments'], current_tool_args)
+                                        if current_tool_call not in current_tool_calls:
+                                            current_tool_calls.append(current_tool_call)
+                                    elif current_tool_call and 'function' in tool_call:
+                                        if 'name' in tool_call['function'] and tool_call['function']['name']:
+                                            current_tool_call['function']['name'] = tool_call['function']['name']
+                                        if 'arguments' in tool_call['function']:
+                                            buf_id = current_tool_call['id']
+                                            current_tool_args.setdefault(buf_id, "")
+                                            current_tool_args[buf_id] += tool_call['function']['arguments'] or ''
+                                            current_tool_call['function']['arguments'] = current_tool_args[buf_id]
+                                else:
+                                    # Handle object format
+                                    if hasattr(tool_call, 'id') and tool_call.id:
+                                        current_tool_call = {
+                                            "id": str(tool_call.id),
+                                            "type": "function",
+                                            "function": {
+                                                "name": getattr(tool_call.function, 'name', ''),
+                                                "arguments": getattr(tool_call.function, 'arguments', '') or ''
+                                            }
+                                        }
+                                        _init_tool_arg_buffer(current_tool_call['id'], current_tool_call['function']['arguments'], current_tool_args)
+                                        if current_tool_call not in current_tool_calls:
+                                            current_tool_calls.append(current_tool_call)
+                                    elif current_tool_call and hasattr(tool_call, 'function'):
+                                        if hasattr(tool_call.function, 'name') and tool_call.function.name:
+                                            current_tool_call['function']['name'] = tool_call.function.name
+                                        if hasattr(tool_call.function, 'arguments'):
+                                            buf_id = current_tool_call['id']
+                                            current_tool_args.setdefault(buf_id, "")
+                                            current_tool_args[buf_id] += getattr(tool_call.function, 'arguments', '') or ''
+                                            current_tool_call['function']['arguments'] = current_tool_args[buf_id]
+                        
+                        # Add usage metrics if available
+                        if hasattr(chunk, 'usage'):
+                            metrics["usage"] = {
+                                "completion_tokens": getattr(chunk.usage, "completion_tokens", 0),
+                                "prompt_tokens": getattr(chunk.usage, "prompt_tokens", 0),
+                                "total_tokens": getattr(chunk.usage, "total_tokens", 0)
+                            }
+                    
+                    # After streaming completes, create assistant message
+                    content = ''.join(current_content)
+                    assistant_message = Message(
+                        role="assistant",
+                        content=content,
+                        tool_calls=current_tool_calls if current_tool_calls else None,
+                        source=self._create_assistant_source(include_version=True),
+                        metrics=metrics
+                    )
+                    thread.add_message(assistant_message)
+                    new_messages.append(assistant_message)
+                    
+                    # If no tool calls, we're done
+                    if not current_tool_calls:
+                        if self.thread_store:
+                            await self.thread_store.save(thread)
+                        break
+                    
+                    # Execute tools (silently - no events yielded)
+                    try:
+                        # Parse and validate tool call arguments
+                        for tool_call in current_tool_calls:
+                            args = tool_call['function']['arguments']
+                            try:
+                                if isinstance(args, str) and args.strip():
+                                    parsed_args = json.loads(args)
+                                elif isinstance(args, dict):
+                                    parsed_args = args
+                                else:
+                                    parsed_args = {}
+                            except json.JSONDecodeError:
+                                parsed_args = {}
+                            
+                            tool_call['function']['arguments'] = json.dumps(parsed_args)
+                        
+                        # Execute tools in parallel
+                        tool_tasks = [self._handle_tool_execution(tc) for tc in current_tool_calls]
+                        tool_results = await asyncio.gather(*tool_tasks, return_exceptions=True)
+                        
+                        # Process tool results into messages
+                        should_break = False
+                        for i, result in enumerate(tool_results):
+                            tool_call = current_tool_calls[i]
+                            tool_name = tool_call['function']['name']
+                            
+                            tool_message, break_iteration = self._process_tool_result(result, tool_call, tool_name)
+                            thread.add_message(tool_message)
+                            new_messages.append(tool_message)
+                            
+                            if break_iteration:
+                                should_break = True
+                        
+                        # Save after tool execution
+                        if self.thread_store:
+                            await self.thread_store.save(thread)
+                        
+                        if should_break:
+                            break
+                    
+                    except Exception as e:
+                        error_msg = f"Tool execution failed: {str(e)}"
+                        logger.error(error_msg)
+                        message = self._create_error_message(error_msg)
+                        thread.add_message(message)
+                        if self.thread_store:
+                            await self.thread_store.save(thread)
+                        break
+                    
+                    # Increment iteration count
+                    self._iteration_count += 1
+                
+                except Exception as e:
+                    error_msg = f"Completion failed: {str(e)}"
+                    logger.error(error_msg)
+                    raise
             
-            if not streaming_response:
-                error_msg = "No response received from chat completion"
-                logger.error(error_msg)
-                raise RuntimeError(error_msg)
+            # Check if we hit max iterations
+            if self._iteration_count >= self.max_tool_iterations:
+                logger.warning(f"Hit max iterations ({self.max_tool_iterations})")
+                message = self.message_factory.create_max_iterations_message()
+                thread.add_message(message)
+                if self.thread_store:
+                    await self.thread_store.save(thread)
             
-            # Verify we got an async generator
-            if not hasattr(streaming_response, '__aiter__'):
-                error_msg = f"Expected async generator from step(), got {type(streaming_response).__name__}"
-                logger.error(error_msg)
-                raise RuntimeError(error_msg)
-            
-            # Pass through all chunks unmodified
-            chunk_count = 0
-            async for chunk in streaming_response:
-                chunk_count += 1
-                yield chunk
-            
-            logger.debug(f"Raw streaming complete - {chunk_count} chunks yielded")
+            logger.debug(f"Raw streaming complete - {self._iteration_count} iterations")
             
         except ValueError:
             # Re-raise ValueError for thread not found

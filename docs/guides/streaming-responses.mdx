@@ -63,7 +63,7 @@ asyncio.run(stream_response())
 ### Raw Streaming (Advanced)
 
 <Warning>
-Raw mode is for advanced use cases. It does NOT execute tools or provide observability events.
+Raw mode is for advanced use cases. Tools ARE executed for full agentic behavior, but you only receive raw chunks (no ExecutionEvents).
 </Warning>
 
 Stream raw LiteLLM chunks for OpenAI compatibility:
@@ -110,11 +110,16 @@ asyncio.run(raw_stream_response())
 - Direct integration with OpenAI-compatible clients
 - Minimal latency requirements (no transformation overhead)
 
-**Limitations:**
-- Tools are NOT executed (deltas just passed through)
-- No ExecutionEvent telemetry
-- No multi-turn iteration support
-- Consumer must handle chunk formatting (e.g., SSE serialization)
+**How it works:**
+- ✅ Tools ARE executed (fully agentic behavior)
+- ✅ Multi-turn iteration supported
+- ✅ Frontend sees `finish_reason: "tool_calls"` in chunks
+- ⚠️ No ExecutionEvent telemetry (only raw chunks)
+- ⚠️ Silent during tool execution (brief pauses expected)
+- ⚠️ Consumer must handle chunk formatting (SSE serialization)
+
+Matches the pattern from [OpenAI's Agents SDK](https://openai.github.io/openai-agents-python/streaming/):
+Raw chunks → finish_reason="tool_calls" → [agent executes tools] → more raw chunks → repeat
 
 **SSE Serialization Example:**
 

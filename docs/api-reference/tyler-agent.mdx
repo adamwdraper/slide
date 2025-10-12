@@ -146,7 +146,7 @@ async for event in agent.go(thread, stream=True):
 ### Raw Streaming Mode (stream="raw")
 
 <Warning>
-  Raw mode is for advanced use cases requiring OpenAI compatibility. It does NOT execute tools or handle iterations.
+  Raw mode is for advanced use cases requiring OpenAI compatibility. Tools ARE executed, but you only receive raw LiteLLM chunks (no ExecutionEvents for observability).
 </Warning>
 
 Stream raw LiteLLM chunks in OpenAI-compatible format for direct integration:
@@ -177,11 +177,16 @@ async for chunk in agent.go(thread, stream="raw"):
 - Debugging provider-specific behavior
 - Minimal latency requirements (no transformation overhead)
 
-**Limitations of raw mode:**
-- Tools are NOT executed (tool call deltas are just passed through)
-- No multi-turn iteration support
-- No ExecutionEvent telemetry
-- Raw chunks must be handled by consumer (SSE serialization, etc.)
+**How raw mode works:**
+- ✅ Tools ARE executed (fully agentic behavior)
+- ✅ Multi-turn iteration supported (continues until task complete)
+- ✅ Raw chunks show tool calls via `finish_reason: "tool_calls"`
+- ⚠️ No ExecutionEvent telemetry (only raw chunks)
+- ⚠️ Silent during tool execution (brief pauses between chunk streams)
+- ⚠️ Consumer handles chunk formatting (SSE serialization, etc.)
+
+The pattern matches [OpenAI's Agents SDK](https://openai.github.io/openai-agents-python/streaming/):
+chunks → finish_reason="tool_calls" → [tools execute silently] → more chunks → repeat until done
 
 See the [streaming guide](/guides/streaming-responses) for more details and examples.
 

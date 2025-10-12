@@ -73,4 +73,13 @@ As a developer building an OpenAI-compatible agent service, I want to use `strea
 - Providing a middleware/proxy server (out of scope for this PR)
 - Modifying the chunk format or adding Tyler-specific metadata to raw chunks
 - Removing or deprecating `stream=True` (maintaining full backward compatibility)
+- Adding ExecutionEvents for tool execution in raw mode (raw chunks only)
+
+## Important Note on Tool Execution
+
+Raw mode DOES execute tools and iterate like a full agent. This matches the pattern from [OpenAI's Agents SDK](https://openai.github.io/openai-agents-python/streaming/) where:
+- Raw response events are LLM chunks
+- Tools are executed silently between LLM responses
+- Frontend sees `finish_reason: "tool_calls"` to know tools are running
+- More chunks arrive after tool execution completes
 

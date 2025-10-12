@@ -53,9 +53,10 @@ async for chunk in agent.go(thread, stream="raw"):
 ## Key Decisions
 
 1. **Single parameter approach**: Use `stream` parameter with multiple values instead of adding a second `raw_chunks` flag
-2. **No tool execution in raw mode**: Raw mode is pass-through only; consumers handle tool calls
+2. **Full agentic behavior in raw mode**: Tools ARE executed and agent iterates until task complete (matches OpenAI Agents SDK pattern)
 3. **No validation**: Pass chunks as-is from LiteLLM without structure validation
 4. **100% backward compatible**: All existing code continues to work unchanged
+5. **Silent tool execution**: No events yielded during tool execution, only raw LLM chunks
 
 ## Implementation Notes
 
