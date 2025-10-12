@@ -57,8 +57,10 @@ def go(self, thread_or_id: Union[Thread, str], stream: Literal["raw"]) -> AsyncG
 ```
 
 ### Internal Changes
-- New private method `_go_stream_raw()` or conditional logic in `_go_stream()`
+- New private method `_go_stream_raw()` with full iteration loop
 - Parameter normalization: convert `True` → `"events"` early in the method
+- Tool execution logic duplicated from `_go_stream()` (yields chunks instead of events)
+- Silent tool execution: no chunks during tool calls, matches OpenAI pattern
 
 ### No Breaking Changes
 - Existing calls with `stream=True` or `stream=False` continue to work identically
@@ -79,15 +81,17 @@ def go(self, thread_or_id: Union[Thread, str], stream: Literal["raw"]) -> AsyncG
 - **Mitigation**: Add documentation best practices for handling high-volume chunk streams
 
 ### Data Integrity
-- **Medium Risk**: Need to ensure ALL chunks are passed through, including:
-  - Content deltas
-  - Tool call deltas
+- **Medium Risk**: Need to ensure ALL chunks are passed through across multiple iterations:
+  - Content deltas from all LLM calls
+  - Tool call deltas 
   - Usage/completion information
   - Error/finish reason
+  - Chunks from iteration 1, then iteration 2, etc.
 - **Mitigation**: 
   - Comprehensive tests comparing raw chunk content with ExecutionEvent content
   - Validate that final usage tokens match in both modes
   - Test with multiple providers (OpenAI, Anthropic, local models)
+  - Test multi-iteration scenarios with tool calls
 
 ### Backward Compatibility
 - **Critical**: Must not break existing code using `stream=True` or `stream=False`

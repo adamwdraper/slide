@@ -27,11 +27,14 @@ Successfully implemented `stream="raw"` mode for Tyler's Agent.go() method, enab
   - Validates invalid values with clear error messages
   - Debug logging for stream mode selection
 
-- **Implemented `_go_stream_raw()` method**:
-  - Async generator that yields raw LiteLLM chunks
-  - Pass-through design - no transformation
-  - Single iteration only (no tool execution)
-  - Minimal overhead for performance
+- **Implemented `_go_stream_raw()` method** (237 lines):
+  - **Fully agentic** async generator (not just pass-through!)
+  - Full iteration loop: `while self._iteration_count < self.max_tool_iterations`
+  - Yields raw LiteLLM chunks from each LLM response
+  - **Executes tools silently** between chunk streams
+  - **Supports multi-turn iterations** until task complete
+  - Creates assistant and tool messages in thread
+  - Matches OpenAI Agents SDK pattern
   - Comprehensive error handling
 
 ### 2. Tests ✅
@@ -99,14 +102,16 @@ Complete specification package following Agent Operating Procedure:
 - Better semantics (parameter describes output format)
 - Type-safe with overloads
 
-### 2. No Tool Execution in Raw Mode ✅
-**Decision**: Raw mode passes through tool call deltas without executing them
+### 2. Full Tool Execution in Raw Mode ✅
+**Decision**: Raw mode executes tools and iterates (fully agentic)
 
 **Rationale**:
-- Raw mode is for OpenAI compatibility/proxying
-- Tool execution requires chunk transformation (defeats purpose)
-- Consumer can execute tools if needed
-- Documented clearly in warnings
+- Follows OpenAI Agents SDK pattern (https://openai.github.io/openai-agents-python/streaming/)
+- Without tool execution, agent can't complete multi-step tasks
+- Frontend gets OpenAI format but Tyler handles the agentic behavior
+- Tools execute silently (no chunks during execution, brief pause)
+- finish_reason in chunks tells frontend what's happening
+- **Critical**: This makes raw mode actually useful for real applications!
 
 ### 3. Backward Compatibility ✅
 **Decision**: `stream=True` continues to work identically as before
@@ -185,19 +190,30 @@ async for event in agent.go(thread, stream=True):
 
 ### Raw Streaming (New)
 ```python
+# Fully agentic - executes tools and iterates!
 async for chunk in agent.go(thread, stream="raw"):
     if hasattr(chunk.choices[0].delta, 'content'):
         print(chunk.choices[0].delta.content, end="")
+    
+    # Check finish_reason to know what's happening
+    finish_reason = chunk.choices[0].finish_reason
+    if finish_reason == "tool_calls":
+        print("\n[Agent executing tools...]")
+        # Brief pause here while Tyler executes tools
+    elif finish_reason == "stop":
+        print("\n[Complete!]")
 ```
 
 ## API Compatibility
 
-| Stream Value | Output Type | Use Case |
-|-------------|-------------|----------|
-| `False` | `AgentResult` | Simple request/response |
-| `True` | `AsyncGenerator[ExecutionEvent]` | Observability & rich telemetry |
-| `"events"` | `AsyncGenerator[ExecutionEvent]` | Explicit observability mode |
-| `"raw"` | `AsyncGenerator[Any]` | OpenAI compatibility |
+| Stream Value | Output Type | Tool Execution | Iterations | Use Case |
+|-------------|-------------|----------------|------------|----------|
+| `False` | `AgentResult` | ✅ Yes | ✅ Yes | Simple request/response |
+| `True` | `AsyncGenerator[ExecutionEvent]` | ✅ Yes | ✅ Yes | Observability & rich telemetry |
+| `"events"` | `AsyncGenerator[ExecutionEvent]` | ✅ Yes | ✅ Yes | Explicit observability mode |
+| `"raw"` | `AsyncGenerator[Any]` | ✅ Yes (silent) | ✅ Yes | OpenAI compatibility |
+
+**All modes are fully agentic!** The difference is the output format, not the agent capabilities.
 
 ## Performance Impact
 
@@ -225,12 +241,17 @@ All existing code continues to work without modification.
 
 ## Known Limitations
 
-1. **No tool execution** - Tools are not executed in raw mode
-2. **No iterations** - Single LLM call only
-3. **No telemetry** - No ExecutionEvents in raw mode
-4. **Consumer responsibility** - SSE serialization, error handling, etc.
+1. **No telemetry** - No ExecutionEvents in raw mode (only raw chunks)
+2. **Silent tool execution** - No chunks yielded while tools run (brief pauses)
+3. **Consumer responsibility** - SSE serialization, error handling, etc.
+4. **No explicit tool events** - Frontend must infer from finish_reason in chunks
 
-All limitations are documented in API reference.
+### Not Limitations (These Work!)
+- ✅ **Tool execution** - Tools ARE executed (fully agentic)
+- ✅ **Iterations** - Multi-turn reasoning supported
+- ✅ **Multi-step tasks** - Agent continues until complete
+
+All behaviors documented in API reference and streaming guide.
 
 ## Conclusion
 

@@ -109,12 +109,54 @@ else:
     raise ValueError(f"Invalid stream mode: {stream_mode}")
 ```
 
-**3. New Method: `_go_stream_raw()`**
-- Similar structure to `_go_stream()` but minimal transformation
-- Yield raw chunks directly from LiteLLM
-- Do NOT create ExecutionEvents
-- Do NOT process tool calls immediately (let chunks flow through)
-- Still handle thread resolution, max iterations, error handling at high level
+**3. New Method: `_go_stream_raw()` - Fully Agentic**
+- Full iteration loop like `_go_stream()` (not simplified!)
+- Initialize iteration tracking: `self._iteration_count = 0`
+- While loop: `while self._iteration_count < self.max_tool_iterations:`
+- For each iteration:
+  1. Get streaming response: `await self.step(thread, stream=True)`
+  2. Yield ALL raw chunks from LLM (including tool_calls deltas)
+  3. Accumulate tool calls while streaming
+  4. Create assistant message with tool_calls
+  5. If tool calls present: **Execute them silently** (no chunks yielded)
+  6. Add tool result messages to thread
+  7. Increment iteration, loop back for next LLM call
+- Matches OpenAI Agents SDK pattern (reference: https://openai.github.io/openai-agents-python/streaming/)
+
+**Key Implementation Details:**
+```python
+async def _go_stream_raw(self, thread_or_id) -> AsyncGenerator[Any, None]:
+    thread = await self._get_thread(thread_or_id)
+    self._iteration_count = 0
+    
+    while self._iteration_count < self.max_tool_iterations:
+        # Get streaming LLM response
+        streaming_response, metrics = await self.step(thread, stream=True)
+        
+        # Accumulate tool calls while yielding chunks
+        current_tool_calls = []
+        async for chunk in streaming_response:
+            yield chunk  # Raw chunk pass-through
+            # Track tool calls from deltas
+            if has_tool_calls(chunk):
+                current_tool_calls.append(...)
+        
+        # Create assistant message
+        message = Message(content=..., tool_calls=current_tool_calls)
+        thread.add_message(message)
+        
+        # If no tools, done
+        if not current_tool_calls:
+            break
+        
+        # EXECUTE TOOLS SILENTLY (no chunks during this)
+        tool_results = await asyncio.gather(...)
+        for result in tool_results:
+            tool_message = create_tool_message(result)
+            thread.add_message(tool_message)
+        
+        self._iteration_count += 1
+```
 
 **4. Type Overloads** (for type checker)
 ```python
@@ -182,10 +224,12 @@ if stream not in (False, True, "events", "raw"):
 - Let caller handle exceptions (same as current behavior)
 
 **Tool Call Handling in Raw Mode**
-- Raw chunks may contain partial tool calls across multiple chunks
-- Responsibility shifts to caller to reassemble tool calls
-- Tyler does NOT execute tools in raw mode (pass-through only)
-- Document this clearly in API docs
+- Raw chunks contain partial tool calls across multiple chunks
+- Tyler accumulates tool call deltas from chunks
+- Tyler **DOES execute tools** after streaming completes (fully agentic)
+- No chunks yielded during tool execution (silent phase)
+- Next iteration's chunks follow after tools complete
+- Frontend sees `finish_reason: "tool_calls"` to know tools are executing
 
 ### Performance Expectations
 
@@ -526,9 +570,10 @@ async def test_raw_mode_performance():
 ### Open Questions
 
 **Q1: Should we support tool execution in raw mode?**
-- **Proposed Answer**: No, raw mode is pass-through only. Document this clearly.
-- **Rationale**: Tool execution requires parsing chunks, which defeats the purpose of raw mode
-- **Decision Needed By**: Before implementation
+- **FINAL DECISION**: YES! Raw mode executes tools and iterates.
+- **Rationale**: Following OpenAI Agents SDK pattern, raw mode should be fully agentic. Without tool execution, it can't complete multi-step tasks and isn't truly an "agent."
+- **Reference**: https://openai.github.io/openai-agents-python/streaming/
+- **Implementation**: Silent tool execution between chunk streams (no events yielded)
 
 **Q2: Should we validate chunk structure in raw mode?**
 - **Proposed Answer**: No, pass through as-is. Let consumers handle malformed data.
@@ -536,9 +581,10 @@ async def test_raw_mode_performance():
 - **Alternative**: Add optional validation flag in future if users request it
 
 **Q3: Should final usage chunk always be included?**
-- **Proposed Answer**: Yes, if LiteLLM provides it. Don't filter any chunks.
+- **FINAL DECISION**: Yes, if LiteLLM provides it. Don't filter any chunks.
 - **Rationale**: Users need token counts for billing/monitoring
-- **Note**: Some providers might not send usage in stream (document this)
+- **Note**: Some providers might not send usage in stream (documented)
+- **Implementation**: Usage chunk yielded at end of each LLM response
 
 **Q4: How to handle Weave tracing in raw mode?**
 - **Proposed Answer**: `@weave.op()` on `_go_stream_raw()`, log basic metrics (chunk count)
@@ -566,17 +612,22 @@ async def test_raw_mode_performance():
 
 ### Task 2: Implement `_go_stream_raw()` Method
 **DoD:**
-- [ ] Create new `_go_stream_raw()` method
-- [ ] Handle thread resolution (same as `_go_stream`)
-- [ ] Call LiteLLM with `stream=True`
-- [ ] Yield raw chunks without transformation
-- [ ] Add debug logging
-- [ ] Handle max_iterations (basic check)
-- [ ] Tests pass for basic raw streaming
+- [x] Create new `_go_stream_raw()` method with full iteration loop
+- [x] Handle thread resolution (same as `_go_stream`)
+- [x] Initialize iteration tracking
+- [x] While loop for max_tool_iterations
+- [x] Call LiteLLM with `stream=True` in each iteration
+- [x] Yield raw chunks without transformation
+- [x] Accumulate tool calls from chunk deltas
+- [x] Execute tools silently after chunk stream ends
+- [x] Add tool result messages to thread
+- [x] Iterate until no more tool calls
+- [x] Add debug logging
+- [x] Tests pass for basic raw streaming
 
 **Tests:**
-- `test_raw_mode_yields_chunks_with_openai_fields` - Write first (should fail)
-- `test_raw_mode_includes_usage_in_final_chunk` - Write first (should fail)
+- `test_raw_mode_yields_chunks_with_openai_fields` - ✅ Passing
+- `test_raw_mode_includes_usage_in_final_chunk` - ✅ Passing
 
 **Dependencies:** Task 1
 
@@ -584,14 +635,14 @@ async def test_raw_mode_performance():
 
 ### Task 3: Add Routing Logic in go()
 **DoD:**
-- [ ] Normalize `True` → `"events"` internally
-- [ ] Route to `_go_complete`, `_go_stream`, or `_go_stream_raw` based on mode
-- [ ] Add debug log for mode selection
-- [ ] All routing tests pass
+- [x] Normalize `True` → `"events"` internally
+- [x] Route to `_go_complete`, `_go_stream`, or `_go_stream_raw` based on mode
+- [x] Add debug log for mode selection
+- [x] All routing tests pass
 
 **Tests:**
-- `test_stream_events_explicit` - Write first (should fail)
-- `test_stream_true_backward_compatibility` - Existing test should still pass
+- `test_stream_events_explicit` - ✅ Passing
+- `test_stream_true_backward_compatibility` - ✅ Passing
 
 **Dependencies:** Task 2
 
@@ -599,13 +650,19 @@ async def test_raw_mode_performance():
 
 ### Task 4: Handle Tool Calls in Raw Mode
 **DoD:**
-- [ ] Document that tool calls are NOT executed in raw mode
-- [ ] Ensure tool call chunks pass through unmodified
-- [ ] Test with mocked tool call responses
-- [ ] Update docstring to clarify tool behavior
+- [x] Accumulate tool calls from chunk deltas (same logic as _go_stream)
+- [x] Execute tools after streaming completes (silently)
+- [x] Add tool result messages to thread
+- [x] Continue iteration for next LLM call
+- [x] Ensure tool call chunks pass through unmodified
+- [x] Test with mocked tool call responses
+- [x] Update docstring to clarify tool execution happens
 
 **Tests:**
-- `test_raw_mode_tool_call_deltas` - Write first (should fail)
+- `test_raw_mode_tool_call_deltas` - ✅ Passing
+
+**Implementation Note:**
+Following OpenAI Agents SDK pattern - tools ARE executed, just silently between chunk streams.
 
 **Dependencies:** Task 3
 
