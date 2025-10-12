@@ -98,9 +98,9 @@ agent = Agent(
 
 ## Processing Conversations
 
-The `go()` method is the primary interface for processing conversations:
+The `go()` method is the primary interface for processing conversations. It supports three output modes controlled by the `stream` parameter:
 
-### Non-Streaming Mode
+### Non-Streaming Mode (stream=False)
 
 ```python
 from tyler import Thread, Message
@@ -110,22 +110,25 @@ thread = Thread()
 thread.add_message(Message(role="user", content="Hello!"))
 
 # Process the thread
-result = await agent.go(thread)
+result = await agent.go(thread)  # or stream=False
 
 # Access the response
 print(result.content)  # The agent's final response
 print(result.thread)  # Updated thread with all messages
 print(result.new_messages)  # New messages added in this turn
-print(result.execution)  # Detailed execution information
 ```
 
-### Streaming Mode
+### Event Streaming Mode (stream=True or stream="events")
+
+Stream responses as high-level ExecutionEvent objects with full observability:
 
 ```python
 from tyler import EventType
 
-# Stream responses in real-time
+# Stream responses in real-time (both syntaxes work identically)
 async for event in agent.go(thread, stream=True):
+    # or: agent.go(thread, stream="events")
+    
     if event.type == EventType.LLM_STREAM_CHUNK:
         # Content being generated
         print(event.data["content_chunk"], end="", flush=True)
@@ -139,6 +142,48 @@ async for event in agent.go(thread, stream=True):
         msg = event.data["message"]
         print(f"New {msg.role} message")
 ```
+
+### Raw Streaming Mode (stream="raw")
+
+<Warning>
+  Raw mode is for advanced use cases requiring OpenAI compatibility. It does NOT execute tools or handle iterations.
+</Warning>
+
+Stream raw LiteLLM chunks in OpenAI-compatible format for direct integration:
+
+```python
+# Get raw chunks for OpenAI compatibility
+async for chunk in agent.go(thread, stream="raw"):
+    # chunk is a raw LiteLLM object with OpenAI structure
+    if hasattr(chunk, 'choices') and chunk.choices:
+        delta = chunk.choices[0].delta
+        
+        # Access content
+        if hasattr(delta, 'content') and delta.content:
+            print(delta.content, end="", flush=True)
+        
+        # Access tool calls (not executed, just passed through)
+        if hasattr(delta, 'tool_calls') and delta.tool_calls:
+            print(f"\nTool call delta: {delta.tool_calls}")
+    
+    # Usage info in final chunk
+    if hasattr(chunk, 'usage') and chunk.usage:
+        print(f"\nTokens: {chunk.usage.total_tokens}")
+```
+
+**When to use raw mode:**
+- Building OpenAI API proxies or gateways
+- Direct integration with OpenAI-compatible clients
+- Debugging provider-specific behavior
+- Minimal latency requirements (no transformation overhead)
+
+**Limitations of raw mode:**
+- Tools are NOT executed (tool call deltas are just passed through)
+- No multi-turn iteration support
+- No ExecutionEvent telemetry
+- Raw chunks must be handled by consumer (SSE serialization, etc.)
+
+See the [streaming guide](/guides/streaming-responses) for more details and examples.
 
 ## Return Values
 
