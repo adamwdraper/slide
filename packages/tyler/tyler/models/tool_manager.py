@@ -3,11 +3,14 @@
 This module provides centralized management of tool registration, including
 delegation tools for child agents.
 """
-from typing import List, Dict, Any
+from typing import List, Dict, Any, TYPE_CHECKING
 from narrator import Thread, Message
 from tyler.utils.tool_runner import tool_runner
 from tyler.utils.tool_strategies import ToolRegistrar
 from tyler.utils.logging import get_logger
+
+if TYPE_CHECKING:
+    from weave import Prompt
 
 logger = get_logger(__name__)
 
@@ -100,11 +103,9 @@ class ToolManager:
         Returns:
             Tool definition dict
         """
-        # Import Prompt here to avoid circular dependency
-        from weave import Prompt
-        
         # Get agent purpose for description
-        if isinstance(agent.purpose, Prompt):
+        # Check if purpose has __str__ method (like Prompt) rather than importing
+        if hasattr(agent.purpose, '__str__') and not isinstance(agent.purpose, str):
             purpose = str(agent.purpose)
         else:
             purpose = agent.purpose

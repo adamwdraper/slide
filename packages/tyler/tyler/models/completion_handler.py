@@ -173,11 +173,15 @@ class CompletionHandler:
             **completion_params: Parameters for acompletion
             
         Returns:
-            Tuple of (response, weave_call)
+            Tuple of (response, weave_call). If called outside of weave's .call() context,
+            weave_call will be None. This is a compatibility workaround to ensure the return
+            type is always a tuple, matching the expected interface for downstream consumers
+            (Agent.step() expects a tuple and extracts call info from the second element).
         """
         response = await acompletion(**completion_params)
-        # When called with .call(), weave returns (response, call_info)
-        # For compatibility, return response twice if no call info
+        # When called with .call(), weave returns (response, call_info).
+        # If not called within weave's .call() context, call_info is unavailable.
+        # For compatibility, we return (response, None) to maintain a consistent tuple return type.
         return response, None
     
     def _build_metrics(

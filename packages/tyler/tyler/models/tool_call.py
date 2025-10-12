@@ -66,10 +66,16 @@ class ToolCall:
         if not name:
             raise ValueError("Tool call dict missing 'function.name' field")
         
-        # Parse arguments (may be JSON string or empty)
+        # Parse arguments (may be JSON string, dict, or empty)
         args_str = function.get('arguments', '{}') or '{}'
         try:
-            arguments = json.loads(args_str) if isinstance(args_str, str) else args_str
+            if isinstance(args_str, str):
+                arguments = json.loads(args_str)
+            elif isinstance(args_str, dict):
+                arguments = args_str
+            else:
+                logger.warning(f"Tool call arguments must be a JSON string or dict, got {type(args_str).__name__}")
+                arguments = {}
         except json.JSONDecodeError as e:
             logger.warning(f"Failed to parse tool arguments, using empty dict: {e}")
             arguments = {}
@@ -91,10 +97,16 @@ class ToolCall:
         if not name:
             raise ValueError("Tool call object missing 'function.name' attribute")
         
-        # Parse arguments (may be JSON string, empty string, or None)
+        # Parse arguments (may be JSON string, dict, empty string, or None)
         args_str = getattr(function, 'arguments', '{}') or '{}'
         try:
-            arguments = json.loads(args_str) if isinstance(args_str, str) else args_str
+            if isinstance(args_str, str):
+                arguments = json.loads(args_str)
+            elif isinstance(args_str, dict):
+                arguments = args_str
+            else:
+                logger.warning(f"Tool call arguments must be a JSON string or dict, got {type(args_str).__name__}")
+                arguments = {}
         except json.JSONDecodeError as e:
             logger.warning(f"Failed to parse tool arguments, using empty dict: {e}")
             arguments = {}
