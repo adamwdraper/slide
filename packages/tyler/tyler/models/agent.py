@@ -1414,8 +1414,24 @@ class Agent(Model):
             # Get streaming response (single iteration only)
             streaming_response, metrics = await self.step(thread, stream=True)
             
+            # Check if step() returned an error (thread, [error_msg]) instead of (response, metrics)
+            # This happens when there's an API error and step_errors_raise is False
+            if isinstance(streaming_response, Thread):
+                # step() encountered an error and returned the thread with error message
+                error_msg = "Error during LLM request"
+                if isinstance(metrics, list) and metrics:
+                    error_msg = metrics[0].content if hasattr(metrics[0], 'content') else str(metrics[0])
+                logger.error(error_msg)
+                raise RuntimeError(error_msg)
+            
             if not streaming_response:
                 error_msg = "No response received from chat completion"
+                logger.error(error_msg)
+                raise RuntimeError(error_msg)
+            
+            # Verify we got an async generator
+            if not hasattr(streaming_response, '__aiter__'):
+                error_msg = f"Expected async generator from step(), got {type(streaming_response).__name__}"
                 logger.error(error_msg)
                 raise RuntimeError(error_msg)
             
