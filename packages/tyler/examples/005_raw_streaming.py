@@ -194,8 +194,8 @@ async def main():
         await demo_comparison()
         
     except Exception as e:
-        logger.error(f"Error in demo: {e}", exc_info=True)
-        raise
+        logger.error(f"Error in demo: {e}")
+        logger.info("Note: This example requires a valid OPENAI_API_KEY environment variable")
 
 
 if __name__ == "__main__":
