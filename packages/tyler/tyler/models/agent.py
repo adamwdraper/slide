@@ -18,6 +18,9 @@ from tyler.models.execution import (
     EventType, ExecutionEvent,
     AgentResult
 )
+from tyler.models.tool_manager import ToolManager
+from tyler.models.message_factory import MessageFactory
+from tyler.models.completion_handler import CompletionHandler
 import asyncio
 from functools import partial
 
@@ -190,168 +193,21 @@ class Agent(Model):
         # Initialize the tool attributes cache
         self._tool_attributes_cache = {}
         
-        # Load tools first as they are needed for the system prompt
-        self._processed_tools = []
-        for tool in self.tools:
-            if isinstance(tool, str):
-                # Load built-in tool module
-                loaded_tools = tool_runner.load_tool_module(tool)
-                if loaded_tools:
-                    self._processed_tools.extend(loaded_tools)
-            elif hasattr(tool, 'TOOLS'):
-                # Handle module objects (e.g., lye.web, lye.files)
-                # This allows passing entire modules like: tools=[web, files]
-                module_tools = getattr(tool, 'TOOLS', [])
-                for module_tool in module_tools:
-                    if isinstance(module_tool, dict) and 'definition' in module_tool and 'implementation' in module_tool:
-                        tool_name = module_tool['definition']['function']['name']
-                        tool_runner.register_tool(
-                            name=tool_name,
-                            implementation=module_tool['implementation'],
-                            definition=module_tool['definition']['function']
-                        )
-                        
-                        # Register any tool attributes
-                        if 'attributes' in module_tool:
-                            tool_runner.register_tool_attributes(tool_name, module_tool['attributes'])
-                            
-                        self._processed_tools.append(module_tool['definition'])
-            elif isinstance(tool, dict):
-                # Add custom tool or tool from a group (e.g., from WEB_TOOLS)
-                if 'definition' in tool and 'implementation' in tool:
-                    # This is a complete tool definition (like from Lye's TOOLS lists)
-                    tool_name = tool['definition']['function']['name']
-                    tool_runner.register_tool(
-                        name=tool_name,
-                        implementation=tool['implementation'],
-                        definition=tool['definition']['function']
-                    )
-                    
-                    # Register any tool attributes
-                    if 'attributes' in tool:
-                        tool_runner.register_tool_attributes(tool_name, tool['attributes'])
-                        
-                    self._processed_tools.append(tool['definition'])
-                elif 'definition' not in tool or 'implementation' not in tool:
-                    # This is a custom tool definition without proper structure
-                    raise ValueError("Custom tools must have 'definition' and 'implementation' keys")
-            elif callable(tool):
-                # Handle direct function references
-                # Try to get tool info from Lye's TOOLS registry
-                tool_def = self._get_tool_definition_from_function(tool)
-                if tool_def:
-                    self._processed_tools.append(tool_def['definition'])
-                    # Register the tool with tool_runner
-                    tool_runner.register_tool(
-                        name=tool_def['definition']['function']['name'],
-                        implementation=tool_def['implementation'],
-                        definition=tool_def['definition']['function']
-                    )
-                else:
-                    # If not a Lye tool, create a basic definition from the function
-                    tool_name = getattr(tool, '__name__', str(tool))
-                    logger.warning(f"Tool '{tool_name}' not found in Lye registry. Creating basic definition.")
-                    
-                    # Create a minimal tool definition
-                    tool_def = {
-                        "type": "function",
-                        "function": {
-                            "name": tool_name,
-                            "description": getattr(tool, '__doc__', f"Function {tool_name}"),
-                            "parameters": {
-                                "type": "object",
-                                "properties": {},
-                                "required": []
-                            }
-                        }
-                    }
-                    
-                    self._processed_tools.append(tool_def)
-                    tool_runner.register_tool(
-                        name=tool_name,
-                        implementation=tool,
-                        definition=tool_def['function']
-                    )
-            else:
-                raise ValueError(f"Invalid tool type: {type(tool)}")
+        # Initialize MessageFactory for creating standardized messages
+        self.message_factory = MessageFactory(self.name, self.model_name)
         
-        # Create delegation tools for agents
-        if self.agents:
-            for agent in self.agents:
-                # Define delegation handler function that calls the agent directly
-                async def delegation_handler(task, context=None, child_agent=agent, **kwargs):
-                    # Create a new thread for the delegated task
-                    thread = Thread()
-                    
-                    # Add context as a system message if provided
-                    if context:
-                        context_content = "Context information:\n"
-                        for key, value in context.items():
-                            context_content += f"- {key}: {value}\n"
-                        thread.add_message(Message(
-                            role="system",
-                            content=context_content
-                        ))
-                    
-                    # Add the task as a user message
-                    thread.add_message(Message(
-                        role="user",
-                        content=task
-                    ))
-                    
-                    # Execute the child agent directly
-                    logger.info(f"Delegating task to {child_agent.name}: {task}")
-                    try:
-                        result_thread, messages = await child_agent.go(thread)
-                        
-                        # Extract response from assistant messages
-                        response = "\n\n".join([
-                            m.content for m in messages 
-                            if m.role == "assistant" and m.content
-                        ])
-                        
-                        logger.info(f"Agent {child_agent.name} completed delegated task")
-                        return response
-                        
-                    except Exception as e:
-                        logger.error(f"Error in delegated agent {child_agent.name}: {str(e)}")
-                        return f"Error in delegated agent '{child_agent.name}': {str(e)}"
-                
-                # Create a tool definition for this agent
-                tool_def = {
-                    "type": "function",
-                    "function": {
-                        "name": f"delegate_to_{agent.name}",
-                        "description": f"Delegate task to {agent.name}: {str(agent.purpose) if isinstance(agent.purpose, Prompt) else agent.purpose}",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "task": {
-                                    "type": "string",
-                                    "description": f"The task or question to delegate to the {agent.name} agent"
-                                },
-                                "context": {
-                                    "type": "object",
-                                    "description": "Additional context to provide to the agent (optional)",
-                                    "additionalProperties": True
-                                }
-                            },
-                            "required": ["task"]
-                        }
-                    }
-                }
-                
-                # Add to processed tools so it's available to the LLM
-                self._processed_tools.append(tool_def)
-                
-                # Register the tool implementation with direct closure over the agent instance
-                tool_runner.register_tool(
-                    name=f"delegate_to_{agent.name}",
-                    implementation=delegation_handler,
-                    definition=tool_def["function"]
-                )
-                
-                logger.info(f"Registered delegation tool: delegate_to_{agent.name}")
+        # Initialize CompletionHandler for LLM communication
+        self.completion_handler = CompletionHandler(
+            model_name=self.model_name,
+            temperature=self.temperature,
+            api_base=self.api_base,
+            extra_headers=self.extra_headers,
+            drop_params=self.drop_params
+        )
+        
+        # Use ToolManager to register all tools and delegation
+        tool_manager = ToolManager(tools=self.tools, agents=self.agents)
+        self._processed_tools = tool_manager.register_all_tools()
 
         # Create default stores if not provided
         if self.thread_store is None:
@@ -422,16 +278,17 @@ class Agent(Model):
         """
         normalized_tool_call = self._normalize_tool_call(tool_call)
         return await tool_runner.execute_tool_call(normalized_tool_call)
-
+    
     @weave.op()
     async def _get_completion(self, **completion_params) -> Any:
         """Get a completion from the LLM with weave tracing.
         
+        This is a thin wrapper around acompletion for backward compatibility
+        with tests that mock this method.
+        
         Returns:
-            Any: The completion response. When called with .call(), also returns weave_call info.
-            If streaming is enabled, returns an async generator of completion chunks.
+            Any: The completion response.
         """
-        # Call completion directly first to get the response
         response = await acompletion(**completion_params)
         return response
     
@@ -454,82 +311,24 @@ class Agent(Model):
         # Get thread messages (these won't include system messages as they're filtered out)
         thread_messages = await thread.get_messages_for_chat_completion(file_store=self.file_store)
         
-        # Create completion messages with ephemeral system prompt at the beginning
+        # Use CompletionHandler to build parameters
         completion_messages = [{"role": "system", "content": self._system_prompt}] + thread_messages
-        
-        completion_params = {
-            "model": self.model_name,
-            "messages": completion_messages,
-            "temperature": self.temperature,
-            "stream": stream
-        }
-        
-        # Add custom API base URL if specified
-        if self.api_base:
-            completion_params["api_base"] = self.api_base
-            
-        # Add extra headers if specified
-        if self.extra_headers:
-            completion_params["extra_headers"] = self.extra_headers
-        
-        # Add drop_params to handle model-specific restrictions
-        completion_params["drop_params"] = self.drop_params
-        
-        if len(self._processed_tools) > 0:
-            # Check if using Gemini model and modify tools accordingly
-            if "gemini" in self.model_name.lower():
-                # Create a deep copy of the tools to avoid modifying the originals
-                import copy
-                modified_tools = copy.deepcopy(self._processed_tools)
-                
-                # Remove additionalProperties from all tool parameters
-                for tool in modified_tools:
-                    if "function" in tool and "parameters" in tool["function"]:
-                        params = tool["function"]["parameters"]
-                        if "properties" in params:
-                            for prop_name, prop in params["properties"].items():
-                                if isinstance(prop, dict) and "additionalProperties" in prop:
-                                    del prop["additionalProperties"]
-                
-                completion_params["tools"] = modified_tools
-            else:
-                completion_params["tools"] = self._processed_tools
+        completion_params = self.completion_handler._build_completion_params(
+            messages=completion_messages,
+            tools=self._processed_tools,
+            stream=stream
+        )
         
         # Track API call time
         api_start_time = datetime.now(UTC)
         
         try:
-            # Get completion with weave call tracking
+            # Get completion with weave call tracking (kept for backward compatibility)
             response, call = await self._get_completion.call(self, **completion_params)
             
-            # Create metrics dict with essential data
-            metrics = {
-                "model": self.model_name,  # Use model_name since streaming responses don't include model
-                "timing": {
-                    "started_at": api_start_time.isoformat(),
-                    "ended_at": datetime.now(UTC).isoformat(),
-                    "latency": (datetime.now(UTC) - api_start_time).total_seconds() * 1000
-                }
-            }
-
-            # Add weave-specific metrics if available
-            try:
-                if hasattr(call, 'id') and call.id:
-                    metrics["weave_call"] = {
-                        "id": str(call.id),
-                        "ui_url": str(call.ui_url)
-                    }
-            except (AttributeError, ValueError):
-                pass
+            # Use CompletionHandler to build metrics
+            metrics = self.completion_handler._build_metrics(api_start_time, response, call)
             
-            # Get usage metrics if available
-            if hasattr(response, 'usage'):
-                metrics["usage"] = {
-                    "completion_tokens": getattr(response.usage, "completion_tokens", 0),
-                    "prompt_tokens": getattr(response.usage, "prompt_tokens", 0),
-                    "total_tokens": getattr(response.usage, "total_tokens", 0)
-                }
-                    
             return response, metrics
         except Exception as e:
             if self.step_errors_raise:
@@ -691,11 +490,7 @@ class Agent(Model):
     @weave.op()
     async def _handle_max_iterations(self, thread: Thread, new_messages: List[Message]) -> Tuple[Thread, List[Message]]:
         """Handle the case when max iterations is reached."""
-        message = Message(
-            role="assistant",
-            content="Maximum tool iteration count reached. Stopping further tool calls.",
-            source=self._create_assistant_source(include_version=False)
-        )
+        message = self.message_factory.create_max_iterations_message()
         thread.add_message(message)
         new_messages.append(message)
         if self.thread_store:
@@ -978,11 +773,7 @@ class Agent(Model):
                 
                 # Check for max iterations
                 if self._iteration_count >= self.max_tool_iterations:
-                    message = Message(
-                        role="assistant",
-                        content="Maximum tool iteration count reached. Stopping further tool calls.",
-                        source=self._create_assistant_source(include_version=False)
-                    )
+                    message = self.message_factory.create_max_iterations_message()
                     thread.add_message(message)
                     new_messages.append(message)
                     record_event(EventType.MESSAGE_CREATED, {"message": message})
@@ -1090,11 +881,7 @@ class Agent(Model):
             
             # Check if we've already hit max iterations
             if self._iteration_count >= self.max_tool_iterations:
-                message = Message(
-                    role="assistant",
-                    content="Maximum tool iteration count reached. Stopping further tool calls.",
-                    source=self._create_assistant_source(include_version=False)
-                )
+                message = self.message_factory.create_max_iterations_message()
                 thread.add_message(message)
                 new_messages.append(message)
                 yield ExecutionEvent(
@@ -1480,19 +1267,7 @@ class Agent(Model):
 
     def _create_error_message(self, error_msg: str, source: Optional[Dict] = None) -> Message:
         """Create a standardized error message."""
-        timestamp = self._get_timestamp()
-        return Message(
-            role="assistant",
-            content=f"I encountered an error: {error_msg}. Please try again.",
-            source=source or self._create_assistant_source(include_version=False),
-            metrics={
-                "timing": {
-                    "started_at": timestamp,
-                    "ended_at": timestamp,
-                    "latency": 0
-                }
-            }
-        )
+        return self.message_factory.create_error_message(error_msg, source=source)
     
     def _process_tool_result(self, result: Any, tool_call: Any, tool_name: str) -> Tuple[Message, bool]:
         """
@@ -1568,31 +1343,3 @@ class Agent(Model):
         should_break = tool_attributes and tool_attributes.get('type') == 'interrupt'
         
         return tool_message, should_break 
-
-    def _get_tool_definition_from_function(self, func: Callable) -> Optional[Dict]:
-        """Look up a tool definition from a function reference using Lye's registry."""
-        try:
-            # Import Lye to access the TOOLS registry
-            import lye
-            
-            # Check each module's tools
-            for module_name, tools_list in lye.TOOL_MODULES.items():
-                for tool_info in tools_list:
-                    if (isinstance(tool_info, dict) and 
-                        'implementation' in tool_info and 
-                        tool_info['implementation'] == func):
-                        return tool_info
-                        
-            # Also check the combined TOOLS list
-            for tool_info in lye.TOOLS:
-                if (isinstance(tool_info, dict) and 
-                    'implementation' in tool_info and 
-                    tool_info['implementation'] == func):
-                    return tool_info
-                    
-        except ImportError:
-            logger.warning("Could not import lye to look up tool definitions")
-        except Exception as e:
-            logger.warning(f"Error looking up tool definition: {e}")
-            
-        return None 
