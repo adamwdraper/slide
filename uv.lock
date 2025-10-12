@@ -5074,7 +5074,7 @@ wheels = [
 
 [[package]]
 name = "slide-lye"
-version = "1.0.0"
+version = "1.0.1"
 source = { editable = "packages/lye" }
 dependencies = [
     { name = "beautifulsoup4" },
@@ -5218,7 +5218,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "slide-tyler"
-version = "2.0.5"
+version = "2.0.6"
 source = { editable = "packages/tyler" }
 dependencies = [
     { name = "aiohappyeyeballs" },

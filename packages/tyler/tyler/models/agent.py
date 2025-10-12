@@ -1384,7 +1384,6 @@ class Agent(Model):
         
         return tool_message, should_break
     
-    @weave.op()
     async def _go_stream_raw(self, thread_or_id: Union[Thread, str]) -> AsyncGenerator[Any, None]:
         """
         Raw streaming implementation that yields unmodified LiteLLM chunks.
