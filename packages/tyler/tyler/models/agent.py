@@ -509,16 +509,24 @@ class Agent(Model):
     def go(
         self, 
         thread_or_id: Union[Thread, str],
-        stream: Literal[True]
+        stream: Union[Literal[True], Literal["events"]]
     ) -> AsyncGenerator[ExecutionEvent, None]:
+        ...
+    
+    @overload
+    def go(
+        self, 
+        thread_or_id: Union[Thread, str],
+        stream: Literal["raw"]
+    ) -> AsyncGenerator[Any, None]:
         ...
     
     @weave.op()
     def go(
         self, 
         thread_or_id: Union[Thread, str],
-        stream: bool = False
-    ) -> Union[AgentResult, AsyncGenerator[ExecutionEvent, None]]:
+        stream: Union[bool, Literal["events", "raw"]] = False
+    ) -> Union[AgentResult, AsyncGenerator[ExecutionEvent, None], AsyncGenerator[Any, None]]:
         """
         Process the thread with the agent.
         
@@ -528,22 +536,29 @@ class Agent(Model):
         Args:
             thread_or_id: Thread object or thread ID to process. The thread will be
                          modified in-place with new messages.
-            stream: If True, returns an async generator yielding ExecutionEvents
-                   as they occur. If False, collects all events and returns an
-                   AgentResult after completion.
+            stream: Controls the output format:
+                   - False (default): Returns AgentResult after completion
+                   - True or "events": Returns async generator of ExecutionEvents
+                   - "raw": Returns async generator of raw LiteLLM chunks
             
         Returns:
             If stream=False:
                 AgentResult containing the updated thread, new messages,
                 final output, and complete execution details.
             
-            If stream=True:
+            If stream=True or stream="events":
                 Async generator yielding ExecutionEvent objects in real-time.
                 Events include message creation, tool execution, and all
                 intermediate steps.
+            
+            If stream="raw":
+                Async generator yielding raw LiteLLM chunk objects in 
+                OpenAI-compatible format. Chunks are passed through unmodified
+                for direct integration with OpenAI-compatible clients.
         
         Raises:
-            ValueError: If thread_id is provided but thread is not found
+            ValueError: If thread_id is provided but thread is not found, or
+                       if an invalid stream value is provided
             Exception: Re-raises any unhandled exceptions during execution,
                       but execution details are still available in the result
                       
@@ -551,17 +566,42 @@ class Agent(Model):
             # Non-streaming usage
             result = await agent.go(thread)
             print(f"Response: {result.content}")
-            print(f"Tokens used: {result.execution.total_tokens}")
             
-            # Streaming usage
+            # ExecutionEvent streaming (observability)
             async for event in agent.go(thread, stream=True):
                 if event.type == EventType.MESSAGE_CREATED:
                     print(f"New message: {event.data['message'].content}")
+            
+            # Raw chunk streaming (OpenAI compatibility)
+            async for chunk in agent.go(thread, stream="raw"):
+                if hasattr(chunk.choices[0].delta, 'content'):
+                    print(chunk.choices[0].delta.content, end="")
         """
-        if stream:
-            return self._go_stream(thread_or_id)
+        # Normalize and validate stream parameter
+        if stream is True:
+            stream_mode = "events"
+        elif stream is False:
+            stream_mode = None
+        elif stream in ("events", "raw"):
+            stream_mode = stream
         else:
+            raise ValueError(
+                f"Invalid stream value: {stream}. "
+                f"Must be False, True, 'events', or 'raw'"
+            )
+        
+        logger.debug(f"Agent.go() called with stream mode: {stream_mode}")
+        
+        # Route to appropriate implementation
+        if stream_mode is None:
             return self._go_complete(thread_or_id)
+        elif stream_mode == "events":
+            return self._go_stream(thread_or_id)
+        elif stream_mode == "raw":
+            return self._go_stream_raw(thread_or_id)
+        else:
+            # Should never reach here due to validation above
+            raise ValueError(f"Unexpected stream mode: {stream_mode}")
     
     @weave.op()
     async def _go_complete(self, thread_or_id: Union[Thread, str]) -> AgentResult:
@@ -1342,4 +1382,55 @@ class Agent(Model):
         tool_attributes = self._get_tool_attributes(tool_name)
         should_break = tool_attributes and tool_attributes.get('type') == 'interrupt'
         
-        return tool_message, should_break 
+        return tool_message, should_break
+    
+    @weave.op()
+    async def _go_stream_raw(self, thread_or_id: Union[Thread, str]) -> AsyncGenerator[Any, None]:
+        """
+        Raw streaming implementation that yields unmodified LiteLLM chunks.
+        
+        This mode is designed for OpenAI compatibility and passes through raw chunks
+        without transformation. Tool calls are NOT executed in this mode - tool call
+        deltas are simply passed through in the chunks.
+        
+        Args:
+            thread_or_id: Thread object or thread ID to process
+            
+        Yields:
+            Raw LiteLLM chunk objects in OpenAI-compatible format
+            
+        Note:
+            This mode does NOT support:
+            - Tool execution (only passes through tool call deltas)
+            - Multiple iterations
+            - ExecutionEvent telemetry
+        """
+        try:
+            # Get thread
+            thread = await self._get_thread(thread_or_id)
+            
+            logger.debug(f"Starting raw streaming for thread {thread.id}")
+            
+            # Get streaming response (single iteration only)
+            streaming_response, metrics = await self.step(thread, stream=True)
+            
+            if not streaming_response:
+                error_msg = "No response received from chat completion"
+                logger.error(error_msg)
+                raise RuntimeError(error_msg)
+            
+            # Pass through all chunks unmodified
+            chunk_count = 0
+            async for chunk in streaming_response:
+                chunk_count += 1
+                yield chunk
+            
+            logger.debug(f"Raw streaming complete - {chunk_count} chunks yielded")
+            
+        except ValueError:
+            # Re-raise ValueError for thread not found
+            raise
+        except Exception as e:
+            error_msg = f"Error in raw streaming mode: {str(e)}"
+            logger.error(error_msg)
+            raise 
