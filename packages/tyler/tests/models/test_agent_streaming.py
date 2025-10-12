@@ -1344,8 +1344,17 @@ async def test_raw_mode_yields_chunks_with_openai_fields():
         assert hasattr(raw_chunks[0], 'created')
         assert hasattr(raw_chunks[0], 'model')
         assert hasattr(raw_chunks[0], 'choices')
-        assert raw_chunks[0].choices[0].delta.content == "Hello"
-        assert raw_chunks[1].choices[0].delta.content == " world"
+        
+        # Delta can be dict or object depending on LiteLLM version
+        delta_0 = raw_chunks[0].choices[0].delta
+        delta_1 = raw_chunks[1].choices[0].delta
+        
+        if isinstance(delta_0, dict):
+            assert delta_0["content"] == "Hello"
+            assert delta_1["content"] == " world"
+        else:
+            assert delta_0.content == "Hello"
+            assert delta_1.content == " world"
 
 
 @pytest.mark.asyncio
@@ -1455,9 +1464,18 @@ async def test_raw_mode_tool_call_deltas():
         
         # Should have tool call deltas in raw format
         assert len(raw_chunks) == 3
-        assert hasattr(raw_chunks[0].choices[0].delta, 'tool_calls')
-        assert raw_chunks[0].choices[0].delta.tool_calls[0]["id"] == "call_123"
-        assert raw_chunks[0].choices[0].delta.tool_calls[0]["function"]["name"] == "get_weather"
+        
+        # Delta can be dict or object depending on LiteLLM version
+        delta_0 = raw_chunks[0].choices[0].delta
+        
+        if isinstance(delta_0, dict):
+            assert "tool_calls" in delta_0
+            assert delta_0["tool_calls"][0]["id"] == "call_123"
+            assert delta_0["tool_calls"][0]["function"]["name"] == "get_weather"
+        else:
+            assert hasattr(delta_0, 'tool_calls')
+            assert delta_0.tool_calls[0]["id"] == "call_123"
+            assert delta_0.tool_calls[0]["function"]["name"] == "get_weather"
 
 
 @pytest.mark.asyncio
