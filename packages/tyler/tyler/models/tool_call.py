@@ -66,19 +66,9 @@ class ToolCall:
         if not name:
             raise ValueError("Tool call dict missing 'function.name' field")
         
-        # Parse arguments (may be JSON string, dict, or empty)
+        # Parse arguments using shared helper
         args_str = function.get('arguments', '{}') or '{}'
-        try:
-            if isinstance(args_str, str):
-                arguments = json.loads(args_str)
-            elif isinstance(args_str, dict):
-                arguments = args_str
-            else:
-                logger.warning(f"Tool call arguments must be a JSON string or dict, got {type(args_str).__name__}")
-                arguments = {}
-        except json.JSONDecodeError as e:
-            logger.warning(f"Failed to parse tool arguments, using empty dict: {e}")
-            arguments = {}
+        arguments = cls._parse_arguments(args_str)
         
         return cls(id=tool_id, name=name, arguments=arguments)
     
@@ -97,21 +87,35 @@ class ToolCall:
         if not name:
             raise ValueError("Tool call object missing 'function.name' attribute")
         
-        # Parse arguments (may be JSON string, dict, empty string, or None)
+        # Parse arguments using shared helper
         args_str = getattr(function, 'arguments', '{}') or '{}'
-        try:
-            if isinstance(args_str, str):
-                arguments = json.loads(args_str)
-            elif isinstance(args_str, dict):
-                arguments = args_str
-            else:
-                logger.warning(f"Tool call arguments must be a JSON string or dict, got {type(args_str).__name__}")
-                arguments = {}
-        except json.JSONDecodeError as e:
-            logger.warning(f"Failed to parse tool arguments, using empty dict: {e}")
-            arguments = {}
+        arguments = cls._parse_arguments(args_str)
         
         return cls(id=tool_id, name=name, arguments=arguments)
+    
+    @classmethod
+    def _parse_arguments(cls, args_str: Any) -> Dict[str, Any]:
+        """Parse tool call arguments from various formats.
+        
+        Handles JSON strings, dicts, and edge cases (None, empty string).
+        
+        Args:
+            args_str: Arguments as JSON string, dict, or other type
+            
+        Returns:
+            Parsed arguments as dict, or empty dict if parsing fails
+        """
+        try:
+            if isinstance(args_str, str):
+                return json.loads(args_str)
+            elif isinstance(args_str, dict):
+                return args_str
+            else:
+                logger.warning(f"Tool call arguments must be a JSON string or dict, got {type(args_str).__name__}")
+                return {}
+        except json.JSONDecodeError as e:
+            logger.warning(f"Failed to parse tool arguments, using empty dict: {e}")
+            return {}
     
     def to_message_format(self) -> Dict[str, Any]:
         """Convert to format suitable for Message.tool_calls field.

@@ -104,11 +104,8 @@ class ToolManager:
             Tool definition dict
         """
         # Get agent purpose for description
-        # Check if purpose has __str__ method (like Prompt) rather than importing
-        if hasattr(agent.purpose, '__str__') and not isinstance(agent.purpose, str):
-            purpose = str(agent.purpose)
-        else:
-            purpose = agent.purpose
+        # str() works for all types including strings and Prompt objects
+        purpose = str(agent.purpose)
         
         return {
             "type": "function",

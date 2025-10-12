@@ -157,7 +157,10 @@ class DictToolStrategy(ToolRegistrationStrategy):
         """
         # Validate required keys
         if 'definition' not in tool or 'implementation' not in tool:
-            raise ValueError("Custom tools must have 'definition' and 'implementation' keys")
+            raise ValueError(
+                "Custom tools must have 'definition' and 'implementation' keys. "
+                "Expected format: {'definition': {'type': 'function', 'function': {...}}, 'implementation': callable}"
+            )
         
         tool_name = tool['definition']['function']['name']
         logger.debug(f"Registering dict tool: {tool_name}")
