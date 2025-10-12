@@ -314,3 +314,4 @@ temp/*.json
 
 # Ignore Code Workspace files
 *.code-workspace.cursor/
+*.code-workspace
