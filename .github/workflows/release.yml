@@ -1,47 +1,18 @@
 name: Unified Release
 
 on:
-  push:
+  pull_request:
+    types: [closed]
     branches: [ main ]
-    paths:
-      - 'packages/**/pyproject.toml'
-      - 'packages/**/__init__.py'
 
 permissions:
   contents: write
   pull-requests: write
 
 jobs:
-  check-release:
-    # Only run if this is a merge from a release/v* branch
-    runs-on: ubuntu-latest
-    outputs:
-      is_release: ${{ steps.check.outputs.is_release }}
-      version: ${{ steps.check.outputs.version }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 2
-      
-      - id: check
-        run: |
-          # Check if this is a merge commit from a release branch
-          COMMIT_MSG="${{ github.event.head_commit.message }}"
-          
-          # Merge commits have format: "Merge pull request #XX from org/release/vX.Y.Z"
-          if [[ "$COMMIT_MSG" =~ Merge\ pull\ request.*from.*release/v([0-9]+\.[0-9]+\.[0-9]+) ]]; then
-            VERSION="${BASH_REMATCH[1]}"
-            echo "is_release=true" >> $GITHUB_OUTPUT
-            echo "version=$VERSION" >> $GITHUB_OUTPUT
-            echo "✓ Detected release merge for version $VERSION"
-          else
-            echo "is_release=false" >> $GITHUB_OUTPUT
-            echo "✗ Not a release merge, skipping"
-          fi
-  
   publish-all:
-    needs: check-release
-    if: needs.check-release.outputs.is_release == 'true'
+    # Only run if PR was merged and branch matches release/v*
+    if: github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'release/v')
     runs-on: ubuntu-latest
     
     steps:
@@ -50,12 +21,13 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
       
-      - name: Set version from check-release job
+      - name: Extract version from branch
         id: version
         run: |
-          VERSION="${{ needs.check-release.outputs.version }}"
+          BRANCH_NAME="${{ github.event.pull_request.head.ref }}"
+          VERSION=${BRANCH_NAME#release/v}
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-          echo "Using version: $VERSION"
+          echo "Extracted version: $VERSION"
       
       - name: Install uv
         uses: astral-sh/setup-uv@v4
@@ -69,6 +41,27 @@ jobs:
       
       - name: Install hatch
         run: uv tool install hatch
+      
+      - name: Verify versions in all packages
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          echo "Verifying all packages are at version $VERSION..."
+          
+          for PACKAGE in tyler narrator space-monkey lye; do
+            PACKAGE_DIR="packages/$PACKAGE"
+            PYPROJECT_VERSION=$(grep 'version = "' $PACKAGE_DIR/pyproject.toml | sed 's/.*version = "\([^"]*\)".*/\1/')
+            
+            echo "  $PACKAGE: $PYPROJECT_VERSION"
+            
+            if [ "$PYPROJECT_VERSION" != "$VERSION" ]; then
+              echo "ERROR: Version mismatch in $PACKAGE!"
+              echo "  Expected: $VERSION"
+              echo "  Found: $PYPROJECT_VERSION"
+              exit 1
+            fi
+          done
+          
+          echo "✓ All packages at version $VERSION"
       
       - name: Create git tags
         run: |
@@ -169,4 +162,3 @@ See [CHANGELOG](https://github.com/${{ github.repository }}/blob/main/packages/l
             packages/lye/dist/*
           
           echo "✓ All GitHub releases created"
-
