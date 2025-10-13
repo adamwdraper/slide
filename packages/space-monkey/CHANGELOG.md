@@ -1,4 +1,4 @@
-## [space-monkey-v2.2.1] - 2025-10-13
+## [space-monkey-v2.2.2] - 2025-10-13
 
 ### 🚀 Features
 

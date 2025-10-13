@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "slide-space-monkey"
-version = "2.2.1"
+version = "2.2.2"
 description = "A simple, powerful way to deploy Tyler AI agents as Slack agents"
 readme = "README.md"
 requires-python = ">=3.11"
