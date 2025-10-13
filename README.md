@@ -13,10 +13,16 @@ Slide is a monorepo containing a collection of AI agent development tools:
 
 ## Installation
 
+**Requirements:** Python 3.11 or higher
+
 ### Install Individual Packages
 
 ```bash
 # Using uv (recommended)
+uv init my-project
+cd my-project
+
+# Add the packages
 uv add slide-tyler
 uv add slide-narrator
 uv add slide-lye
@@ -26,6 +32,8 @@ uv add slide-space-monkey
 uv add slide-tyler slide-narrator slide-lye slide-space-monkey
 
 # Using pip (fallback)
+python3 -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install slide-tyler slide-narrator slide-lye slide-space-monkey
 ```
 

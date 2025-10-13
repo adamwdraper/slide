@@ -6,7 +6,7 @@ Attach this file + the feature spec to the agent for every build.
 ---
 
 ## Languages & Frameworks
-- Backend: Python (3.13+) 
+- Backend: Python (3.11+) 
 - Package management: uv (Python)
 
 ## Project Conventions

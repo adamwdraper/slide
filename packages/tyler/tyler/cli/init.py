@@ -57,7 +57,7 @@ def create_pyproject_toml(project_path: Path, project_name: str) -> None:
 name = "{project_name}"
 version = "0.1.0"
 description = "A Tyler agent for {project_name}"
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 dependencies = [
     "slide-tyler>=2.0.0",
     "python-dotenv>=1.0.0",

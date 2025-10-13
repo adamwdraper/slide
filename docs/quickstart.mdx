@@ -5,6 +5,10 @@ description: 'Build your first AI agent in 5 minutes'
 
 In this quickstart, you'll build an AI agent that can search the web and analyze images. Let's dive in!
 
+<Note>
+  **Requirements:** Python 3.11 or higher
+</Note>
+
 <Steps>
   <Step title="Install Slide">
     <Tabs>
@@ -23,8 +27,8 @@ In this quickstart, you'll build an AI agent that can search the web and analyze
       </Tab>
       <Tab title="pip">
         ```bash
-        # Create a virtual environment
-        python -m venv venv
+        # Create a virtual environment (Python 3.11+)
+        python3 -m venv venv
         source venv/bin/activate  # On Windows: venv\Scripts\activate
 
         # Install Slide
@@ -200,6 +204,31 @@ Now that you have a working agent, explore these guides to add more capabilities
 ## Troubleshooting
 
 <AccordionGroup>
+  <Accordion title="Python Version Errors">
+    If you see errors like "No solution found when resolving dependencies" or "requires Python>=3.11":
+    
+    **For uv users:**
+    ```bash
+    # If you initialized with an older Python version, edit your pyproject.toml:
+    # requires-python = ">=3.11"
+    
+    # Then recreate your virtual environment:
+    rm -rf .venv
+    uv sync
+    ```
+    
+    **For pip users:**
+    ```bash
+    # Make sure you're using Python 3.11+
+    python --version  # Should show 3.11 or higher
+    
+    # If not, create a new venv with Python 3.11+:
+    python3.11 -m venv venv
+    source venv/bin/activate
+    pip install slide-tyler slide-lye slide-narrator
+    ```
+  </Accordion>
+
   <Accordion title="API Key Errors">
     Make sure to set your OpenAI API key:
     ```bash

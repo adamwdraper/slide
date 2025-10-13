@@ -13,6 +13,10 @@ on:
 jobs:
   test-examples:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.11', '3.12', '3.13']
+      fail-fast: false
     
     steps:
     - uses: actions/checkout@v4
@@ -22,10 +26,10 @@ jobs:
       with:
         enable-cache: true
     
-    - name: Set up Python
+    - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5
       with:
-        python-version: '3.13'
+        python-version: ${{ matrix.python-version }}
     
     - name: Install system dependencies
       run: |
@@ -60,6 +64,10 @@ jobs:
     runs-on: ubuntu-latest
     # Only run on main branch and if API key is available
     if: github.ref == 'refs/heads/main' && github.repository == 'adamwdraper/slide'
+    strategy:
+      matrix:
+        python-version: ['3.11', '3.12', '3.13']
+      fail-fast: false
     
     steps:
     - uses: actions/checkout@v4
@@ -69,10 +77,10 @@ jobs:
       with:
         enable-cache: true
     
-    - name: Set up Python
+    - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5
       with:
-        python-version: '3.13'
+        python-version: ${{ matrix.python-version }}
     
     - name: Install system dependencies
       run: |
