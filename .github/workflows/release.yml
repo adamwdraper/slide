@@ -11,8 +11,11 @@ permissions:
 
 jobs:
   publish-all:
-    # Only run if PR was merged and branch matches release/v*
-    if: github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'release/v')
+    # Only run if PR was merged, has release label, and branch matches release/v*
+    if: |
+      github.event.pull_request.merged == true &&
+      contains(github.event.pull_request.labels.*.name, 'release') &&
+      startsWith(github.event.pull_request.head.ref, 'release/v')
     runs-on: ubuntu-latest
     
     steps:
