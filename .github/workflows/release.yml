@@ -1,0 +1,187 @@
+name: Unified Release
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [ main ]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  check-release:
+    # Quick check to prevent workflow from running on non-release PRs
+    if: |
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.merged == true &&
+      contains(github.event.pull_request.labels.*.name, 'release') &&
+      startsWith(github.event.pull_request.head.ref, 'release/v')
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.check.outputs.result }}
+    steps:
+      - id: check
+        run: echo "result=true" >> $GITHUB_OUTPUT
+  
+  publish-all:
+    needs: check-release
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Validate release branch
+        run: |
+          if [[ ! "${{ github.event.pull_request.head.ref }}" =~ ^release/v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "ERROR: Branch must match pattern release/vX.Y.Z"
+            echo "Branch: ${{ github.event.pull_request.head.ref }}"
+            exit 1
+          fi
+          echo "✓ Valid release branch"
+      
+      - name: Extract version from branch
+        id: version
+        run: |
+          BRANCH_NAME="${{ github.event.pull_request.head.ref }}"
+          VERSION=${BRANCH_NAME#release/v}
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "Extracted version: $VERSION"
+      
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      
+      - name: Install hatch
+        run: uv tool install hatch
+      
+      - name: Verify versions in all packages
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          echo "Verifying all packages are at version $VERSION..."
+          
+          for PACKAGE in tyler narrator space-monkey lye; do
+            PACKAGE_DIR="packages/$PACKAGE"
+            PYPROJECT_VERSION=$(grep -Po '(?<=version = ")[^"]*' $PACKAGE_DIR/pyproject.toml)
+            
+            echo "  $PACKAGE: $PYPROJECT_VERSION"
+            
+            if [ "$PYPROJECT_VERSION" != "$VERSION" ]; then
+              echo "ERROR: Version mismatch in $PACKAGE!"
+              echo "  Expected: $VERSION"
+              echo "  Found: $PYPROJECT_VERSION"
+              exit 1
+            fi
+          done
+          
+          echo "✓ All packages at version $VERSION"
+      
+      - name: Create git tags
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          
+          for PACKAGE in tyler narrator space-monkey lye; do
+            TAG="$PACKAGE-v$VERSION"
+            echo "Creating tag: $TAG"
+            git tag -a "$TAG" -m "Release $PACKAGE version $VERSION"
+            git push origin "$TAG"
+          done
+          
+          echo "✓ All tags created and pushed"
+      
+      - name: Build all packages
+        run: |
+          for PACKAGE in tyler narrator space-monkey lye; do
+            echo "::group::Building $PACKAGE"
+            cd "packages/$PACKAGE"
+            uv tool run hatch build
+            cd ../..
+            echo "::endgroup::"
+            echo "::notice::$PACKAGE built successfully"
+          done
+      
+      - name: Publish all packages to PyPI
+        env:
+          HATCH_INDEX_USER: __token__
+          HATCH_INDEX_AUTH: ${{ secrets.PYPI_API_TOKEN }}
+        run: |
+          for PACKAGE in tyler narrator space-monkey lye; do
+            echo "::group::Publishing $PACKAGE"
+            cd "packages/$PACKAGE"
+            uv tool run hatch publish
+            cd ../..
+            echo "::endgroup::"
+            echo "::notice::$PACKAGE published successfully to PyPI"
+          done
+      
+      - name: Create GitHub releases
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          
+          # Tyler release
+          gh release create "tyler-v$VERSION" \
+            --title "Tyler v$VERSION" \
+            --notes "Release Tyler v$VERSION
+
+**Package**: slide-tyler  
+**Version**: $VERSION
+
+This is part of the unified Slide release v$VERSION. All Slide packages at version $VERSION are guaranteed compatible.
+
+See [CHANGELOG](https://github.com/${{ github.repository }}/blob/main/packages/tyler/CHANGELOG.md) for details." \
+            packages/tyler/dist/*
+          
+          # Narrator release
+          gh release create "narrator-v$VERSION" \
+            --title "Narrator v$VERSION" \
+            --notes "Release Narrator v$VERSION
+
+**Package**: slide-narrator  
+**Version**: $VERSION
+
+This is part of the unified Slide release v$VERSION. All Slide packages at version $VERSION are guaranteed compatible.
+
+See [CHANGELOG](https://github.com/${{ github.repository }}/blob/main/packages/narrator/CHANGELOG.md) for details." \
+            packages/narrator/dist/*
+          
+          # Space Monkey release
+          gh release create "space-monkey-v$VERSION" \
+            --title "Space Monkey v$VERSION" \
+            --notes "Release Space Monkey v$VERSION
+
+**Package**: slide-space-monkey  
+**Version**: $VERSION
+
+This is part of the unified Slide release v$VERSION. All Slide packages at version $VERSION are guaranteed compatible.
+
+See [CHANGELOG](https://github.com/${{ github.repository }}/blob/main/packages/space-monkey/CHANGELOG.md) for details." \
+            packages/space-monkey/dist/*
+          
+          # Lye release
+          gh release create "lye-v$VERSION" \
+            --title "Lye v$VERSION" \
+            --notes "Release Lye v$VERSION
+
+**Package**: slide-lye  
+**Version**: $VERSION
+
+This is part of the unified Slide release v$VERSION. All Slide packages at version $VERSION are guaranteed compatible.
+
+See [CHANGELOG](https://github.com/${{ github.repository }}/blob/main/packages/lye/CHANGELOG.md) for details." \
+            packages/lye/dist/*
+          
+          echo "✓ All GitHub releases created"
+
