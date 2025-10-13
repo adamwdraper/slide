@@ -13,22 +13,35 @@ permissions:
 
 jobs:
   check-release:
-    # Only run if the commit message indicates a release
-    if: startsWith(github.event.head_commit.message, 'Release v')
+    # Only run if this is a merge from a release/v* branch
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.extract.outputs.version }}
+      is_release: ${{ steps.check.outputs.is_release }}
+      version: ${{ steps.check.outputs.version }}
     steps:
-      - id: extract
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      
+      - id: check
         run: |
-          # Extract version from commit message "Release v2.2.2"
+          # Check if this is a merge commit from a release branch
           COMMIT_MSG="${{ github.event.head_commit.message }}"
-          VERSION=$(echo "$COMMIT_MSG" | sed -n 's/^Release v\([0-9]\+\.[0-9]\+\.[0-9]\+\).*/\1/p')
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Detected release version: $VERSION"
+          
+          # Merge commits have format: "Merge pull request #XX from org/release/vX.Y.Z"
+          if [[ "$COMMIT_MSG" =~ Merge\ pull\ request.*from.*release/v([0-9]+\.[0-9]+\.[0-9]+) ]]; then
+            VERSION="${BASH_REMATCH[1]}"
+            echo "is_release=true" >> $GITHUB_OUTPUT
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "✓ Detected release merge for version $VERSION"
+          else
+            echo "is_release=false" >> $GITHUB_OUTPUT
+            echo "✗ Not a release merge, skipping"
+          fi
   
   publish-all:
     needs: check-release
+    if: needs.check-release.outputs.is_release == 'true'
     runs-on: ubuntu-latest
     
     steps:
