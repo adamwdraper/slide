@@ -1,9 +1,11 @@
 name: Unified Release
 
 on:
-  pull_request:
-    types: [closed]
+  push:
     branches: [ main ]
+    paths:
+      - 'packages/**/pyproject.toml'
+      - 'packages/**/__init__.py'
 
 permissions:
   contents: write
@@ -11,18 +13,18 @@ permissions:
 
 jobs:
   check-release:
-    # Quick check to prevent workflow from running on non-release PRs
-    if: |
-      github.event_name == 'pull_request' &&
-      github.event.pull_request.merged == true &&
-      contains(github.event.pull_request.labels.*.name, 'release') &&
-      startsWith(github.event.pull_request.head.ref, 'release/v')
+    # Only run if the commit message indicates a release
+    if: startsWith(github.event.head_commit.message, 'Release v')
     runs-on: ubuntu-latest
     outputs:
-      should_release: ${{ steps.check.outputs.result }}
+      version: ${{ steps.extract.outputs.version }}
     steps:
-      - id: check
-        run: echo "result=true" >> $GITHUB_OUTPUT
+      - id: extract
+        run: |
+          # Extract version from commit message "Release v2.2.2"
+          VERSION=$(echo "${{ github.event.head_commit.message }}" | grep -oP 'Release v\K[0-9]+\.[0-9]+\.[0-9]+')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Detected release version: $VERSION"
   
   publish-all:
     needs: check-release
@@ -34,22 +36,12 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
       
-      - name: Validate release branch
-        run: |
-          if [[ ! "${{ github.event.pull_request.head.ref }}" =~ ^release/v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "ERROR: Branch must match pattern release/vX.Y.Z"
-            echo "Branch: ${{ github.event.pull_request.head.ref }}"
-            exit 1
-          fi
-          echo "✓ Valid release branch"
-      
-      - name: Extract version from branch
+      - name: Set version from check-release job
         id: version
         run: |
-          BRANCH_NAME="${{ github.event.pull_request.head.ref }}"
-          VERSION=${BRANCH_NAME#release/v}
+          VERSION="${{ needs.check-release.outputs.version }}"
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-          echo "Extracted version: $VERSION"
+          echo "Using version: $VERSION"
       
       - name: Install uv
         uses: astral-sh/setup-uv@v4
@@ -63,27 +55,6 @@ jobs:
       
       - name: Install hatch
         run: uv tool install hatch
-      
-      - name: Verify versions in all packages
-        run: |
-          VERSION="${{ steps.version.outputs.VERSION }}"
-          echo "Verifying all packages are at version $VERSION..."
-          
-          for PACKAGE in tyler narrator space-monkey lye; do
-            PACKAGE_DIR="packages/$PACKAGE"
-            PYPROJECT_VERSION=$(grep -Po '(?<=version = ")[^"]*' $PACKAGE_DIR/pyproject.toml)
-            
-            echo "  $PACKAGE: $PYPROJECT_VERSION"
-            
-            if [ "$PYPROJECT_VERSION" != "$VERSION" ]; then
-              echo "ERROR: Version mismatch in $PACKAGE!"
-              echo "  Expected: $VERSION"
-              echo "  Found: $PYPROJECT_VERSION"
-              exit 1
-            fi
-          done
-          
-          echo "✓ All packages at version $VERSION"
       
       - name: Create git tags
         run: |
