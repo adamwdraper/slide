@@ -8,7 +8,7 @@ from .models.thread import Thread
 from .models.message import Message
 from .models.attachment import Attachment
 
-__version__ = "2.2.1"
+__version__ = "2.2.2"
 __all__ = [
     "ThreadStore",
     "FileStore", 
