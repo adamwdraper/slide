@@ -4,6 +4,9 @@ on:
   pull_request:
     types: [closed]
     branches: [ main ]
+    paths:
+      - 'packages/**'
+      - '.github/workflows/release.yml'
 
 permissions:
   contents: write
