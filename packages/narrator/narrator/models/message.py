@@ -1,4 +1,5 @@
-from typing import Dict, Optional, Literal, Any, Union, List, TypedDict
+from typing import Dict, Optional, Literal, Any, Union, List
+from typing_extensions import TypedDict
 from datetime import datetime, UTC
 from pydantic import BaseModel, Field, field_validator, model_validator
 import hashlib
