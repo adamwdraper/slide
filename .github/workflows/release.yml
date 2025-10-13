@@ -1,12 +1,9 @@
 name: Unified Release
 
-# Temporarily disabled during PR #66 to prevent spurious notifications
-# Will be enabled after this PR is merged
 on:
-  workflow_dispatch:  # Manual trigger only for now
-  # pull_request:
-  #   types: [closed]
-  #   branches: [ main ]
+  pull_request:
+    types: [closed]
+    branches: [ main ]
 
 permissions:
   contents: write
