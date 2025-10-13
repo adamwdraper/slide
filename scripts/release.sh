@@ -149,10 +149,20 @@ echo ""
 echo -e "${BLUE}Generating CHANGELOGs...${NC}"
 
 for PACKAGE in "${PACKAGES[@]}"; do
-    echo -e "  ${GREEN}✓${NC} Generating CHANGELOG for $PACKAGE..."
-    git cliff --include-path "packages/$PACKAGE/**" \
+    echo -e "  Generating CHANGELOG for $PACKAGE..."
+    if git cliff --include-path "packages/$PACKAGE/**" \
         --tag "$PACKAGE-v$NEW_VERSION" \
-        --output "packages/$PACKAGE/CHANGELOG.md" 2>/dev/null || true
+        --output "packages/$PACKAGE/CHANGELOG.md" 2>&1; then
+        echo -e "  ${GREEN}✓${NC} $PACKAGE CHANGELOG generated"
+    else
+        echo -e "  ${YELLOW}⚠${NC} Warning: Failed to generate CHANGELOG for $PACKAGE"
+        echo -e "  ${YELLOW}  Creating empty CHANGELOG - please update manually${NC}"
+        echo "# Changelog" > "packages/$PACKAGE/CHANGELOG.md"
+        echo "" >> "packages/$PACKAGE/CHANGELOG.md"
+        echo "## [$NEW_VERSION] - $(date +%Y-%m-%d)" >> "packages/$PACKAGE/CHANGELOG.md"
+        echo "" >> "packages/$PACKAGE/CHANGELOG.md"
+        echo "Please add changelog entries manually." >> "packages/$PACKAGE/CHANGELOG.md"
+    fi
 done
 
 # Stage all changes
