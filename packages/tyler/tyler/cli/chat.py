@@ -446,6 +446,19 @@ async def handle_stream_update(event: ExecutionEvent, chat_manager: ChatManager)
         if panel:
             console.print(panel)
     elif event.type == EventType.EXECUTION_ERROR:
+        # Clean up any active live panels to avoid ghost panels
+        if hasattr(handle_stream_update, 'thinking_live'):
+            handle_stream_update.thinking_live.stop()
+            delattr(handle_stream_update, 'thinking_live')
+            if hasattr(handle_stream_update, 'thinking'):
+                delattr(handle_stream_update, 'thinking')
+        
+        if hasattr(handle_stream_update, 'live'):
+            handle_stream_update.live.stop()
+            delattr(handle_stream_update, 'live')
+            if hasattr(handle_stream_update, 'content'):
+                delattr(handle_stream_update, 'content')
+        
         console.print(f"[red]Error: {event.data.get('message', 'Unknown error')}[/]")
 
 def load_custom_tool(file_path: str) -> list:

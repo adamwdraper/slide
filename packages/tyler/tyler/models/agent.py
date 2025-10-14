@@ -1022,12 +1022,14 @@ class Agent(Model):
                         
                         # Emit thinking chunk event if found
                         if thinking_content:
-                            current_thinking.append(thinking_content)
+                            # Ensure thinking_content is a string for type safety
+                            thinking_text = str(thinking_content)
+                            current_thinking.append(thinking_text)
                             yield ExecutionEvent(
                                 type=EventType.LLM_THINKING_CHUNK,
                                 timestamp=datetime.now(UTC),
                                 data={
-                                    "thinking_chunk": thinking_content,
+                                    "thinking_chunk": thinking_text,
                                     "thinking_type": thinking_type
                                 }
                             )
@@ -1100,8 +1102,8 @@ class Agent(Model):
                     
                     # Add reasoning content to metrics if present
                     if current_thinking:
-                        reasoning_content = ''.join(current_thinking)
-                        metrics["reasoning_content"] = reasoning_content
+                        # Ensure all thinking chunks are strings before joining
+                        metrics["reasoning_content"] = ''.join(map(str, current_thinking))
                     
                     # Add thinking_blocks if available in final chunk (Anthropic specific)
                     if hasattr(chunk, 'choices') and chunk.choices and hasattr(chunk.choices[0], 'message'):

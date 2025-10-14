@@ -29,7 +29,6 @@ dependencies = [
     "pdf2image>=1.17.0",
     "pandas>=2.2.3",
     "pypdf>=5.3.0",
-    "python-magic>=0.4.0",
     "pillow>=11.0.0",
     "slide-narrator",
     "slide-lye",
