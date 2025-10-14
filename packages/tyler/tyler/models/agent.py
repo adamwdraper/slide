@@ -980,6 +980,7 @@ class Agent(Model):
                     
                     # Process streaming chunks
                     current_content = []
+                    current_thinking = []  # Track thinking/reasoning tokens
                     current_tool_calls = []
                     current_tool_call = None
                     
@@ -996,6 +997,35 @@ class Agent(Model):
                                 type=EventType.LLM_STREAM_CHUNK,
                                 timestamp=datetime.now(UTC),
                                 data={"content_chunk": delta.content}
+                            )
+                        
+                        # Handle thinking/reasoning chunks (LiteLLM v1.63.0+ standardization)
+                        thinking_content = None
+                        thinking_type = None
+                        
+                        # Check for LiteLLM standardized field (v1.63.0+)
+                        if hasattr(delta, 'reasoning_content') and delta.reasoning_content is not None:
+                            thinking_content = delta.reasoning_content
+                            thinking_type = "reasoning"
+                        # Fallback: Anthropic-specific field
+                        elif hasattr(delta, 'thinking') and delta.thinking is not None:
+                            thinking_content = delta.thinking
+                            thinking_type = "thinking"
+                        # Fallback: Extended thinking field
+                        elif hasattr(delta, 'extended_thinking') and delta.extended_thinking is not None:
+                            thinking_content = delta.extended_thinking
+                            thinking_type = "extended_thinking"
+                        
+                        # Emit thinking chunk event if found
+                        if thinking_content:
+                            current_thinking.append(thinking_content)
+                            yield ExecutionEvent(
+                                type=EventType.LLM_THINKING_CHUNK,
+                                timestamp=datetime.now(UTC),
+                                data={
+                                    "thinking_chunk": thinking_content,
+                                    "thinking_type": thinking_type
+                                }
                             )
                         
                         # Process tool calls (same logic as legacy streaming)
@@ -1063,6 +1093,17 @@ class Agent(Model):
                             "prompt_tokens": getattr(chunk.usage, "prompt_tokens", 0),
                             "total_tokens": getattr(chunk.usage, "total_tokens", 0)
                         }
+                    
+                    # Add reasoning content to metrics if present
+                    if current_thinking:
+                        reasoning_content = ''.join(current_thinking)
+                        metrics["reasoning_content"] = reasoning_content
+                    
+                    # Add thinking_blocks if available in final chunk (Anthropic specific)
+                    if hasattr(chunk, 'choices') and chunk.choices and hasattr(chunk.choices[0], 'message'):
+                        final_message = chunk.choices[0].message
+                        if hasattr(final_message, 'thinking_blocks') and final_message.thinking_blocks:
+                            metrics["thinking_blocks"] = final_message.thinking_blocks
                     
                     yield ExecutionEvent(
                         type=EventType.LLM_RESPONSE,
