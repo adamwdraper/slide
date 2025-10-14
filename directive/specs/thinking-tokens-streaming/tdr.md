@@ -195,6 +195,11 @@ response.choices[0].message.thinking_blocks    # Structured blocks (Anthropic on
 - Store `reasoning_content` in metrics dict
 - Store `thinking_blocks` if present (Anthropic)
 
+**Tyler CLI (chat.py):**
+- Handle `LLM_THINKING_CHUNK` events in `handle_stream_update()`
+- Display thinking in visually distinct panel (e.g., yellow border, "Thinking" title)
+- Maintain existing display behavior for non-reasoning models
+
 ### Interfaces & Data Contracts
 
 **New Event Type:**
@@ -562,6 +567,8 @@ logger.warning(
 | AC5 | `test_non_reasoning_model_unchanged_behavior` | Verify normal streaming works | P0 |
 | AC6 | `test_tool_calls_with_thinking` | Verify tools + thinking work together | P0 |
 | AC6 | `test_thinking_tool_sequence` | Verify correct event sequence | P1 |
+| AC7 | `test_cli_displays_thinking_tokens` | Verify CLI shows thinking in distinct panel | P1 |
+| AC7 | `test_cli_thinking_separated_from_content` | Verify CLI separates thinking from content | P1 |
 | Negative | `test_malformed_reasoning_graceful_degradation` | Verify graceful handling of bad data | P1 |
 | Negative | `test_missing_reasoning_field_no_error` | Verify absence handled gracefully | P1 |
 

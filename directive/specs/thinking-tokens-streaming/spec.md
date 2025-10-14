@@ -83,6 +83,8 @@ Tyler's streaming API should expose thinking/reasoning tokens as separate events
 - Check for LiteLLM's standardized `reasoning_content` field in delta
 - Fall back to provider-specific fields (`thinking`, `extended_thinking`) if needed
 - Preserve `reasoning_content` and `thinking_blocks` in Message object after streaming
+- Display thinking tokens in Tyler CLI (`tyler chat`) when present
+- Show thinking in a visually distinct way from regular content in CLI
 - Maintain full backward compatibility - existing code must work unchanged
 - Work with all LiteLLM-supported reasoning providers
 - Document thinking token support in streaming guide
@@ -137,6 +139,13 @@ Tyler's streaming API should expose thinking/reasoning tokens as separate events
 **Then** both thinking events and tool events are emitted  
 **And** the sequence is: thinking → tool_selected → tool_result → thinking → response  
 **And** both reasoning and tool results are preserved in messages
+
+### AC7: CLI Displays Thinking Tokens
+**Given** a user runs `tyler chat` with a reasoning-capable model  
+**When** the agent emits thinking tokens during streaming  
+**Then** the CLI displays thinking in a visually distinct panel or format  
+**And** thinking is shown separately from the response content  
+**And** the user can see the model's reasoning process in real-time
 
 ### Negative Case: Malformed Reasoning Content
 **Given** LiteLLM returns malformed reasoning data  

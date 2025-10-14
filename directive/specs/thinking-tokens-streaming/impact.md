@@ -17,6 +17,11 @@
   - May add type hints for `reasoning_content` and `thinking_blocks` in metrics
   - Backward compatible - these are optional fields
 
+- **`packages/tyler/tyler/cli/chat.py`** (10-20 lines)
+  - Update `handle_stream_update()` function to handle `LLM_THINKING_CHUNK` events
+  - Display thinking in a visually distinct panel (e.g., yellow border, different title)
+  - Maintain existing CLI behavior for non-reasoning models
+
 ### Testing (Medium Impact)
 - **`packages/tyler/tests/models/test_agent_streaming.py`** (100-150 lines new)
   - Test thinking tokens with Anthropic Claude
