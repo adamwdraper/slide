@@ -14,9 +14,13 @@ notes: |
   - Maintain context across conversations
 
 # Model Configuration
-model_name: "gpt-4.1"
+model_name: "o3-mini"
 temperature: 0.7
 max_tool_iterations: 10
+
+# Reasoning/Thinking Configuration (for models that support it)
+# Enables thinking tokens to be displayed in the CLI
+reasoning_effort: "low"  # Options: low, medium, high
 
 # Tool Configuration
 # List of tools to load. Can be:
