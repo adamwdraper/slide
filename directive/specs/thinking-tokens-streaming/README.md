@@ -10,7 +10,7 @@ Successfully implemented thinking/reasoning token support in Tyler's streaming A
 
 ## What Was Implemented
 
-### Core Changes (~40 lines of code)
+### Core Changes (~70 lines of code)
 1. **New Event Type** (`execution.py`)
    - Added `EventType.LLM_THINKING_CHUNK`
    - Data structure: `{thinking_chunk: str, thinking_type: str}`
@@ -21,25 +21,34 @@ Successfully implemented thinking/reasoning token support in Tyler's streaming A
    - Emit thinking chunk events during streaming
    - Store reasoning in Message.metrics after completion
 
-3. **Tests** (`test_agent_thinking_tokens.py`)
+3. **CLI Display** (`cli/chat.py`)
+   - Display thinking tokens in yellow panel with 💭 emoji
+   - Separate Live panel from regular content (blue panel)
+   - Shows thinking type in panel title
+   - Real-time updates as thinking tokens stream
+
+4. **Tests** (`test_agent_thinking_tokens.py`)
    - 4 comprehensive tests covering all acceptance criteria
    - Tests for Anthropic, OpenAI o1, non-reasoning models, and error cases
    - Following TDD approach
 
-4. **Documentation**
+5. **Documentation**
    - Added thinking tokens section to streaming guide
    - Created comprehensive example (`007_thinking_tokens_streaming.py`)
    - Documented supported models and usage patterns
+   - Updated introduction page to highlight thinking tokens
 
 ## Files Changed
 
 ```
 packages/tyler/tyler/models/execution.py          (+1 line)
 packages/tyler/tyler/models/agent.py              (+41 lines)
+packages/tyler/tyler/cli/chat.py                  (+32 lines)
 packages/tyler/pyproject.toml                     (upgrade to litellm>=1.63.0)
 packages/tyler/tests/models/test_agent_thinking_tokens.py  (+242 lines, NEW)
 examples/007_thinking_tokens_streaming.py         (+261 lines, NEW)
 docs/guides/streaming-responses.mdx              (+156 lines)
+docs/introduction.mdx                             (+1 line)
 ```
 
 ## Acceptance Criteria Status
@@ -50,6 +59,7 @@ docs/guides/streaming-responses.mdx              (+156 lines)
 - ✅ **AC4:** Raw streaming preserves reasoning fields
 - ✅ **AC5:** Non-reasoning models work unchanged
 - ✅ **AC6:** Tool calls + thinking work together
+- ✅ **AC7:** CLI displays thinking tokens in distinct yellow panel
 - ✅ **Negative Case:** Malformed reasoning handled gracefully
 
 ## Implementation Approach
@@ -78,8 +88,9 @@ docs/guides/streaming-responses.mdx              (+156 lines)
 - Mistral AI
 - Groq
 
-## Usage Example
+## Usage Examples
 
+### In Code
 ```python
 from tyler import Agent, Thread, Message, EventType
 
@@ -96,6 +107,26 @@ async for event in agent.go(thread, stream=True):
         print(f"💭 {event.data['thinking_chunk']}")
     elif event.type == EventType.LLM_STREAM_CHUNK:
         print(f"💬 {event.data['content_chunk']}", end="")
+```
+
+### In Tyler CLI
+```bash
+# Start chat with reasoning-capable model
+tyler chat --model anthropic/claude-3-7-sonnet-20250219
+
+# Ask a question
+You: What's the square root of 12345?
+
+# See thinking in yellow panel, response in blue panel:
+┌─ 💭 Thinking (reasoning) ─────────────────┐
+│ Let me calculate the square root of       │
+│ 12345 step by step...                     │
+└───────────────────────────────────────────┘
+
+┌─ Agent ───────────────────────────────────┐
+│ The square root of 12345 is approximately │
+│ 111.11                                     │
+└───────────────────────────────────────────┘
 ```
 
 ## Testing
