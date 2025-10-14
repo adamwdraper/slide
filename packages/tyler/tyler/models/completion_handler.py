@@ -36,8 +36,7 @@ class CompletionHandler:
         api_base: Optional[str] = None,
         extra_headers: Optional[Dict[str, str]] = None,
         drop_params: bool = True,
-        reasoning_effort: Optional[str] = None,
-        thinking: Optional[Dict[str, Any]] = None
+        reasoning: Optional[Any] = None
     ):
         """Initialize the CompletionHandler.
         
@@ -47,16 +46,14 @@ class CompletionHandler:
             api_base: Optional custom API base URL
             extra_headers: Optional additional headers
             drop_params: Whether to drop unsupported parameters
-            reasoning_effort: Reasoning effort level for supported models
-            thinking: Thinking configuration for Anthropic models
+            reasoning: Unified reasoning config (string or dict)
         """
         self.model_name = model_name
         self.temperature = temperature
         self.api_base = api_base
         self.extra_headers = extra_headers
         self.drop_params = drop_params
-        self.reasoning_effort = reasoning_effort
-        self.thinking = thinking
+        self.reasoning = reasoning
     
     @weave.op()
     async def get_completion(
@@ -144,13 +141,39 @@ class CompletionHandler:
                 params["tools"] = tools
         
         # Add reasoning parameters if specified (for thinking/reasoning tokens)
-        if self.reasoning_effort:
-            params["reasoning_effort"] = self.reasoning_effort
-        
-        if self.thinking:
-            params["thinking"] = self.thinking
+        if self.reasoning:
+            reasoning_params = self._map_reasoning_to_provider_params(self.reasoning)
+            params.update(reasoning_params)
         
         return params
+    
+    def _map_reasoning_to_provider_params(self, reasoning: Any) -> Dict[str, Any]:
+        """Map unified reasoning parameter to provider-specific format.
+        
+        Args:
+            reasoning: String ('low'/'medium'/'high') or Dict (advanced config)
+            
+        Returns:
+            Dict with provider-specific parameter(s)
+        """
+        if isinstance(reasoning, str):
+            # Simple string format → use reasoning_effort (most providers)
+            return {"reasoning_effort": reasoning}
+        
+        elif isinstance(reasoning, dict):
+            # Dict format - check what it contains
+            if "type" in reasoning:
+                # Anthropic format: {"type": "enabled", "budget_tokens": 1024}
+                return {"thinking": reasoning}
+            elif "effort" in reasoning:
+                # Alternative dict format: {"effort": "low"}
+                return {"reasoning_effort": reasoning["effort"]}
+            else:
+                # Unknown format - try reasoning_effort as most compatible
+                return {"reasoning": reasoning}
+        
+        # Fallback: empty dict (no reasoning params)
+        return {}
     
     def _modify_tools_for_gemini(self, tools: List[Dict]) -> List[Dict]:
         """Modify tools for Gemini compatibility.
