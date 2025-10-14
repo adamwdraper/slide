@@ -197,7 +197,7 @@ response.choices[0].message.thinking_blocks    # Structured blocks (Anthropic on
 
 **Tyler CLI (chat.py):**
 - Handle `LLM_THINKING_CHUNK` events in `handle_stream_update()`
-- Display thinking in visually distinct panel (e.g., yellow border, "Thinking" title)
+- Display thinking in visually distinct panel (gray/dim border, 💭 emoji, "Thinking" title)
 - Maintain existing display behavior for non-reasoning models
 
 ### Interfaces & Data Contracts

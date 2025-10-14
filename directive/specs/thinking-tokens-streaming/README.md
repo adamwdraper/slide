@@ -22,7 +22,7 @@ Successfully implemented thinking/reasoning token support in Tyler's streaming A
    - Store reasoning in Message.metrics after completion
 
 3. **CLI Display** (`cli/chat.py`)
-   - Display thinking tokens in yellow panel with 💭 emoji
+   - Display thinking tokens in gray/dim panel with 💭 emoji
    - Separate Live panel from regular content (blue panel)
    - Shows thinking type in panel title
    - Real-time updates as thinking tokens stream

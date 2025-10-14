@@ -19,7 +19,7 @@
 
 - **`packages/tyler/tyler/cli/chat.py`** (10-20 lines)
   - Update `handle_stream_update()` function to handle `LLM_THINKING_CHUNK` events
-  - Display thinking in a visually distinct panel (e.g., yellow border, different title)
+  - Display thinking in a visually distinct panel (gray/dim border, 💭 emoji, different title)
   - Maintain existing CLI behavior for non-reasoning models
 
 ### Testing (Medium Impact)
