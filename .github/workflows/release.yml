@@ -112,53 +112,25 @@ jobs:
           # Tyler release
           gh release create "tyler-v$VERSION" \
             --title "Tyler v$VERSION" \
-            --notes "Release Tyler v$VERSION
-
-**Package**: slide-tyler  
-**Version**: $VERSION
-
-This is part of the unified Slide release v$VERSION. All Slide packages at version $VERSION are guaranteed compatible.
-
-See [CHANGELOG](https://github.com/${{ github.repository }}/blob/main/packages/tyler/CHANGELOG.md) for details." \
+            --notes "Release Tyler v$VERSION - Package: slide-tyler - This is part of the unified Slide release v$VERSION. All Slide packages at version $VERSION are guaranteed compatible. See CHANGELOG for details." \
             packages/tyler/dist/*
           
           # Narrator release
           gh release create "narrator-v$VERSION" \
             --title "Narrator v$VERSION" \
-            --notes "Release Narrator v$VERSION
-
-**Package**: slide-narrator  
-**Version**: $VERSION
-
-This is part of the unified Slide release v$VERSION. All Slide packages at version $VERSION are guaranteed compatible.
-
-See [CHANGELOG](https://github.com/${{ github.repository }}/blob/main/packages/narrator/CHANGELOG.md) for details." \
+            --notes "Release Narrator v$VERSION - Package: slide-narrator - This is part of the unified Slide release v$VERSION. All Slide packages at version $VERSION are guaranteed compatible. See CHANGELOG for details." \
             packages/narrator/dist/*
           
           # Space Monkey release
           gh release create "space-monkey-v$VERSION" \
             --title "Space Monkey v$VERSION" \
-            --notes "Release Space Monkey v$VERSION
-
-**Package**: slide-space-monkey  
-**Version**: $VERSION
-
-This is part of the unified Slide release v$VERSION. All Slide packages at version $VERSION are guaranteed compatible.
-
-See [CHANGELOG](https://github.com/${{ github.repository }}/blob/main/packages/space-monkey/CHANGELOG.md) for details." \
+            --notes "Release Space Monkey v$VERSION - Package: slide-space-monkey - This is part of the unified Slide release v$VERSION. All Slide packages at version $VERSION are guaranteed compatible. See CHANGELOG for details." \
             packages/space-monkey/dist/*
           
           # Lye release
           gh release create "lye-v$VERSION" \
             --title "Lye v$VERSION" \
-            --notes "Release Lye v$VERSION
-
-**Package**: slide-lye  
-**Version**: $VERSION
-
-This is part of the unified Slide release v$VERSION. All Slide packages at version $VERSION are guaranteed compatible.
-
-See [CHANGELOG](https://github.com/${{ github.repository }}/blob/main/packages/lye/CHANGELOG.md) for details." \
+            --notes "Release Lye v$VERSION - Package: slide-lye - This is part of the unified Slide release v$VERSION. All Slide packages at version $VERSION are guaranteed compatible. See CHANGELOG for details." \
             packages/lye/dist/*
           
           echo "✓ All GitHub releases created"
