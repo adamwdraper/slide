@@ -3,7 +3,7 @@
 Example demonstrating thinking tokens (reasoning) streaming.
 
 This example shows how to:
-1. Enable thinking tokens with reasoning_effort
+1. Enable thinking tokens with the reasoning parameter
 2. Stream both thinking and content separately
 3. Use models that support reasoning (OpenAI o1/o3, DeepSeek-R1, etc.)
 4. Compare responses with and without thinking tokens
@@ -43,7 +43,7 @@ async def demo_thinking_tokens_basic():
     agent = Agent(
         model_name="gpt-4.1",  # Or use "openai/deepseek-ai/DeepSeek-R1-0528" for W&B Inference
         purpose="To demonstrate thinking tokens streaming.",
-        reasoning_effort="low",  # Options: low, medium, high
+        reasoning="low",  # Options: "low", "medium", "high" or dict for advanced config
         temperature=0.7
     )
     
@@ -83,21 +83,21 @@ async def demo_thinking_tokens_basic():
             logger.info(f"   Total time: {event.data.get('duration_ms', 0):.2f}ms")
 
 
-async def demo_reasoning_effort_levels():
-    """Compare different reasoning effort levels"""
+async def demo_reasoning_levels():
+    """Compare different reasoning levels"""
     logger.info("\n" + "=" * 70)
-    logger.info("Demo 2: Reasoning Effort Levels")
+    logger.info("Demo 2: Reasoning Levels")
     logger.info("=" * 70)
     
     problem = "A farmer has 17 sheep. All but 9 die. How many are left?"
     
-    for effort in ["low", "medium", "high"]:
-        logger.info(f"\n--- Testing reasoning_effort='{effort}' ---")
+    for level in ["low", "medium", "high"]:
+        logger.info(f"\n--- Testing reasoning='{level}' ---")
         
         agent = Agent(
             model_name="gpt-4.1",
-            purpose="To test reasoning effort levels",
-            reasoning_effort=effort,
+            purpose="To test reasoning levels",
+            reasoning=level,
             temperature=0.7
         )
         
@@ -144,11 +144,11 @@ async def demo_comparison():
             print("\n")
     
     # With thinking tokens
-    logger.info("[WITH thinking tokens (reasoning_effort='medium')]")
+    logger.info("[WITH thinking tokens (reasoning='medium')]")
     agent_with_thinking = Agent(
         model_name="gpt-4.1",
         purpose="Response with reasoning",
-        reasoning_effort="medium",
+        reasoning="medium",
         temperature=0.7
     )
     
@@ -196,7 +196,7 @@ async def demo_wandb_inference():
             "X-Project-Name": "wandb-designers/slide"
         },
         purpose="To demonstrate W&B Inference with thinking tokens",
-        reasoning_effort="low",
+        reasoning="low",
         temperature=0.7,
         drop_params=True
     )
@@ -246,7 +246,7 @@ async def demo_all_events():
     agent = Agent(
         model_name="gpt-4.1",
         purpose="To show all event types",
-        reasoning_effort="low",
+        reasoning="low",
         temperature=0.7
     )
     
@@ -290,8 +290,8 @@ async def main():
         # Demo 1: Basic thinking tokens streaming
         await demo_thinking_tokens_basic()
         
-        # Demo 2: Different reasoning effort levels
-        await demo_reasoning_effort_levels()
+        # Demo 2: Different reasoning levels
+        await demo_reasoning_levels()
         
         # Demo 3: Compare with and without thinking
         await demo_comparison()
