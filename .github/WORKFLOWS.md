@@ -17,10 +17,11 @@ This document describes the CI/CD workflows for the Slide project.
 
 2. **Integration Tests** (after package tests):
    - `integration-test` - Tests package imports and basic functionality
-   - `test-examples` - **NEW** - Tests project examples (smoke tests, imports, structure)
+   - `test-examples` - Tests project examples (smoke tests, imports, structure)
 
 **Key Features:**
 - ✅ Runs on every PR to main
+- ✅ Tests Python 3.11 (min) and 3.13 (max) for fast feedback
 - ✅ Tests both packages and examples
 - ✅ Installs system dependencies (libmagic, poppler-utils)
 - ✅ Uses uv workspace setup
@@ -32,7 +33,7 @@ This document describes the CI/CD workflows for the Slide project.
 
 **Jobs:**
 1. **Extended Testing**:
-   - Tests across multiple Python versions (3.9-3.12)
+   - Tests across all supported Python versions (3.11, 3.12, 3.13)
    - Comprehensive example testing
    - Mock API key testing
 
@@ -43,7 +44,7 @@ This document describes the CI/CD workflows for the Slide project.
 
 **Key Features:**
 - ✅ Extended testing after PR merge
-- ✅ Multi-version Python support
+- ✅ Full Python version matrix (3.11, 3.12, 3.13)
 - ✅ Real API integration testing
 - ✅ System dependencies included
 
@@ -57,13 +58,19 @@ This document describes the CI/CD workflows for the Slide project.
 
 ### PR Testing (test.yml)
 ```
-PR Created → Package Tests → Integration Tests → Examples Tests → ✅ Ready to Merge
+PR Created → Package Tests (3.11, 3.13) → Integration Tests → Examples Tests → ✅ Ready to Merge
 ```
+- **Optimized for speed**: Tests minimum (3.11) and maximum (3.13) versions only
+- **Fast feedback**: 33% fewer jobs than full matrix testing
+- **Quality maintained**: Boundary testing catches most compatibility issues
 
 ### Post-Merge Testing (test-examples.yml)
 ```
-Merge to Main → Extended Example Tests → API Integration Tests → ✅ Verified
+Merge to Main → Extended Example Tests (3.11, 3.12, 3.13) → API Integration Tests → ✅ Verified
 ```
+- **Comprehensive coverage**: Full Python version matrix
+- **Safety net**: Catches any edge cases in Python 3.12
+- **Real-world validation**: Tests with actual API integrations
 
 ## Example Test Strategy
 
