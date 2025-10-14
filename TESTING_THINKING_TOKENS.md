@@ -48,8 +48,9 @@ uv run tyler chat --config tyler-chat-config-wandb.yaml
 ### Option 3: Anthropic Claude
 
 ```bash
-# Use the Anthropic config
-export ANTHROPIC_API_KEY=your_key
+# Get API key from: https://console.anthropic.com/
+export ANTHROPIC_API_KEY=sk-ant-your-actual-key-here  # Replace with your real key!
+
 uv run tyler chat --config tyler-chat-config-anthropic.yaml
 ```
 
