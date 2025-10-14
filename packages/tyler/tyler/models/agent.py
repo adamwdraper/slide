@@ -159,8 +159,13 @@ class Agent(Model):
     extra_headers: Optional[Dict[str, str]] = Field(default=None, description="Additional headers to include in API requests (e.g., for authentication or tracking)")
     temperature: float = Field(default=0.7)
     drop_params: bool = Field(default=True, description="Whether to drop unsupported parameters for specific models (e.g., O-series models only support temperature=1)")
-    reasoning_effort: Optional[str] = Field(default=None, description="Reasoning effort level for models that support it (e.g., 'low', 'medium', 'high'). Enables thinking tokens for supported models.")
-    thinking: Optional[Dict[str, Any]] = Field(default=None, description="Thinking configuration for Anthropic models (e.g., {'type': 'enabled', 'budget_tokens': 1024})")
+    reasoning: Optional[Union[str, Dict[str, Any]]] = Field(
+        default=None,
+        description="""Enable reasoning/thinking tokens for supported models.
+        - String: 'low', 'medium', 'high' (recommended for most use cases)
+        - Dict: Provider-specific config (e.g., {'type': 'enabled', 'budget_tokens': 1024} for Anthropic)
+        """
+    )
     name: str = Field(default="Tyler")
     purpose: Union[str, Prompt] = Field(default_factory=lambda: weave.StringPrompt("To be a helpful assistant."))
     notes: Union[str, Prompt] = Field(default_factory=lambda: weave.StringPrompt(""))
@@ -205,8 +210,7 @@ class Agent(Model):
             api_base=self.api_base,
             extra_headers=self.extra_headers,
             drop_params=self.drop_params,
-            reasoning_effort=self.reasoning_effort,
-            thinking=self.thinking
+            reasoning=self.reasoning
         )
         
         # Use ToolManager to register all tools and delegation
