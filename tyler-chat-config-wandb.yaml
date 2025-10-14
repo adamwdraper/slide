@@ -1,0 +1,36 @@
+# Tyler Chat Configuration for W&B Inference (DeepSeek with Thinking Tokens)
+# Requires: WANDB_API_KEY environment variable
+# See: https://docs.wandb.ai/guides/inference/models/
+
+# Agent Identity
+name: "Tyler"
+purpose: "To be a helpful AI assistant with access to various tools and capabilities."
+notes: |
+  - Prefer clear, concise communication
+  - Use tools when appropriate to enhance responses
+  - Maintain context across conversations
+
+# Model Configuration - Using W&B Inference DeepSeek model
+# DeepSeek models support reasoning content (thinking tokens)
+model_name: "deepseek-ai/DeepSeek-R1-0528"  # Options: DeepSeek-R1-0528, DeepSeek-V3-0324, DeepSeek-V3.1
+
+# W&B Inference endpoint configuration
+# Replace <your-team> and <your-project> with your W&B team and project names
+base_url: "https://api.wandb.ai/api/v1/inference/<your-team>/<your-project>"
+extra_headers:
+  Authorization: "Bearer ${WANDB_API_KEY}"  # Will be populated from env var
+
+temperature: 0.7
+max_tool_iterations: 10
+
+# Reasoning/Thinking Configuration
+# DeepSeek models support thinking tokens when this is enabled
+reasoning_effort: "low"  # Options: low, medium, high
+
+# Tool Configuration
+tools:
+  - "web"
+  - "slack"
+  - "notion"
+  - "command_line"
+
