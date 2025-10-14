@@ -370,7 +370,31 @@ shown in the /threads list. For example:
 
 async def handle_stream_update(event: ExecutionEvent, chat_manager: ChatManager):
     """Handle streaming updates from the agent"""
-    if event.type == EventType.LLM_STREAM_CHUNK:
+    if event.type == EventType.LLM_THINKING_CHUNK:
+        # Display thinking/reasoning tokens in a distinct panel
+        if not hasattr(handle_stream_update, 'thinking_live'):
+            handle_stream_update.thinking = []
+            handle_stream_update.thinking_live = Live(
+                Panel(
+                    "",
+                    title="[dim]💭 Thinking[/]",
+                    border_style="dim",
+                    box=box.ROUNDED
+                ),
+                console=console,
+                refresh_per_second=4
+            )
+            handle_stream_update.thinking_live.start()
+        
+        handle_stream_update.thinking.append(event.data.get("thinking_chunk", ""))
+        handle_stream_update.thinking_live.update(Panel(
+            Markdown(''.join(handle_stream_update.thinking)),
+            title=f"[dim]💭 Thinking ({event.data.get('thinking_type', 'reasoning')})[/]",
+            border_style="dim",
+            box=box.ROUNDED
+        ))
+    
+    elif event.type == EventType.LLM_STREAM_CHUNK:
         # Create/update the panel with the streaming content
         if not hasattr(handle_stream_update, 'live'):
             handle_stream_update.content = []
@@ -393,7 +417,14 @@ async def handle_stream_update(event: ExecutionEvent, chat_manager: ChatManager)
             border_style="blue",
             box=box.ROUNDED
         ))
+    
     elif event.type == EventType.MESSAGE_CREATED and event.data.get("message", {}).role == "assistant":
+        # Stop the thinking display if it exists
+        if hasattr(handle_stream_update, 'thinking_live'):
+            handle_stream_update.thinking_live.stop()
+            delattr(handle_stream_update, 'thinking_live')
+            delattr(handle_stream_update, 'thinking')
+        
         # Stop the live display if it exists
         if hasattr(handle_stream_update, 'live'):
             handle_stream_update.live.stop()
@@ -415,6 +446,19 @@ async def handle_stream_update(event: ExecutionEvent, chat_manager: ChatManager)
         if panel:
             console.print(panel)
     elif event.type == EventType.EXECUTION_ERROR:
+        # Clean up any active live panels to avoid ghost panels
+        if hasattr(handle_stream_update, 'thinking_live'):
+            handle_stream_update.thinking_live.stop()
+            delattr(handle_stream_update, 'thinking_live')
+            if hasattr(handle_stream_update, 'thinking'):
+                delattr(handle_stream_update, 'thinking')
+        
+        if hasattr(handle_stream_update, 'live'):
+            handle_stream_update.live.stop()
+            delattr(handle_stream_update, 'live')
+            if hasattr(handle_stream_update, 'content'):
+                delattr(handle_stream_update, 'content')
+        
         console.print(f"[red]Error: {event.data.get('message', 'Unknown error')}[/]")
 
 def load_custom_tool(file_path: str) -> list:

@@ -1,0 +1,47 @@
+# Tyler Chat Configuration for W&B Inference (DeepSeek with Thinking Tokens)
+# 
+# Setup:
+# 1. Get your API key from: https://wandb.ai/authorize
+# 2. Add to .env file in project root:
+#    OPENAI_API_KEY=<your-wandb-api-key>
+#    (W&B Inference uses OpenAI-compatible API, so litellm expects OPENAI_API_KEY)
+# 
+# Reference: https://docs.wandb.ai/guides/inference/examples/
+
+# Agent Identity
+name: "Tyler"
+purpose: "To be a helpful AI assistant with access to various tools and capabilities."
+notes: |
+  - Prefer clear, concise communication
+  - Use tools when appropriate to enhance responses
+  - Maintain context across conversations
+
+# Model Configuration - Using W&B Inference DeepSeek model
+# DeepSeek models support reasoning content (thinking tokens)
+# Note: The openai/ prefix tells litellm to use OpenAI-compatible format for W&B Inference
+model_name: "openai/deepseek-ai/DeepSeek-R1-0528"  # Options: DeepSeek-R1-0528, DeepSeek-V3-0324, DeepSeek-V3.1
+
+# W&B Inference endpoint configuration
+# This is the standard W&B Inference API endpoint (not team/project specific)
+base_url: "https://api.inference.wandb.ai/v1"
+
+# Optional: Track usage by team/project
+# Replace wandb/slide with your team/project if needed
+extra_headers:
+  HTTP-Referer: "https://wandb.ai/wandb/slide"
+  X-Project-Name: "wandb-designers/slide"
+
+temperature: 0.7
+max_tool_iterations: 10
+
+# Reasoning/Thinking Configuration
+# DeepSeek models support thinking tokens when this is enabled
+reasoning_effort: "low"  # Options: low, medium, high
+
+# Tool Configuration
+tools:
+  - "web"
+  - "slack"
+  - "notion"
+  - "command_line"
+

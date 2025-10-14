@@ -213,6 +213,162 @@ async for event in agent.go(thread, stream=True):
         print(f"\n✅ Complete in {event.data['duration_ms']:.0f}ms!")
 ```
 
+## Thinking Tokens (Reasoning Content)
+
+<Note>
+Requires LiteLLM >= 1.63.0 and a reasoning-capable model like OpenAI o1 or Anthropic Claude with extended thinking.
+</Note>
+
+Models like OpenAI o1 and Anthropic Claude can emit their reasoning process as separate "thinking tokens" alongside the response content. Tyler's streaming API exposes these as dedicated `LLM_THINKING_CHUNK` events, allowing you to display reasoning separately from the final answer.
+
+### Why Use Thinking Tokens?
+
+- **Transparency**: Show users how the AI arrived at its answer
+- **Debugging**: Trace model reasoning for better agent development
+- **UX**: Display thinking in a collapsible section or different style
+- **Trust**: Users can verify the model's reasoning process
+
+### Event Streaming with Thinking
+
+```python
+from tyler import Agent, Thread, Message, EventType
+
+agent = Agent(
+    name="thinking-agent",
+    model_name="anthropic/claude-3-7-sonnet-20250219",  # or "o1-preview"
+    purpose="To demonstrate thinking tokens"
+)
+
+thread = Thread()
+thread.add_message(Message(
+    role="user",
+    content="What's 137 * 284? Show your thinking."
+))
+
+print("💭 Thinking: ", end="", flush=True)
+print("\n💬 Response: ", end="", flush=True)
+
+async for event in agent.go(thread, stream=True):
+    if event.type == EventType.LLM_THINKING_CHUNK:
+        # Thinking/reasoning tokens (separate from content)
+        thinking = event.data['thinking_chunk']
+        thinking_type = event.data['thinking_type']  # "reasoning", "thinking", etc.
+        print(f"\n[{thinking_type}] {thinking}", flush=True)
+    
+    elif event.type == EventType.LLM_STREAM_CHUNK:
+        # Regular response content
+        print(event.data['content_chunk'], end="", flush=True)
+```
+
+**Output:**
+```
+💭 Thinking:
+[reasoning] Let me calculate 137 * 284 step by step...
+[reasoning] 137 * 284 = 137 * (280 + 4) = 137 * 280 + 137 * 4...
+
+💬 Response: The answer is 38,908.
+```
+
+### Thinking in Message Metrics
+
+After streaming completes, thinking content is stored in the message's `metrics` dict:
+
+```python
+async for event in agent.go(thread, stream=True):
+    if event.type == EventType.MESSAGE_CREATED:
+        msg = event.data['message']
+        if msg.role == "assistant":
+            # Access complete reasoning
+            if 'reasoning_content' in msg.metrics:
+                reasoning = msg.metrics['reasoning_content']
+                print(f"Full reasoning: {reasoning}")
+            
+            # Anthropic models may also include structured thinking_blocks
+            if 'thinking_blocks' in msg.metrics:
+                blocks = msg.metrics['thinking_blocks']
+                print(f"Thinking blocks: {len(blocks)}")
+```
+
+### Raw Streaming with Thinking
+
+Raw mode preserves all thinking fields from LiteLLM:
+
+```python
+async for chunk in agent.go(thread, stream="raw"):
+    if hasattr(chunk, 'choices') and chunk.choices:
+        delta = chunk.choices[0].delta
+        
+        # LiteLLM standardized field (v1.63.0+)
+        if hasattr(delta, 'reasoning_content') and delta.reasoning_content:
+            print(f"[Reasoning] {delta.reasoning_content}")
+        
+        # Anthropic-specific field
+        if hasattr(delta, 'thinking') and delta.thinking:
+            print(f"[Thinking] {delta.thinking}")
+        
+        # Regular content
+        if hasattr(delta, 'content') and delta.content:
+            print(delta.content, end="")
+```
+
+### UI Pattern: Separated Display
+
+A common pattern is showing thinking in a collapsible section:
+
+```python
+thinking_section = []
+response_section = []
+
+async for event in agent.go(thread, stream=True):
+    if event.type == EventType.LLM_THINKING_CHUNK:
+        thinking_section.append(event.data['thinking_chunk'])
+    elif event.type == EventType.LLM_STREAM_CHUNK:
+        response_section.append(event.data['content_chunk'])
+
+# Display in UI
+print("─── Thinking Process (click to expand) ───")
+print(''.join(thinking_section))
+print("─── Response ───")
+print(''.join(response_section))
+```
+
+### Supported Models
+
+**OpenAI:**
+- `o1-preview` (reasoning_content)
+- `o1-mini` (reasoning_content)
+
+**Anthropic:**
+- `claude-3-7-sonnet-20250219` with extended thinking
+- Future Claude models with thinking capability
+
+**Other Providers via LiteLLM:**
+- Deepseek
+- XAI
+- Google AI Studio
+- Perplexity (Magistral models)
+- Groq
+
+See [LiteLLM docs](https://docs.litellm.ai/docs/reasoning_content) for full list.
+
+### Backward Compatibility
+
+Models without thinking support work unchanged - no `LLM_THINKING_CHUNK` events are emitted:
+
+```python
+agent = Agent(name="regular", model_name="gpt-4o")  # No thinking
+
+async for event in agent.go(thread, stream=True):
+    if event.type == EventType.LLM_THINKING_CHUNK:
+        # This won't execute for non-reasoning models
+        pass
+    elif event.type == EventType.LLM_STREAM_CHUNK:
+        # Regular content streaming works as before
+        print(event.data['content_chunk'], end="")
+```
+
+See `examples/007_thinking_tokens_streaming.py` for complete working examples.
+
 ## Streaming with Tools
 
 See tool usage in real-time:
