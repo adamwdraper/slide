@@ -35,7 +35,9 @@ class CompletionHandler:
         temperature: float = 0.7,
         api_base: Optional[str] = None,
         extra_headers: Optional[Dict[str, str]] = None,
-        drop_params: bool = True
+        drop_params: bool = True,
+        reasoning_effort: Optional[str] = None,
+        thinking: Optional[Dict[str, Any]] = None
     ):
         """Initialize the CompletionHandler.
         
@@ -45,12 +47,16 @@ class CompletionHandler:
             api_base: Optional custom API base URL
             extra_headers: Optional additional headers
             drop_params: Whether to drop unsupported parameters
+            reasoning_effort: Reasoning effort level for supported models
+            thinking: Thinking configuration for Anthropic models
         """
         self.model_name = model_name
         self.temperature = temperature
         self.api_base = api_base
         self.extra_headers = extra_headers
         self.drop_params = drop_params
+        self.reasoning_effort = reasoning_effort
+        self.thinking = thinking
     
     @weave.op()
     async def get_completion(
@@ -136,6 +142,13 @@ class CompletionHandler:
                 params["tools"] = self._modify_tools_for_gemini(tools)
             else:
                 params["tools"] = tools
+        
+        # Add reasoning parameters if specified (for thinking/reasoning tokens)
+        if self.reasoning_effort:
+            params["reasoning_effort"] = self.reasoning_effort
+        
+        if self.thinking:
+            params["thinking"] = self.thinking
         
         return params
     
