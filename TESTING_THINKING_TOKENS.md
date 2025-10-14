@@ -2,11 +2,12 @@
 
 ## Quick Test Guide
 
-### Option 1: Use Anthropic Claude (RECOMMENDED)
+### Option 1: DeepSeek Direct (EASIEST)
 
 ```bash
-# Use the Anthropic config
-uv run tyler chat --config tyler-chat-config-anthropic.yaml
+# Use the DeepSeek config
+export DEEPSEEK_API_KEY=your_key
+uv run tyler chat --config tyler-chat-config-deepseek-direct.yaml
 
 # Ask a reasoning question
 You: What's 137 * 284? Show your work.
@@ -22,23 +23,39 @@ You: What's 137 * 284? Show your work.
 ```
 
 **Requirements:**
-- `ANTHROPIC_API_KEY` environment variable
-- Model: `anthropic/claude-3-7-sonnet-20250219`
-- Config includes: `reasoning_effort: "low"`
+- `DEEPSEEK_API_KEY` environment variable
+- Model: `deepseek/deepseek-chat`
+- Free tier available!
 
-### Option 2: Use Deepseek
+### Option 2: W&B Inference (DeepSeek)
 
 ```bash
-# Edit your config:
-# model_name: "deepseek/deepseek-chat"
-# reasoning_effort: "low"
+# Edit tyler-chat-config-wandb.yaml to add your team/project:
+# base_url: "https://api.wandb.ai/api/v1/inference/YOUR-TEAM/YOUR-PROJECT"
 
 # Set API key
-export DEEPSEEK_API_KEY=your_key
+export WANDB_API_KEY=your_key
 
 # Run chat
-uv run tyler chat
+uv run tyler chat --config tyler-chat-config-wandb.yaml
 ```
+
+**Requirements:**
+- W&B account with Inference enabled
+- Update `base_url` in config with your team/project
+- Uses DeepSeek-R1-0528 (optimized for reasoning)
+
+### Option 3: Anthropic Claude
+
+```bash
+# Use the Anthropic config
+export ANTHROPIC_API_KEY=your_key
+uv run tyler chat --config tyler-chat-config-anthropic.yaml
+```
+
+**Requirements:**
+- `ANTHROPIC_API_KEY` environment variable
+- Model: `anthropic/claude-3-7-sonnet-20250219`
 
 ### Option 3: Debug Script
 
@@ -51,8 +68,8 @@ uv run python test_thinking_debug.py
 
 According to [LiteLLM docs](https://docs.litellm.ai/docs/reasoning_content):
 
-✅ **Supported:**
-- Deepseek (`deepseek/deepseek-chat`)
+✅ **Supported (via LiteLLM):**
+- Deepseek (`deepseek/deepseek-chat`) ← EASIEST TO TEST
 - Anthropic (`anthropic/claude-3-7-sonnet-20250219`)
 - Bedrock (Anthropic + Deepseek)
 - Vertex AI (Anthropic)
@@ -63,8 +80,18 @@ According to [LiteLLM docs](https://docs.litellm.ai/docs/reasoning_content):
 - Mistral AI
 - Groq
 
+✅ **Supported (via W&B Inference):**
+- `deepseek-ai/DeepSeek-R1-0528` (optimized for reasoning)
+- `deepseek-ai/DeepSeek-V3-0324`
+- `deepseek-ai/DeepSeek-V3.1`
+- `openai/gpt-oss-20b` (reasoning capabilities)
+- `openai/gpt-oss-120b` (high-reasoning)
+- `Qwen/Qwen3-235B-A22B-Thinking-2507` (thinking-optimized)
+- `zai-org/GLM-4.5` (controllable thinking modes)
+
 ❌ **NOT Supported (yet):**
-- OpenAI (o1, o3, gpt-4.1 models)
+- OpenAI Direct API (o1, o3, gpt-4.1 models)
+  - Note: W&B Inference has OpenAI GPT-OSS models that DO support reasoning!
 
 ## Why OpenAI Models Don't Show Thinking
 
