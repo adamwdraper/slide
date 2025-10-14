@@ -377,8 +377,8 @@ async def handle_stream_update(event: ExecutionEvent, chat_manager: ChatManager)
             handle_stream_update.thinking_live = Live(
                 Panel(
                     "",
-                    title="[yellow]💭 Thinking[/]",
-                    border_style="yellow",
+                    title="[dim]💭 Thinking[/]",
+                    border_style="dim",
                     box=box.ROUNDED
                 ),
                 console=console,
@@ -389,8 +389,8 @@ async def handle_stream_update(event: ExecutionEvent, chat_manager: ChatManager)
         handle_stream_update.thinking.append(event.data.get("thinking_chunk", ""))
         handle_stream_update.thinking_live.update(Panel(
             Markdown(''.join(handle_stream_update.thinking)),
-            title=f"[yellow]💭 Thinking ({event.data.get('thinking_type', 'reasoning')})[/]",
-            border_style="yellow",
+            title=f"[dim]💭 Thinking ({event.data.get('thinking_type', 'reasoning')})[/]",
+            border_style="dim",
             box=box.ROUNDED
         ))
     
