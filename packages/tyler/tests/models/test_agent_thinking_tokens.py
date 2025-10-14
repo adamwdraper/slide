@@ -105,18 +105,20 @@ async def test_thinking_chunks_emitted_for_anthropic():
 
 
 @pytest.mark.asyncio
-async def test_reasoning_stored_in_message_metrics():
+async def test_reasoning_stored_in_message_top_level():
     """
-    AC2: Test that reasoning_content is stored in Message.metrics after streaming.
+    AC2: Test that reasoning_content is stored as top-level Message field.
     
     Given: Streaming completes with thinking tokens
     When: The assistant Message is created
-    Then: The Message contains reasoning_content in its metrics
+    Then: The Message has reasoning_content as a top-level field
+    And: reasoning_content is NOT in metrics
     """
     # Arrange
     agent = Agent(
         name="thinking-agent",
-        model_name="anthropic/claude-3-7-sonnet-20250219"
+        model_name="anthropic/claude-3-7-sonnet-20250219",
+        reasoning="low"  # Updated to use unified parameter
     )
     
     thread = Thread()
@@ -141,17 +143,18 @@ async def test_reasoning_stored_in_message_metrics():
         async for event in agent.go(thread, stream=True):
             events.append(event)
     
-    # Assert: Check message has reasoning in metrics
+    # Assert: Check message has reasoning as top-level field
     message_events = [e for e in events if e.type == EventType.MESSAGE_CREATED]
     assistant_messages = [e.data["message"] for e in message_events if e.data["message"].role == "assistant"]
     
     assert len(assistant_messages) >= 1, "Should have at least one assistant message"
     
     assistant_msg = assistant_messages[0]
-    assert assistant_msg.metrics is not None, "Message should have metrics"
-    assert "reasoning_content" in assistant_msg.metrics, "Message metrics should contain reasoning_content"
-    # Note: The exact reasoning_content value depends on how we accumulate it
-    # For now, just verify it exists
+    # Check top-level field
+    assert hasattr(assistant_msg, 'reasoning_content'), "Message should have reasoning_content attribute"
+    assert assistant_msg.reasoning_content == "Thinking...", "reasoning_content should contain thinking text"
+    # Verify NOT in metrics
+    assert "reasoning_content" not in assistant_msg.metrics, "reasoning_content should NOT be in metrics"
 
 
 @pytest.mark.asyncio
