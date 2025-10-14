@@ -1,6 +1,12 @@
 # Tyler Chat Configuration for W&B Inference (DeepSeek with Thinking Tokens)
-# Requires: WANDB_API_KEY environment variable
-# See: https://docs.wandb.ai/guides/inference/models/
+# 
+# Setup:
+# 1. Get your API key from: https://wandb.ai/authorize
+# 2. Add to .env file in project root:
+#    OPENAI_API_KEY=<your-wandb-api-key>
+#    (W&B Inference uses OpenAI-compatible API, so litellm expects OPENAI_API_KEY)
+# 
+# Reference: https://docs.wandb.ai/guides/inference/examples/
 
 # Agent Identity
 name: "Tyler"
@@ -12,13 +18,18 @@ notes: |
 
 # Model Configuration - Using W&B Inference DeepSeek model
 # DeepSeek models support reasoning content (thinking tokens)
-model_name: "deepseek-ai/DeepSeek-R1-0528"  # Options: DeepSeek-R1-0528, DeepSeek-V3-0324, DeepSeek-V3.1
+# Note: The openai/ prefix tells litellm to use OpenAI-compatible format for W&B Inference
+model_name: "openai/deepseek-ai/DeepSeek-R1-0528"  # Options: DeepSeek-R1-0528, DeepSeek-V3-0324, DeepSeek-V3.1
 
 # W&B Inference endpoint configuration
-# Replace <your-team> and <your-project> with your W&B team and project names
-base_url: "https://api.wandb.ai/api/v1/inference/<your-team>/<your-project>"
+# This is the standard W&B Inference API endpoint (not team/project specific)
+base_url: "https://api.inference.wandb.ai/v1"
+
+# Optional: Track usage by team/project
+# Replace wandb/slide with your team/project if needed
 extra_headers:
-  Authorization: "Bearer ${WANDB_API_KEY}"  # Will be populated from env var
+  HTTP-Referer: "https://wandb.ai/wandb/slide"
+  X-Project-Name: "wandb-designers/slide"
 
 temperature: 0.7
 max_tool_iterations: 10

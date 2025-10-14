@@ -1007,32 +1007,22 @@ class Agent(Model):
                         thinking_content = None
                         thinking_type = None
                         
-                        # Debug: Log all delta attributes to see what's available
-                        if hasattr(delta, '__dict__'):
-                            delta_attrs = [attr for attr in dir(delta) if not attr.startswith('_')]
-                            if delta_attrs:
-                                logger.debug(f"Delta attributes available: {delta_attrs}")
-                        
                         # Check for LiteLLM standardized field (v1.63.0+)
                         if hasattr(delta, 'reasoning_content') and delta.reasoning_content is not None:
                             thinking_content = delta.reasoning_content
                             thinking_type = "reasoning"
-                            logger.debug(f"Found reasoning_content: {thinking_content[:50]}...")
                         # Fallback: Anthropic-specific field
                         elif hasattr(delta, 'thinking') and delta.thinking is not None:
                             thinking_content = delta.thinking
                             thinking_type = "thinking"
-                            logger.debug(f"Found thinking: {thinking_content[:50]}...")
                         # Fallback: Extended thinking field
                         elif hasattr(delta, 'extended_thinking') and delta.extended_thinking is not None:
                             thinking_content = delta.extended_thinking
                             thinking_type = "extended_thinking"
-                            logger.debug(f"Found extended_thinking: {thinking_content[:50]}...")
                         
                         # Emit thinking chunk event if found
                         if thinking_content:
                             current_thinking.append(thinking_content)
-                            logger.info(f"Emitting LLM_THINKING_CHUNK event (type={thinking_type})")
                             yield ExecutionEvent(
                                 type=EventType.LLM_THINKING_CHUNK,
                                 timestamp=datetime.now(UTC),

@@ -5852,7 +5852,7 @@ wheels = [
 
 [[package]]
 name = "slide-lye"
-version = "1.0.1"
+version = "2.2.3"
 source = { editable = "packages/lye" }
 dependencies = [
     { name = "beautifulsoup4" },
@@ -5908,7 +5908,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "slide-narrator"
-version = "1.0.2"
+version = "2.2.3"
 source = { editable = "packages/narrator" }
 dependencies = [
     { name = "aiosqlite" },
@@ -5952,7 +5952,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "slide-space-monkey"
-version = "1.0.0"
+version = "2.2.3"
 source = { editable = "packages/space-monkey" }
 dependencies = [
     { name = "fastapi" },
@@ -5998,7 +5998,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "slide-tyler"
-version = "2.1.0"
+version = "2.2.3"
 source = { editable = "packages/tyler" }
 dependencies = [
     { name = "aiohappyeyeballs" },
@@ -6158,7 +6158,7 @@ requires-dist = [
     { name = "jiter", specifier = ">=0.8.2" },
     { name = "jsonschema", specifier = ">=4.23.0" },
     { name = "jsonschema-specifications", specifier = ">=2024.10.1" },
-    { name = "litellm", specifier = ">=1.60.2" },
+    { name = "litellm", specifier = ">=1.63.0" },
     { name = "mako", specifier = ">=1.3.9" },
     { name = "markdown-it-py", specifier = ">=3.0.0" },
     { name = "markupsafe", specifier = ">=3.0.2" },
