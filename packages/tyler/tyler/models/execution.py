@@ -14,6 +14,7 @@ class EventType(Enum):
     LLM_REQUEST = "llm_request"          # {message_count, model, temperature}
     LLM_RESPONSE = "llm_response"        # {content, tool_calls, tokens, latency_ms}
     LLM_STREAM_CHUNK = "llm_stream_chunk" # {content_chunk}
+    LLM_THINKING_CHUNK = "llm_thinking_chunk" # {thinking_chunk, thinking_type}
     
     # Tool execution  
     TOOL_SELECTED = "tool_selected"      # {tool_name, arguments, tool_call_id}
