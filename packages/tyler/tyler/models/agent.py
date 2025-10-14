@@ -1104,16 +1104,11 @@ class Agent(Model):
                             "total_tokens": getattr(chunk.usage, "total_tokens", 0)
                         }
                     
-                    # Add reasoning content to metrics if present
+                    # Prepare reasoning content for Message (top-level field, not metrics)
+                    reasoning_content = None
                     if current_thinking:
                         # Ensure all thinking chunks are strings before joining
-                        metrics["reasoning_content"] = ''.join(map(str, current_thinking))
-                    
-                    # Add thinking_blocks if available in final chunk (Anthropic specific)
-                    if hasattr(chunk, 'choices') and chunk.choices and hasattr(chunk.choices[0], 'message'):
-                        final_message = chunk.choices[0].message
-                        if hasattr(final_message, 'thinking_blocks') and final_message.thinking_blocks:
-                            metrics["thinking_blocks"] = final_message.thinking_blocks
+                        reasoning_content = ''.join(map(str, current_thinking))
                     
                     yield ExecutionEvent(
                         type=EventType.LLM_RESPONSE,
@@ -1130,6 +1125,7 @@ class Agent(Model):
                     assistant_message = Message(
                         role="assistant",
                         content=content,
+                        reasoning_content=reasoning_content,  # Top-level field (not in metrics)
                         tool_calls=current_tool_calls if current_tool_calls else None,
                         source=self._create_assistant_source(include_version=True),
                         metrics=metrics
