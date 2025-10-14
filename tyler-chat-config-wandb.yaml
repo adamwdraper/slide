@@ -36,7 +36,7 @@ max_tool_iterations: 10
 
 # Reasoning/Thinking Configuration
 # DeepSeek models support thinking tokens when this is enabled
-reasoning_effort: "low"  # Options: low, medium, high
+reasoning: "low"  # Options: "low", "medium", "high" or dict for advanced config
 
 # Tool Configuration
 tools:
