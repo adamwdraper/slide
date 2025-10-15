@@ -178,11 +178,12 @@ async def demo_wandb_inference():
     logger.info("=" * 70)
     
     # Check if W&B API key is available
-    if not os.getenv("OPENAI_API_KEY"):
-        logger.warning("⚠️  Skipping W&B Inference demo - OPENAI_API_KEY not set")
+    wandb_api_key = os.getenv("WANDB_API_KEY")
+    if not wandb_api_key:
+        logger.warning("⚠️  Skipping W&B Inference demo - WANDB_API_KEY not set")
         logger.info("   To use W&B Inference:")
         logger.info("   1. Get API key from: https://wandb.ai/authorize")
-        logger.info("   2. Set: export OPENAI_API_KEY=<your-wandb-api-key>")
+        logger.info("   2. Set: export WANDB_API_KEY=<your-wandb-api-key>")
         return
     
     logger.info("Using W&B Inference with DeepSeek-R1-0528...")
@@ -191,6 +192,7 @@ async def demo_wandb_inference():
     agent = Agent(
         model_name="openai/deepseek-ai/DeepSeek-R1-0528",
         base_url="https://api.inference.wandb.ai/v1",
+        api_key=wandb_api_key,  # Pass W&B API key explicitly
         extra_headers={
             "HTTP-Referer": "https://wandb.ai/wandb-designers/slide",
             "X-Project-Name": "wandb-designers/slide"

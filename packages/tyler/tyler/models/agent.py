@@ -156,6 +156,7 @@ class Agent(Model):
     """
     model_name: str = Field(default="gpt-4.1")
     api_base: Optional[str] = Field(default=None, description="Custom API base URL for the model provider (e.g., for using alternative inference services). You can also use 'base_url' as an alias.")
+    api_key: Optional[str] = Field(default=None, description="API key for the model provider. If not provided, LiteLLM will use environment variables.")
     extra_headers: Optional[Dict[str, str]] = Field(default=None, description="Additional headers to include in API requests (e.g., for authentication or tracking)")
     temperature: float = Field(default=0.7)
     drop_params: bool = Field(default=True, description="Whether to drop unsupported parameters for specific models (e.g., O-series models only support temperature=1)")
@@ -208,6 +209,7 @@ class Agent(Model):
             model_name=self.model_name,
             temperature=self.temperature,
             api_base=self.api_base,
+            api_key=self.api_key,
             extra_headers=self.extra_headers,
             drop_params=self.drop_params,
             reasoning=self.reasoning
