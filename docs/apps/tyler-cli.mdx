@@ -104,6 +104,23 @@ tools:
   - "~/tools/special_tool.py"
 ```
 
+### Environment variable substitution
+
+Config files support environment variable substitution using `${VAR_NAME}` syntax. This is useful for securely referencing API keys:
+
+```yaml
+# Example: W&B Inference configuration
+model_name: "openai/deepseek-ai/DeepSeek-R1-0528"
+base_url: "https://api.inference.wandb.ai/v1"
+api_key: "${WANDB_API_KEY}"  # Reads from environment
+extra_headers:
+  HTTP-Referer: "https://wandb.ai/my-team/my-project"
+```
+
+<Tip>
+Never hardcode API keys in config files. Always use environment variables via `${VAR_NAME}` syntax or store them in your `.env` file.
+</Tip>
+
 ### Command line options
 
 ```bash
@@ -230,8 +247,14 @@ Tyler Chat respects these environment variables:
 |----------|-------------|
 | `OPENAI_API_KEY` | API key for OpenAI models |
 | `ANTHROPIC_API_KEY` | API key for Anthropic models |
+| `WANDB_API_KEY` | W&B API key (for W&B Inference or Weave tracking) |
+| `WANDB_PROJECT` | W&B project for Weave tracking (optional - if not set, Weave won't initialize) |
 | `NARRATOR_DATABASE_URL` | Database URL for thread persistence |
-| `WEAVE_PROJECT` | W&B project for tracking |
+
+<Note>
+**Breaking Change in v3.0.0**: Weave tracking is now opt-in via the `WANDB_PROJECT` environment variable. 
+Set `WANDB_PROJECT=tyler-cli` to restore automatic tracking behavior from previous versions.
+</Note>
 
 ## Troubleshooting
 

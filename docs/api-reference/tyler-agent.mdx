@@ -73,8 +73,27 @@ agent = Agent(
   Alias for `api_base`. Either parameter can be used to specify a custom API endpoint.
 </ParamField>
 
+<ParamField path="api_key" type="string | None" default="None">
+  API key for the model provider. If not provided, LiteLLM will use environment variables (e.g., OPENAI_API_KEY, WANDB_API_KEY).
+  Use this when you need to explicitly pass an API key, such as with W&B Inference or custom providers.
+</ParamField>
+
 <ParamField path="extra_headers" type="Dict[str, str] | None" default="None">
   Additional headers to include in API requests. Useful for authentication tokens, API keys, or tracking headers.
+</ParamField>
+
+<ParamField path="reasoning" type="string | Dict | None" default="None">
+  Enable reasoning/thinking tokens for supported models (OpenAI o1/o3, DeepSeek-R1, Claude with extended thinking).
+  
+  - String: `'low'`, `'medium'`, `'high'` (recommended for most use cases)
+  - Dict: Provider-specific config (e.g., `{'type': 'enabled', 'budget_tokens': 1024}` for Anthropic)
+  
+  When enabled, the model will show its internal reasoning process before generating the final answer.
+</ParamField>
+
+<ParamField path="step_errors_raise" type="bool" default="False">
+  If True, the `step()` method will raise exceptions instead of returning error messages. 
+  Used for backward compatibility and custom error handling.
 </ParamField>
 
 <ParamField path="notes" type="string | Prompt" default="">
@@ -301,6 +320,8 @@ result = await coordinator.go(thread)
 
 ## Custom Configuration
 
+### Using custom API endpoints
+
 ```python
 # Use a custom API endpoint
 agent = Agent(
@@ -308,8 +329,39 @@ agent = Agent(
     api_base="https://your-api.com/v1",
     extra_headers={"Authorization": "Bearer token"}
 )
+```
 
-# Configure storage
+### W&B Inference configuration
+
+```python
+import os
+
+# Use W&B Inference with DeepSeek-R1 (thinking tokens)
+agent = Agent(
+    model_name="openai/deepseek-ai/DeepSeek-R1-0528",
+    base_url="https://api.inference.wandb.ai/v1",
+    api_key=os.getenv("WANDB_API_KEY"),  # Your W&B API key
+    extra_headers={
+        "HTTP-Referer": "https://wandb.ai/my-team/my-project",
+        "X-Project-Name": "my-team/my-project"
+    },
+    reasoning="low",  # Enable thinking tokens
+    temperature=0.7
+)
+```
+
+<Tip>
+For W&B Inference, you can also use YAML config with environment variable substitution:
+```yaml
+model_name: "openai/deepseek-ai/DeepSeek-R1-0528"
+base_url: "https://api.inference.wandb.ai/v1"
+api_key: "${WANDB_API_KEY}"  # Reads from environment
+```
+</Tip>
+
+### Custom storage configuration
+
+```python
 from narrator import ThreadStore, FileStore
 
 agent = Agent(
