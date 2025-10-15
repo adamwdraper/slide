@@ -1,4 +1,9 @@
-## [narrator-v2.2.3] - 2025-10-13
+## [narrator-v3.0.0] - 2025-10-15
+
+### 🚀 Features
+
+- Add reasoning_content as top-level field in Narrator Message
+## [tyler-v2.2.3] - 2025-10-14
 
 ### 🐛 Bug Fixes
 
