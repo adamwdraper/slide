@@ -65,9 +65,40 @@ As a Tyler CLI user, I want to control whether Weave tracking is enabled via an 
 
 ## Non-Goals
 - Adding YAML configuration for Weave project (keep it simple with env vars only)
-- Configuring other Weave settings (entity, API key, etc.) - users can use environment variables for those
 - Adding UI/CLI commands to toggle Weave on/off during a session
 - Migrating existing Weave traces to new project names
 - Providing automatic migration of existing user configs (breaking change is acceptable)
 - Checking for `WANDB_API_KEY` before initializing (Weave can handle missing API key gracefully)
+
+## Additional Improvements Discovered During Implementation
+
+While implementing this feature, we discovered and addressed several related issues:
+
+### 1. Missing API Key Support
+**Problem**: Agent was missing `api_key` field, preventing use of W&B Inference and other custom providers  
+**Solution**: 
+- Added `api_key` field to Agent model
+- Pass `api_key` through to CompletionHandler → LiteLLM
+- Enables W&B Inference, custom endpoints requiring explicit API keys
+
+### 2. Environment Variable Substitution
+**Problem**: YAML configs couldn't reference environment variables (needed for secure API key configuration)  
+**Solution**: 
+- Added `substitute_env_vars()` function to config loader
+- Supports `${VAR_NAME}` syntax in YAML configs
+- Enables secure configuration: `api_key: "${WANDB_API_KEY}"`
+
+### 3. Property Regression Prevention
+**Problem**: Agent properties could be accidentally removed during refactoring (as happened with `api_key`)  
+**Solution**:
+- Created comprehensive property validation test suite (8 tests)
+- Tests all 17 Agent properties exist and work correctly
+- Prevents future regressions
+
+### 4. Enhanced User Experience
+**Improvements**:
+- Enhanced welcome message to show agent name and model
+- Moved tyler-chat config files from project root to `packages/tyler/`
+- Updated/created `.env.example` files with comprehensive documentation
+- Better file organization
 

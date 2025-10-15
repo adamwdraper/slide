@@ -1,20 +1,55 @@
 # Impact Analysis — Conditional Weave Initialization in Tyler Chat CLI
 
 ## Modules/packages likely touched
-- **`packages/tyler/tyler/cli/chat.py`**
-  - `ChatManager.__init__()` method (lines 130-137)
-  - Currently unconditionally calls `weave.init("tyler-cli")`
-  - Will need to check for `WANDB_PROJECT` env var before initializing
-  
-- **`docs/apps/tyler-cli.mdx`**
-  - Documentation for Tyler Chat CLI
-  - Currently mentions `WEAVE_PROJECT` env var (line 234)
-  - Needs update to clarify new behavior and breaking change
-  - Should add migration guide for existing users
 
-- **Template config in `packages/tyler/tyler/cli/chat.py`**
-  - The `load_config()` function creates a template config (lines 519-555)
-  - Should add a comment about Weave configuration using `WANDB_PROJECT` env var
+### Core Implementation
+- **`packages/tyler/tyler/cli/chat.py`**
+  - `ChatManager.__init__()` method - Conditional Weave initialization
+  - `load_config()` function - Environment variable substitution
+  - Template config generation - Weave documentation
+  
+- **`packages/tyler/tyler/models/agent.py`**
+  - Added `api_key` field to Agent model
+  - Pass `api_key` to CompletionHandler
+
+- **`packages/tyler/tyler/models/completion_handler.py`**
+  - Added `api_key` parameter to `__init__()`
+  - Include `api_key` in LiteLLM completion params
+
+### Testing
+- **`packages/tyler/tests/cli/test_chat_weave.py`** (NEW)
+  - 5 unit tests for Weave initialization
+  
+- **`packages/tyler/tests/cli/test_chat_integration.py`** (NEW)
+  - 3 integration tests for CLI functionality
+
+- **`packages/tyler/tests/models/test_agent_properties.py`** (NEW)
+  - 8 property validation tests
+
+### Documentation & Configuration
+- **`packages/tyler/CHANGELOG.md`**
+  - Breaking change notice and migration guide
+
+- **`packages/tyler/README.md`**
+  - Document example config files location
+
+- **`packages/tyler/.env.example`** (UPDATED)
+  - Comprehensive environment variable documentation
+
+- **`packages/space-monkey/env.example`** (UPDATED)
+  - Clarified WANDB_PROJECT usage
+
+- **`packages/tyler/tyler-chat-config-wandb.yaml`** (MOVED & UPDATED)
+  - Moved from root to packages/tyler/
+  - Added `api_key: "${WANDB_API_KEY}"` configuration
+
+- **`packages/tyler/tyler-chat-config.yaml`** (MOVED)
+  - Moved from root to packages/tyler/
+
+### Examples
+- **`packages/tyler/examples/006_thinking_tokens.py`**
+  - Updated W&B Inference demo to use `WANDB_API_KEY` correctly
+  - Uses explicit `api_key` parameter
 
 ## Contracts to update (APIs, events, schemas, migrations)
 
@@ -30,11 +65,20 @@
   - **After**: Controls whether Weave initializes and which project to use
   - **Note**: Already used by Space Monkey package, so this creates consistency
 
-### No API Changes
-- No Python API changes
-- No function signatures changing
-- No new command-line arguments
-- Only internal initialization logic changes
+### API Changes
+- **Agent model** (backward compatible addition):
+  - **Added**: `api_key: Optional[str]` field
+  - **Benefit**: Supports W&B Inference and custom providers requiring explicit API keys
+  - **Backward compatible**: Optional field, defaults to None
+  
+- **CompletionHandler** (internal change):
+  - **Added**: `api_key` parameter to `__init__()`
+  - **Impact**: Internal only, not part of public API
+
+### Config Loader Enhancement
+- **Added**: Environment variable substitution in YAML configs
+- **Syntax**: `${VARIABLE_NAME}` in YAML values
+- **Use case**: Secure API key configuration without hardcoding
 
 ## Risks
 
