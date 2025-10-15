@@ -1,4 +1,41 @@
-## [tyler-v2.2.3] - 2025-10-13
+## [tyler-v3.0.0] - 2025-10-15
+
+### 🚀 Features
+
+- Add LLM_THINKING_CHUNK event type
+- Implement thinking tokens detection in streaming
+- Add thinking tokens display to tyler chat CLI
+- Add reasoning_effort and thinking parameters to Agent
+- Add reasoning parameter mapping in CompletionHandler
+
+### 🐛 Bug Fixes
+
+- Address code review feedback
+- Update examples to use unified reasoning parameter
+
+### 💼 Other
+
+- Add logging to track thinking token detection
+
+### 🚜 Refactor
+
+- Unify reasoning parameters in Agent
+- Store reasoning_content as top-level Message field
+
+### 🎨 Styling
+
+- Change thinking panel color from yellow to gray
+
+### 🧪 Testing
+
+- Add failing tests for thinking tokens support
+- Update tests to use new reasoning API
+
+### ⚙️ Miscellaneous Tasks
+
+- Upgrade litellm to >=1.63.0 for reasoning_content support
+- Clean up and finalize thinking tokens implementation
+## [tyler-v2.2.3] - 2025-10-14
 
 ### 🚀 Features
 
