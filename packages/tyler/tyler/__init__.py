@@ -1,6 +1,6 @@
 """Tyler - A development kit for AI agents with a complete lack of conventional limitations"""
 
-__version__ = "3.1.1"
+__version__ = "3.1.2"
 
 from tyler.utils.logging import get_logger
 from tyler.models.agent import Agent
