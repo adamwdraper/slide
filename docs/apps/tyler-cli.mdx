@@ -251,10 +251,9 @@ Tyler Chat respects these environment variables:
 | `WANDB_PROJECT` | W&B project for Weave tracking (optional - if not set, Weave won't initialize) |
 | `NARRATOR_DATABASE_URL` | Database URL for thread persistence |
 
-<Note>
-**Breaking Change in v3.0.0**: Weave tracking is now opt-in via the `WANDB_PROJECT` environment variable. 
-Set `WANDB_PROJECT=tyler-cli` to restore automatic tracking behavior from previous versions.
-</Note>
+<Tip>
+To enable Weave tracing for observability, set `WANDB_PROJECT` to your desired project name. If not set, the CLI runs without tracing overhead for faster startup.
+</Tip>
 
 ## Troubleshooting
 
