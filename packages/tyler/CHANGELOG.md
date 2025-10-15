@@ -1,3 +1,22 @@
+## [tyler-v3.1.0] - 2025-10-15
+
+### 🚀 Features
+
+- *(tyler-cli)* [**breaking**] Make Weave initialization conditional on WANDB_PROJECT env var
+- *(tyler-cli)* Add environment variable substitution to config loader
+- *(tyler)* Add api_key support to Agent and CompletionHandler
+
+### 🐛 Bug Fixes
+
+- Address code review feedback
+
+### 📚 Documentation
+
+- Remove breaking change warnings (no existing users)
+
+### 🧪 Testing
+
+- *(tyler)* Add comprehensive Agent property validation tests
 ## [tyler-v3.0.0] - 2025-10-15
 
 ### 🚀 Features
@@ -7,21 +26,6 @@
 - Add thinking tokens display to tyler chat CLI
 - Add reasoning_effort and thinking parameters to Agent
 - Add reasoning parameter mapping in CompletionHandler
-
-### 🔧 Improvements
-
-- **Tyler Chat CLI**: Weave initialization is now conditional on `WANDB_PROJECT` environment variable
-  - Set `WANDB_PROJECT=your-project-name` to enable Weave tracing
-  - If not set, CLI runs without Weave (faster startup, no tracking overhead)
-  - Gives users control over observability features
-  
-- **Agent API Key Support**: Added `api_key` field to Agent model
-  - Enables W&B Inference and custom providers requiring explicit API keys
-  - Pass API key directly: `Agent(api_key=os.getenv("WANDB_API_KEY"))`
-  
-- **Config Environment Variables**: YAML configs now support `${VAR_NAME}` substitution
-  - Example: `api_key: "${WANDB_API_KEY}"` reads from environment
-  - Secure configuration without hardcoding secrets
 
 ### 🐛 Bug Fixes
 
@@ -45,7 +49,6 @@
 
 - Add failing tests for thinking tokens support
 - Update tests to use new reasoning API
-- Add comprehensive tests for conditional Weave initialization
 
 ### ⚙️ Miscellaneous Tasks
 
