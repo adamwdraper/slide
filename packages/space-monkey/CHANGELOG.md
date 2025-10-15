@@ -1,3 +1,8 @@
+## [space-monkey-v3.1.0] - 2025-10-15
+
+### 🚀 Features
+
+- *(tyler-cli)* [**breaking**] Make Weave initialization conditional on WANDB_PROJECT env var
 ## [tyler-v2.2.3] - 2025-10-14
 
 ### 🚀 Features
