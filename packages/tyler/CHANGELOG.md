@@ -8,6 +8,15 @@
 - Add reasoning_effort and thinking parameters to Agent
 - Add reasoning parameter mapping in CompletionHandler
 
+### 💥 BREAKING CHANGES
+
+- **Tyler Chat CLI**: Weave initialization is now conditional on `WANDB_PROJECT` environment variable
+  - **Before**: CLI automatically initialized Weave with project "tyler-cli" on every startup
+  - **After**: CLI only initializes Weave when `WANDB_PROJECT` environment variable is set
+  - **Migration**: Set `WANDB_PROJECT=tyler-cli` (or your preferred project name) to restore previous behavior
+  - **Example**: Add to your `.env` file: `WANDB_PROJECT=tyler-cli`
+  - **Benefit**: Reduced overhead and faster startup when tracking is not needed, plus users can customize project names
+
 ### 🐛 Bug Fixes
 
 - Address code review feedback
@@ -30,6 +39,7 @@
 
 - Add failing tests for thinking tokens support
 - Update tests to use new reasoning API
+- Add comprehensive tests for conditional Weave initialization
 
 ### ⚙️ Miscellaneous Tasks
 
