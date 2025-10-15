@@ -570,6 +570,21 @@ tools:
                 config = yaml.safe_load(f)
             else:
                 config = json.load(f)
+        
+        # Substitute environment variables in config values
+        def substitute_env_vars(obj):
+            """Recursively substitute environment variables in config values."""
+            if isinstance(obj, dict):
+                return {k: substitute_env_vars(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [substitute_env_vars(item) for item in obj]
+            elif isinstance(obj, str) and obj.startswith('${') and obj.endswith('}'):
+                # Extract env var name from ${VAR_NAME} format
+                env_var = obj[2:-1]
+                return os.getenv(env_var, obj)  # Return original if not found
+            return obj
+        
+        config = substitute_env_vars(config)
                 
         # Process tools list to load custom tools
         if 'tools' in config and isinstance(config['tools'], list):
