@@ -1,3 +1,8 @@
+## [tyler-v3.1.1] - 2025-10-15
+
+### 🐛 Bug Fixes
+
+- Add minimum version constraints for narrator dependency
 ## [tyler-v3.1.0] - 2025-10-15
 
 ### 🚀 Features

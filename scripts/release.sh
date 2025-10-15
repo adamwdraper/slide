@@ -114,31 +114,23 @@ for PACKAGE in "${PACKAGES[@]}"; do
     rm "$PACKAGE_DIR/$MODULE_NAME/__init__.py.bak"
 done
 
-# Remove version constraints from inter-package dependencies
+# Set inter-package minimum version constraints
 echo ""
-echo -e "${BLUE}Removing inter-package version constraints...${NC}"
+echo -e "${BLUE}Setting inter-package minimum version constraints...${NC}"
 
-# Tyler: slide-narrator>=X.Y.Z -> slide-narrator
-if grep -q '"slide-narrator>=.*"' packages/tyler/pyproject.toml; then
-    sed -i.bak 's/"slide-narrator>=.*"/"slide-narrator"/g' packages/tyler/pyproject.toml
-    echo -e "  ${GREEN}✓${NC} Tyler: slide-narrator constraint removed"
-fi
+# Tyler: Set narrator and lye to >=NEW_VERSION
+sed -i.bak "s/\"slide-narrator[^\"]*\"/\"slide-narrator>=$NEW_VERSION\"/g" packages/tyler/pyproject.toml
+echo -e "  ${GREEN}✓${NC} Tyler: slide-narrator>=$NEW_VERSION"
 
-if grep -q '"slide-lye>=.*"' packages/tyler/pyproject.toml; then
-    sed -i.bak 's/"slide-lye>=.*"/"slide-lye"/g' packages/tyler/pyproject.toml
-    echo -e "  ${GREEN}✓${NC} Tyler: slide-lye constraint removed"
-fi
+sed -i.bak "s/\"slide-lye[^\"]*\"/\"slide-lye>=$NEW_VERSION\"/g" packages/tyler/pyproject.toml
+echo -e "  ${GREEN}✓${NC} Tyler: slide-lye>=$NEW_VERSION"
 
-# Space Monkey: slide-tyler>=X.Y.Z -> slide-tyler
-if grep -q '"slide-tyler>=.*"' packages/space-monkey/pyproject.toml; then
-    sed -i.bak 's/"slide-tyler>=.*"/"slide-tyler"/g' packages/space-monkey/pyproject.toml
-    echo -e "  ${GREEN}✓${NC} Space Monkey: slide-tyler constraint removed"
-fi
+# Space Monkey: Set tyler and narrator to >=NEW_VERSION
+sed -i.bak "s/\"slide-tyler[^\"]*\"/\"slide-tyler>=$NEW_VERSION\"/g" packages/space-monkey/pyproject.toml
+echo -e "  ${GREEN}✓${NC} Space Monkey: slide-tyler>=$NEW_VERSION"
 
-if grep -q '"slide-narrator>=.*"' packages/space-monkey/pyproject.toml; then
-    sed -i.bak 's/"slide-narrator>=.*"/"slide-narrator"/g' packages/space-monkey/pyproject.toml
-    echo -e "  ${GREEN}✓${NC} Space Monkey: slide-narrator constraint removed"
-fi
+sed -i.bak "s/\"slide-narrator[^\"]*\"/\"slide-narrator>=$NEW_VERSION\"/g" packages/space-monkey/pyproject.toml
+echo -e "  ${GREEN}✓${NC} Space Monkey: slide-narrator>=$NEW_VERSION"
 
 # Clean up backup files
 rm -f packages/tyler/pyproject.toml.bak
