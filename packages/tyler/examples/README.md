@@ -26,7 +26,7 @@ Thread persistence with streaming responses.
 
 ### 006_thinking_tokens.py ✨ NEW
 **Thinking tokens (reasoning) streaming** - demonstrates:
-- Enabling thinking tokens with `reasoning_effort`
+- Enabling thinking tokens with `reasoning` parameter
 - Streaming both thinking and content separately
 - Using models that support reasoning (OpenAI o1/o3, DeepSeek-R1, etc.)
 - W&B Inference integration with DeepSeek-R1
@@ -146,7 +146,7 @@ Tyler supports three streaming modes:
    - Best for: Building API proxies, direct OpenAI client integration
    - Example: `005_raw_streaming.py`
 
-3. **Thinking tokens** (`reasoning_effort="low|medium|high"`): Stream model reasoning separately
+3. **Thinking tokens** (`reasoning="low|medium|high"`): Stream model reasoning separately
    - Best for: Showing model's thought process, debugging, transparency
    - Example: `006_thinking_tokens.py`
 
@@ -169,7 +169,7 @@ Usage:
 ```python
 agent = Agent(
     model_name="gpt-4.1",
-    reasoning_effort="low",  # Options: low, medium, high
+    reasoning="low",  # Options: "low", "medium", "high" or dict for advanced config
     temperature=0.7
 )
 

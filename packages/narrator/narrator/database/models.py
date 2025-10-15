@@ -55,6 +55,7 @@ class MessageRecord(Base):
     turn = Column(Integer, nullable=True)
     role = Column(String, nullable=False)
     content = Column(Text, nullable=True)
+    reasoning_content = Column(Text, nullable=True)
     name = Column(String, nullable=True)
     tool_call_id = Column(String, nullable=True)
     tool_calls = Column(JSONBCompat, nullable=True)

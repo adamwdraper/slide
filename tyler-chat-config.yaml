@@ -20,7 +20,7 @@ max_tool_iterations: 10
 
 # Reasoning/Thinking Configuration (for models that support it)
 # Enables thinking tokens to be displayed in the CLI
-reasoning_effort: "low"  # Options: low, medium, high
+reasoning: "low"  # Options: "low", "medium", "high" or dict for advanced config
 
 # Tool Configuration
 # List of tools to load. Can be:

@@ -269,24 +269,18 @@ async for event in agent.go(thread, stream=True):
 💬 Response: The answer is 38,908.
 ```
 
-### Thinking in Message Metrics
+### Thinking in Message Object
 
-After streaming completes, thinking content is stored in the message's `metrics` dict:
+After streaming completes, thinking content is stored as a top-level field on the message:
 
 ```python
 async for event in agent.go(thread, stream=True):
     if event.type == EventType.MESSAGE_CREATED:
         msg = event.data['message']
         if msg.role == "assistant":
-            # Access complete reasoning
-            if 'reasoning_content' in msg.metrics:
-                reasoning = msg.metrics['reasoning_content']
-                print(f"Full reasoning: {reasoning}")
-            
-            # Anthropic models may also include structured thinking_blocks
-            if 'thinking_blocks' in msg.metrics:
-                blocks = msg.metrics['thinking_blocks']
-                print(f"Thinking blocks: {len(blocks)}")
+            # Access complete reasoning (top-level field)
+            if msg.reasoning_content:
+                print(f"Full reasoning: {msg.reasoning_content}")
 ```
 
 ### Raw Streaming with Thinking

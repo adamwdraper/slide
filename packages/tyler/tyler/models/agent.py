@@ -159,8 +159,13 @@ class Agent(Model):
     extra_headers: Optional[Dict[str, str]] = Field(default=None, description="Additional headers to include in API requests (e.g., for authentication or tracking)")
     temperature: float = Field(default=0.7)
     drop_params: bool = Field(default=True, description="Whether to drop unsupported parameters for specific models (e.g., O-series models only support temperature=1)")
-    reasoning_effort: Optional[str] = Field(default=None, description="Reasoning effort level for models that support it (e.g., 'low', 'medium', 'high'). Enables thinking tokens for supported models.")
-    thinking: Optional[Dict[str, Any]] = Field(default=None, description="Thinking configuration for Anthropic models (e.g., {'type': 'enabled', 'budget_tokens': 1024})")
+    reasoning: Optional[Union[str, Dict[str, Any]]] = Field(
+        default=None,
+        description="""Enable reasoning/thinking tokens for supported models.
+        - String: 'low', 'medium', 'high' (recommended for most use cases)
+        - Dict: Provider-specific config (e.g., {'type': 'enabled', 'budget_tokens': 1024} for Anthropic)
+        """
+    )
     name: str = Field(default="Tyler")
     purpose: Union[str, Prompt] = Field(default_factory=lambda: weave.StringPrompt("To be a helpful assistant."))
     notes: Union[str, Prompt] = Field(default_factory=lambda: weave.StringPrompt(""))
@@ -205,8 +210,7 @@ class Agent(Model):
             api_base=self.api_base,
             extra_headers=self.extra_headers,
             drop_params=self.drop_params,
-            reasoning_effort=self.reasoning_effort,
-            thinking=self.thinking
+            reasoning=self.reasoning
         )
         
         # Use ToolManager to register all tools and delegation
@@ -1100,16 +1104,11 @@ class Agent(Model):
                             "total_tokens": getattr(chunk.usage, "total_tokens", 0)
                         }
                     
-                    # Add reasoning content to metrics if present
+                    # Prepare reasoning content for Message (top-level field, not metrics)
+                    reasoning_content = None
                     if current_thinking:
                         # Ensure all thinking chunks are strings before joining
-                        metrics["reasoning_content"] = ''.join(map(str, current_thinking))
-                    
-                    # Add thinking_blocks if available in final chunk (Anthropic specific)
-                    if hasattr(chunk, 'choices') and chunk.choices and hasattr(chunk.choices[0], 'message'):
-                        final_message = chunk.choices[0].message
-                        if hasattr(final_message, 'thinking_blocks') and final_message.thinking_blocks:
-                            metrics["thinking_blocks"] = final_message.thinking_blocks
+                        reasoning_content = ''.join(map(str, current_thinking))
                     
                     yield ExecutionEvent(
                         type=EventType.LLM_RESPONSE,
@@ -1126,6 +1125,7 @@ class Agent(Model):
                     assistant_message = Message(
                         role="assistant",
                         content=content,
+                        reasoning_content=reasoning_content,  # Top-level field (not in metrics)
                         tool_calls=current_tool_calls if current_tool_calls else None,
                         source=self._create_assistant_source(include_version=True),
                         metrics=metrics

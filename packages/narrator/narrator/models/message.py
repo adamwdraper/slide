@@ -43,6 +43,10 @@ class Message(BaseModel):
         description="Turn number grouping related messages in the same conversational step."
     )
     content: Optional[Union[str, List[Union[TextContent, ImageContent]]]] = None
+    reasoning_content: Optional[str] = Field(
+        default=None,
+        description="Model's reasoning/thinking process for models that support it (e.g., OpenAI o1, Anthropic Claude)"
+    )
     name: Optional[str] = None
     tool_call_id: Optional[str] = None  # Required for tool messages
     tool_calls: Optional[list] = None  # For assistant messages
@@ -232,6 +236,9 @@ class Message(BaseModel):
             "metrics": self.metrics,
             "reactions": self.reactions
         }
+        
+        if self.reasoning_content:
+            message_dict["reasoning_content"] = self.reasoning_content
         
         if self.name:
             message_dict["name"] = self.name

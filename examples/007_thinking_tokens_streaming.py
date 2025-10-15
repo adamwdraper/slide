@@ -32,7 +32,8 @@ async def demo_thinking_with_anthropic():
         name="thinking-agent",
         model_name="anthropic/claude-3-7-sonnet-20250219",
         purpose="To demonstrate thinking tokens",
-        temperature=0.7
+        temperature=0.7,
+        reasoning="low"  # Enable thinking tokens
     )
     
     # Create a thread with a question that benefits from reasoning
@@ -68,10 +69,10 @@ async def demo_thinking_with_anthropic():
         elif event.type == EventType.MESSAGE_CREATED:
             msg = event.data['message']
             if msg.role == "assistant":
-                # Check if reasoning was stored in metrics
-                if msg.metrics and 'reasoning_content' in msg.metrics:
-                    logger.info("\n\n✅ Reasoning stored in message metrics")
-                    logger.info(f"   Length: {len(msg.metrics['reasoning_content'])} chars")
+                # Check if reasoning was stored (top-level field)
+                if msg.reasoning_content:
+                    logger.info("\n\n✅ Reasoning stored in message")
+                    logger.info(f"   Length: {len(msg.reasoning_content)} chars")
     
     logger.info("\n" + "="*70)
     logger.info(f"📊 Summary:")
