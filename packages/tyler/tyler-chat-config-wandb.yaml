@@ -1,11 +1,12 @@
 # Tyler Chat Configuration for W&B Inference (DeepSeek with Thinking Tokens)
 # 
 # Setup:
-# 1. Get your API key from: https://wandb.ai/authorize
-# 2. Add to .env file in project root:
-#    OPENAI_API_KEY=<your-wandb-api-key>
-#    (W&B Inference uses OpenAI-compatible API, so litellm expects OPENAI_API_KEY)
+# 1. Get your W&B API key from: https://wandb.ai/authorize
+# 2. Add to your .env file:
+#    WANDB_API_KEY=<your-wandb-api-key>
+#    WANDB_PROJECT=tyler-wandb  (optional - enables Weave tracing)
 # 
+# Note: This config uses environment variable substitution (${WANDB_API_KEY})
 # Reference: https://docs.wandb.ai/guides/inference/examples/
 
 # Agent Identity
@@ -24,6 +25,10 @@ model_name: "openai/deepseek-ai/DeepSeek-R1-0528"  # Options: DeepSeek-R1-0528, 
 # W&B Inference endpoint configuration
 # This is the standard W&B Inference API endpoint (not team/project specific)
 base_url: "https://api.inference.wandb.ai/v1"
+
+# API Key: Reads WANDB_API_KEY from environment. Set this in your .env file:
+# WANDB_API_KEY=<your-api-key-from-https://wandb.ai/authorize>
+api_key: "${WANDB_API_KEY}"
 
 # Optional: Track usage by team/project
 # Replace wandb/slide with your team/project if needed

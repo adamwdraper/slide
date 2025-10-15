@@ -25,6 +25,7 @@ class CompletionHandler:
         model_name: Name of the LLM model to use
         temperature: Temperature setting for completions
         api_base: Optional custom API base URL
+        api_key: Optional API key for the model provider
         extra_headers: Optional additional headers
         drop_params: Whether to drop unsupported parameters
     """
@@ -34,6 +35,7 @@ class CompletionHandler:
         model_name: str,
         temperature: float = 0.7,
         api_base: Optional[str] = None,
+        api_key: Optional[str] = None,
         extra_headers: Optional[Dict[str, str]] = None,
         drop_params: bool = True,
         reasoning: Optional[Any] = None
@@ -44,6 +46,7 @@ class CompletionHandler:
             model_name: Name of the LLM model
             temperature: Temperature for completions
             api_base: Optional custom API base URL
+            api_key: Optional API key for the model provider
             extra_headers: Optional additional headers
             drop_params: Whether to drop unsupported parameters
             reasoning: Unified reasoning config (string or dict)
@@ -51,6 +54,7 @@ class CompletionHandler:
         self.model_name = model_name
         self.temperature = temperature
         self.api_base = api_base
+        self.api_key = api_key
         self.extra_headers = extra_headers
         self.drop_params = drop_params
         self.reasoning = reasoning
@@ -127,6 +131,10 @@ class CompletionHandler:
         # Add custom API base URL if specified
         if self.api_base:
             params["api_base"] = self.api_base
+        
+        # Add API key if specified
+        if self.api_key:
+            params["api_key"] = self.api_key
         
         # Add extra headers if specified
         if self.extra_headers:

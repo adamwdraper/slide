@@ -36,6 +36,10 @@ While Tyler can be used as a library, it comes with two interactive interfaces:
 1. A web-based chat interface available as a separate repository at [tyler-chat](https://github.com/adamwdraper/tyler-chat)
 2. A built-in command-line interface (CLI) accessible via the `tyler-chat` command after installation. See the [Tyler chat CLI](https://adamwdraper.github.io/tyler/apps/tyler-chat-cli) documentation for details.
 
+**Example configurations** for the Tyler CLI are available in this directory:
+- `tyler-chat-config.yaml` - Basic configuration template
+- `tyler-chat-config-wandb.yaml` - Configuration for W&B Inference with DeepSeek models
+
 
 &nbsp;
 

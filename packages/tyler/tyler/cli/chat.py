@@ -132,9 +132,12 @@ class ChatManager:
         self.current_thread = None
         self.thread_store = ThreadStore()
         self.thread_count = 0  # Track number of threads created
-        # Initialize Weave with suppressed output
-        with suppress_output():
-            weave.init("tyler-cli")
+        
+        # Initialize Weave only if WANDB_PROJECT is set
+        weave_project = os.getenv("WANDB_PROJECT", "").strip()
+        if weave_project:
+            with suppress_output():
+                weave.init(weave_project)
         
     def initialize_agent(self, config: Dict[str, Any] = None) -> None:
         """Initialize the agent with optional configuration"""
@@ -549,6 +552,13 @@ tools:
   - "notion"        # Notion integration tools
   - "command_line"  # System command execution tools
   # - "./my_tools.py"  # Example custom tools (uncomment to use)
+
+# Weave/W&B Configuration
+# To enable Weave tracing, set the WANDB_PROJECT environment variable:
+#   export WANDB_PROJECT=tyler-cli
+# Or add to your .env file:
+#   WANDB_PROJECT=tyler-cli
+# Weave will only initialize if WANDB_PROJECT is set.
 """
                 template_path.write_text(template)
                 console.print(f"[yellow]Created template config at: {template_path}[/]")
@@ -560,6 +570,21 @@ tools:
                 config = yaml.safe_load(f)
             else:
                 config = json.load(f)
+        
+        # Substitute environment variables in config values
+        def substitute_env_vars(obj):
+            """Recursively substitute environment variables in config values."""
+            if isinstance(obj, dict):
+                return {k: substitute_env_vars(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [substitute_env_vars(item) for item in obj]
+            elif isinstance(obj, str) and obj.startswith('${') and obj.endswith('}'):
+                # Extract env var name from ${VAR_NAME} format
+                env_var = obj[2:-1]
+                return os.getenv(env_var, obj)  # Return original if not found
+            return obj
+        
+        config = substitute_env_vars(config)
                 
         # Process tools list to load custom tools
         if 'tools' in config and isinstance(config['tools'], list):
@@ -615,6 +640,7 @@ def _main_inner(config: Optional[str], title: Optional[str]):
         asyncio.run(chat_manager.create_thread(title=title))
         
         console.print("[bold blue]Welcome to Tyler Chat![/]")
+        console.print(f"My name is {chat_manager.agent.name} and I am an agent based on {chat_manager.agent.model_name}.")
         console.print("Type your message or /help for commands")
         
         # Main chat loop
