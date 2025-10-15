@@ -46,7 +46,7 @@ brew install git-cliff   # Changelog generator
 
 1. **Validates environment** - Ensures you're on main branch with no uncommitted changes
 2. **Bumps versions** - Updates all 4 packages to the same new version
-3. **Removes version constraints** - Clears inter-package version requirements
+3. **Sets minimum version constraints** - Ensures inter-package compatibility (e.g., Tyler 3.1.1 requires narrator>=3.1.1)
 4. **Generates CHANGELOGs** - Auto-generates from conventional commits using git-cliff
 5. **Creates release branch** - Named `release/v<VERSION>`
 6. **Commits changes** - All version bumps and changelog updates
@@ -69,23 +69,30 @@ Once the release PR is merged to `main`, the unified release workflow automatica
 
 4. **Creates GitHub releases** - Individual releases for each package with changelogs
 
-## Synchronized Versioning
+## Synchronized Versioning & Dependency Management
 
 **Key Points:**
 - All packages always have the same version number
 - Releasing means bumping ALL packages, even if some have no changes
 - Packages at the same version are guaranteed compatible
-- No version constraints between internal packages (e.g., `slide-tyler` depends on `slide-narrator` without a version requirement)
+- **Minimum version constraints** are automatically set for inter-package dependencies
+- This ensures users can't install incompatible combinations (e.g., Tyler 3.1.1 with narrator 2.0.0)
 
 **Example:**
 ```toml
-# Tyler's dependencies (no version constraints on internal packages)
+# Tyler's dependencies after release 3.1.1
 dependencies = [
-    "slide-narrator",  # No version constraint!
-    "slide-lye",       # No version constraint!
-    "litellm>=1.60.2", # External packages still have constraints
+    "slide-narrator>=3.1.1",  # Minimum version automatically set by release script!
+    "slide-lye>=3.1.1",       # Minimum version automatically set by release script!
+    "litellm>=1.60.2",        # External packages have manually-managed constraints
 ]
 ```
+
+**Why `>=` instead of `==`?**
+- Allows future versions (Tyler 3.1.1 works with narrator 3.2.0)
+- Enables independent patch releases for critical bug fixes
+- Prevents transitive dependency conflicts
+- Maintains forward compatibility within major versions
 
 ## Changelog Generation
 
@@ -107,6 +114,27 @@ All packages are released together:
 - **narrator** - Thread and message storage system
 - **space-monkey** - Slack agent framework
 - **lye** - Tools package for Tyler
+
+## Verifying Release
+
+After the script runs, verify that constraints were set correctly:
+
+```bash
+# Check inter-package constraints
+grep "slide-narrator\|slide-lye\|slide-tyler" packages/*/pyproject.toml
+
+# Expected output for v3.1.1 release:
+#   packages/tyler/pyproject.toml:    "slide-narrator>=3.1.1",
+#   packages/tyler/pyproject.toml:    "slide-lye>=3.1.1",
+#   packages/space-monkey/pyproject.toml:    "slide-tyler>=3.1.1",
+#   packages/space-monkey/pyproject.toml:    "slide-narrator>=3.1.1",
+```
+
+**What to check:**
+- ✅ Tyler has `slide-narrator>=X.Y.Z` and `slide-lye>=X.Y.Z`
+- ✅ Space-monkey has `slide-tyler>=X.Y.Z` and `slide-narrator>=X.Y.Z`
+- ✅ External packages (litellm, openai, etc.) remain unchanged
+- ✅ Version in constraint matches the release version
 
 ## Troubleshooting
 
