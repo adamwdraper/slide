@@ -640,7 +640,7 @@ def _main_inner(config: Optional[str], title: Optional[str]):
         asyncio.run(chat_manager.create_thread(title=title))
         
         console.print("[bold blue]Welcome to Tyler Chat![/]")
-        console.print(f"My name is {chat_manager.agent.name} and I am an agent based on {chat_manager.agent.model_name}.what i")
+        console.print(f"My name is {chat_manager.agent.name} and I am an agent based on {chat_manager.agent.model_name}.")
         console.print("Type your message or /help for commands")
         
         # Main chat loop

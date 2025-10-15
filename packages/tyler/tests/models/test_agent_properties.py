@@ -63,7 +63,7 @@ class TestAgentProperties:
         assert agent.api_key == "test-api-key"
         assert agent.extra_headers == {"X-Custom": "header"}
         assert agent.temperature == 0.8
-        assert agent.drop_params == False
+        assert agent.drop_params is False
         assert agent.reasoning == "low"
         assert agent.name == "TestAgent"
         assert str(agent.purpose) == "Test purpose"
@@ -72,7 +72,7 @@ class TestAgentProperties:
         assert agent.tools == []
         assert agent.max_tool_iterations == 5
         assert agent.agents == []
-        assert agent.step_errors_raise == True
+        assert agent.step_errors_raise is True
     
     def test_api_key_passed_to_completion_handler(self):
         """Test that api_key is passed to CompletionHandler."""
@@ -152,7 +152,7 @@ class TestAgentProperties:
         assert agent.api_key is None
         assert agent.extra_headers is None
         assert agent.temperature == 0.7
-        assert agent.drop_params == True
+        assert agent.drop_params is True
         assert agent.reasoning is None
         assert agent.name == "Tyler"
         assert agent.version == "1.0.0"
@@ -161,5 +161,5 @@ class TestAgentProperties:
         assert agent.agents == []
         assert agent.thread_store is not None  # Created by default
         assert agent.file_store is not None  # Created by default
-        assert agent.step_errors_raise == False
+        assert agent.step_errors_raise is False
 
