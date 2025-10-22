@@ -17,7 +17,6 @@ Enable first-class, declarative MCP configuration in Tyler:
 - [ ] Users can specify at least one MCP server in YAML, and Tyler auto-connects and exposes tools without custom shims.
 - [ ] Users can instantiate `Agent(mcp=...)` with one line and get tools from the declared servers.
 - [ ] Namespacing and include/exclude filters work to prevent tool overload.
-- [ ] Backward compatibility: existing `tools:` and Python `MCPAdapter` flows continue to work.
 
 ## User Story
 As a developer, I want to declare my MCP servers once (in config or Agent), so that I can immediately use their tools in Tyler without writing glue code.
@@ -34,7 +33,6 @@ As a developer, I want to declare my MCP servers once (in config or Agent), so t
 - Must support `namespace`, `include_tools`, `exclude_tools` per server.
 - Must provide `connect_on_start`/`connect_on_init` behavior toggles.
 - Must surface clear warnings (not fatal) when a server cannot be connected or exposes zero tools.
-- Must preserve existing `tools:` semantics and `MCPAdapter` Python API.
 - Must not require users to write shim files to load MCP tools.
 
 ## Acceptance Criteria
