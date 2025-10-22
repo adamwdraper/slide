@@ -15,34 +15,40 @@ MCP provides a standardized way to:
 
 ## Quick start
 
-### Using an MCP Server
+### Using an MCP Server (first-class API)
 
 ```python
 import asyncio
 from tyler import Agent, Thread, Message
-from tyler.mcp import MCPAdapter
 
 async def main():
-    # Create MCP adapter
-    adapter = MCPAdapter()
-    
-    # Connect to an MCP server
-    await adapter.connect("stdio://./path/to/mcp-server")
-    
-    # Create agent with MCP tools
+    # Create an agent that connects to one or more MCP servers on init
     agent = Agent(
         name="mcp-agent",
-        model_name="gpt-4",
+        model_name="gpt-4.1",
         purpose="To help with tasks using MCP tools",
-        mcp_adapter=adapter
+        mcp={
+            "connect_on_init": True,
+            "servers": [
+                # stdio example
+                {
+                    "name": "filesystem",
+                    "transport": "stdio",
+                    "command": "npx",
+                    "args": ["-y", "@modelcontextprotocol/server-filesystem", "--port", "3000", "/path/to/files"]
+                },
+                # SSE example
+                {"name": "docs", "transport": "sse", "url": "https://docs.example.com/mcp"},
+                # WebSocket example
+                {"name": "ws", "transport": "websocket", "url": "wss://mcp.example.com/ws"}
+            ]
+        }
     )
-    
-    # Use the agent - it now has access to all MCP tools
+
     thread = Thread()
-    message = Message(role="user", content="List available tools")
-    thread.add_message(message)
-    
+    thread.add_message(Message(role="user", content="List available tools"))
     result = await agent.go(thread)
+    print(result.content)
 
 asyncio.run(main())
 ```
@@ -50,37 +56,34 @@ asyncio.run(main())
 ## Connection Types
 
 ### Standard I/O (stdio)
-For local MCP servers:
+Define a server entry:
 
 ```python
-# Connect to a local executable
-await adapter.connect("stdio://./mcp-filesystem-server")
-
-# With arguments
-await adapter.connect("stdio://python3 my_server.py --config config.json")
+{
+  "name": "local_server",
+  "transport": "stdio",
+  "command": "python3",
+  "args": ["my_server.py", "--config", "config.json"],
+  "env": {"EXAMPLE_TOKEN": "..."}
+}
 ```
 
 ### WebSocket
-For remote MCP servers:
+Define a server entry:
 
 ```python
-# Connect via WebSocket
-await adapter.connect("ws://localhost:8080/mcp")
-
-# With authentication
-await adapter.connect("wss://mcp.example.com/server", {
-    "headers": {
-        "Authorization": "Bearer token123"
-    }
-})
+{
+  "name": "ws_server",
+  "transport": "websocket",
+  "url": "wss://mcp.example.com/server"
+}
 ```
 
 ### HTTP/SSE
-For servers using Server-Sent Events:
+Define a server entry:
 
 ```python
-# Connect via HTTP with SSE
-await adapter.connect("http://localhost:3000/mcp")
+{ "name": "sse_server", "transport": "sse", "url": "http://localhost:3000/sse" }
 ```
 
 ## Popular MCP Servers
@@ -218,25 +221,21 @@ await adapter.connect("stdio://python3 my_mcp_server.py")
 
 ### Multiple MCP Servers
 
-Connect to multiple servers simultaneously:
+Create an agent that connects to multiple servers:
 
 ```python
-# Create adapters for different servers
-fs_adapter = MCPAdapter()
-await fs_adapter.connect("stdio://mcp-server-filesystem")
-
-db_adapter = MCPAdapter()
-await db_adapter.connect("stdio://mcp-server-sqlite --db-path data.db")
-
-api_adapter = MCPAdapter()
-await api_adapter.connect("ws://api.example.com/mcp")
-
-# Create agent with all adapters
 agent = Agent(
     name="multi-mcp-agent",
-    model_name="gpt-4",
+    model_name="gpt-4.1",
     purpose="To work with files, databases, and APIs",
-    mcp_adapters=[fs_adapter, db_adapter, api_adapter]
+    mcp={
+        "connect_on_init": True,
+        "servers": [
+            {"name": "fs", "transport": "stdio", "command": "npx", "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path"]},
+            {"name": "db", "transport": "stdio", "command": "npx", "args": ["-y", "@modelcontextprotocol/server-sqlite", "--db-path", "data.db"]},
+            {"name": "api", "transport": "websocket", "url": "wss://api.example.com/mcp"}
+        ]
+    }
 )
 ```
 
@@ -293,28 +292,38 @@ Combine MCP tools with Lye tools:
 ```python
 from lye import WEB_TOOLS, FILES_TOOLS
 
-# Connect to MCP server
-mcp_adapter = MCPAdapter()
-await mcp_adapter.connect("stdio://mcp-server-code")
-
-# Create agent with both MCP and Lye tools
 agent = Agent(
     name="hybrid-agent",
-    model_name="gpt-4",
+    model_name="gpt-4.1",
     purpose="To use both MCP and built-in tools",
     tools=[*WEB_TOOLS, *FILES_TOOLS],
-    mcp_adapter=mcp_adapter
+    mcp={
+        "connect_on_init": True,
+        "servers": [{"name": "code", "transport": "stdio", "command": "npx", "args": ["-y", "@modelcontextprotocol/server-code", "--lang", "python"]}]
+    }
 )
 
-# Agent can now use both tool sets
 thread = Thread()
-message = Message(
-    role="user",
-    content="Search for Python tutorials, then write a simple Python script"
-)
-thread.add_message(message)
-
+thread.add_message(Message(role="user", content="Search for Python tutorials, then write a simple Python script"))
 result = await agent.go(thread)
+```
+
+## Chat config
+
+First-class MCP also works via chat config:
+
+```yaml
+name: "Tyler"
+model_name: "gpt-4.1"
+mcp:
+  connect_on_start: true
+  servers:
+    - name: wandb_docs
+      transport: sse
+      url: "https://docs.wandb.ai/mcp"
+      namespace: "wandb"
+      include_tools: []
+      exclude_tools: []
 ```
 
 ## Security Considerations
