@@ -79,7 +79,8 @@ echo -e "${GREEN}New version: ${NEW_VERSION}${NC}"
 echo ""
 echo -e "${YELLOW}This will:${NC}"
 echo "  - Bump all 4 packages to v$NEW_VERSION"
-echo "  - Remove inter-package version constraints"
+echo "  - Set inter-package minimum version constraints (>=$NEW_VERSION)"
+echo "  - Update lock file with new constraints"
 echo "  - Generate CHANGELOGs automatically"
 echo "  - Create release branch: release/v$NEW_VERSION"
 echo "  - Create PR for review"
@@ -136,6 +137,16 @@ echo -e "  ${GREEN}✓${NC} Space Monkey: slide-narrator>=$NEW_VERSION"
 rm -f packages/tyler/pyproject.toml.bak
 rm -f packages/space-monkey/pyproject.toml.bak
 
+# Update lock file with new constraints
+echo ""
+echo -e "${BLUE}Updating lock file with new constraints...${NC}"
+if uv lock --upgrade-package slide-narrator --upgrade-package slide-tyler --upgrade-package slide-lye --upgrade-package slide-space-monkey; then
+    echo -e "  ${GREEN}✓${NC} Lock file updated"
+else
+    echo -e "  ${YELLOW}⚠${NC} Warning: Failed to update lock file"
+    echo -e "  ${YELLOW}  Please run 'uv lock' manually after merge${NC}"
+fi
+
 # Generate CHANGELOGs
 echo ""
 echo -e "${BLUE}Generating CHANGELOGs...${NC}"
@@ -158,7 +169,7 @@ for PACKAGE in "${PACKAGES[@]}"; do
 done
 
 # Stage all changes
-git add packages/*/pyproject.toml packages/*/__init__.py packages/*/*/__init__.py packages/*/CHANGELOG.md
+git add packages/*/pyproject.toml packages/*/__init__.py packages/*/*/__init__.py packages/*/CHANGELOG.md uv.lock
 
 # Commit
 echo ""
@@ -166,7 +177,8 @@ echo -e "${BLUE}Creating commit...${NC}"
 git commit -m "Release v$NEW_VERSION
 
 - Bump all packages to $NEW_VERSION
-- Remove inter-package version constraints
+- Set inter-package minimum version constraints (>=$NEW_VERSION)
+- Update lock file with new constraints
 - Generate CHANGELOGs
 - Synchronized release across all packages"
 
@@ -191,7 +203,8 @@ This PR implements a unified release for all Slide packages.
 
 ### Changes
 - ✅ All packages synchronized to version $NEW_VERSION
-- ✅ Removed inter-package version constraints
+- ✅ Set inter-package minimum version constraints (>=$NEW_VERSION)
+- ✅ Updated lock file with new constraints
 - ✅ Auto-generated CHANGELOGs from conventional commits
 - ✅ All packages with this version are guaranteed compatible
 
