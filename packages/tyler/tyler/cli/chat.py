@@ -585,6 +585,14 @@ tools:
             return obj
         
         config = substitute_env_vars(config)
+
+        # Pass-through MCP config directly to Agent if present
+        if 'mcp' in config and isinstance(config['mcp'], dict):
+            # Optionally support simple top-level enable flag
+            mcp_cfg = config['mcp']
+            if 'connect_on_start' in mcp_cfg and 'connect_on_init' not in mcp_cfg:
+                # Map chat key to Agent key for clarity
+                mcp_cfg['connect_on_init'] = bool(mcp_cfg.get('connect_on_start'))
                 
         # Process tools list to load custom tools
         if 'tools' in config and isinstance(config['tools'], list):

@@ -19,6 +19,7 @@ from tyler.models.execution import (
     AgentResult
 )
 from tyler.models.tool_manager import ToolManager
+from tyler.mcp import MCPAdapter
 from tyler.models.message_factory import MessageFactory
 from tyler.models.completion_handler import CompletionHandler
 import asyncio
@@ -172,6 +173,7 @@ class Agent(Model):
     notes: Union[str, Prompt] = Field(default_factory=lambda: weave.StringPrompt(""))
     version: str = Field(default="1.0.0")
     tools: List[Union[str, Dict, Callable, types.ModuleType]] = Field(default_factory=list, description="List of tools available to the agent. Can include: 1) Direct tool function references (callables), 2) Tool module namespaces (modules like web, files), 3) Built-in tool module names (strings), 4) Custom tool definitions (dicts with 'definition', 'implementation', and optional 'attributes' keys). For module names, you can specify specific tools using 'module:tool1,tool2'.")
+    mcp: Optional[Dict[str, Any]] = Field(default=None, description="MCP configuration: {'connect_on_init': bool, 'servers': [{name, transport, url, namespace?, include_tools?, exclude_tools?}]} ")
     max_tool_iterations: int = Field(default=10)
     agents: List["Agent"] = Field(default_factory=list, description="List of agents that this agent can delegate tasks to.")
     thread_store: Optional[ThreadStore] = Field(default=None, description="Thread store instance for managing conversation threads", exclude=True)
@@ -215,6 +217,40 @@ class Agent(Model):
             reasoning=self.reasoning
         )
         
+        # Optionally connect MCP servers and augment tools before registration
+        if self.mcp and isinstance(self.mcp, dict) and self.mcp.get("connect_on_init"):
+            try:
+                servers = self.mcp.get("servers", []) or []
+                mcp_adapter = MCPAdapter()
+                # Connect concurrently
+                async def _connect_all():
+                    tasks = []
+                    for s in servers:
+                        if not isinstance(s, dict):
+                            continue
+                        name = s.get("name")
+                        transport = s.get("transport")
+                        if not name or not transport:
+                            continue
+                        # Pass through url/command/args/env and namespace/filters
+                        kwargs = {k: v for k, v in s.items() if k not in ("name", "transport")}
+                        tasks.append(mcp_adapter.connect(name=name, transport=transport, **kwargs))
+                    if tasks:
+                        results = await asyncio.gather(*tasks, return_exceptions=True)
+                        # Log failures but continue
+                        failed = sum(1 for r in results if r is not True)
+                        if failed:
+                            logger.warning(f"MCP: {failed} server(s) failed to connect")
+                # Run the connect coroutine synchronously during init
+                asyncio.get_event_loop().run_until_complete(_connect_all())
+                # Gather tools from all connected servers
+                mcp_tools = mcp_adapter.get_tools_for_agent()
+                if mcp_tools:
+                    # Extend tools list with converted tool dicts
+                    self.tools.extend(mcp_tools)
+            except Exception as e:
+                logger.warning(f"MCP initialization skipped due to error: {e}")
+
         # Use ToolManager to register all tools and delegation
         tool_manager = ToolManager(tools=self.tools, agents=self.agents)
         self._processed_tools = tool_manager.register_all_tools()

@@ -4,6 +4,7 @@ This module adapts MCP tools to work with Tyler's tool system.
 """
 
 import re
+import fnmatch
 import logging
 from typing import Dict, List, Any, Optional
 
@@ -28,6 +29,8 @@ class MCPAdapter:
         """
         self.client = mcp_client or MCPClient()
         self._registered_tools: Dict[str, str] = {}  # tyler_name -> server_name
+        # Per-server options: namespace override and include/exclude filters
+        self._server_options: Dict[str, Dict[str, Any]] = {}
         
     async def connect(self, name: str, transport: str, **kwargs) -> bool:
         """Connect to an MCP server and register its tools with Tyler.
@@ -41,6 +44,18 @@ class MCPAdapter:
             bool: True if connection successful and tools registered
         """
         # Connect to the server
+        # Extract and store server options (not passed to client)
+        namespace = kwargs.pop("namespace", None)
+        include_tools = kwargs.pop("include_tools", None)
+        exclude_tools = kwargs.pop("exclude_tools", None)
+
+        if namespace or include_tools or exclude_tools:
+            self._server_options[name] = {
+                "namespace": namespace,
+                "include_tools": include_tools or [],
+                "exclude_tools": exclude_tools or [],
+            }
+
         connected = await self.client.connect(name, transport, **kwargs)
         if not connected:
             return False
@@ -57,9 +72,33 @@ class MCPAdapter:
     async def _register_server_tools(self, server_name: str) -> None:
         """Register all tools from a server with Tyler's tool runner."""
         tools = self.client.get_tools(server_name)
+        options = self._server_options.get(server_name, {})
+        include_patterns: List[str] = options.get("include_tools", []) or []
+        exclude_patterns: List[str] = options.get("exclude_tools", []) or []
         
+        def _is_included(tool_name: str) -> bool:
+            # If include list provided, must match one of them
+            if include_patterns:
+                if not any(fnmatch.fnmatch(tool_name, p) for p in include_patterns):
+                    return False
+            # Exclude wins if matches
+            if exclude_patterns:
+                if any(fnmatch.fnmatch(tool_name, p) for p in exclude_patterns):
+                    return False
+            return True
+
         for tool in tools:
+            # Filter on original MCP tool name
+            if hasattr(tool, 'name') and not _is_included(tool.name):
+                continue
+
             tyler_tool = self._convert_to_tyler_format(server_name, tool)
+            # If namespace override provided, rename tool accordingly
+            namespace = options.get("namespace")
+            if namespace:
+                original_name = tyler_tool["attributes"]["original_name"]
+                new_name = self._create_tyler_name(namespace, original_name)
+                tyler_tool["definition"]["function"]["name"] = new_name
             tool_name = tyler_tool["definition"]["function"]["name"]
             
             # Register with tool runner
@@ -89,6 +128,7 @@ class MCPAdapter:
             Tyler tool definition dictionary
         """
         # Create a safe, namespaced tool name
+        # Use server namespace by default; may be overridden by connect options later
         tyler_name = self._create_tyler_name(server_name, mcp_tool.name)
         
         # Create the Tyler tool definition
