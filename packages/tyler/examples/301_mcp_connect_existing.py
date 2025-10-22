@@ -14,7 +14,6 @@ import asyncio
 import os
 import weave
 from tyler import Agent, Thread, Message
-from tyler.mcp import MCPAdapter
 
 # Initialize weave tracing if available
 try:
@@ -25,154 +24,103 @@ except Exception as e:
     logger.warning(f"Failed to initialize weave tracing: {e}")
 
 
-async def example_filesystem_server():
-    """Example: Connect to a filesystem MCP server running on HTTP."""
-    # Skip MCP server connections during tests
+async def example_filesystem_agent():
+    """Example: Create an Agent that connects to a filesystem MCP server via SSE."""
     if os.getenv("PYTEST_CURRENT_TEST"):
         logger.info("Skipping MCP server connection during tests")
         return None
-        
-    mcp = MCPAdapter()
     
-    # Connect to a filesystem server running on HTTP
-    # Start it first with: npx -y @modelcontextprotocol/server-filesystem --port 3000 /path/to/files
-    connected = await mcp.connect(
-        name="filesystem",
-        transport="sse",  # Server-Sent Events over HTTP
-        url="http://localhost:3000/sse"
-    )
-    
-    if not connected:
-        logger.error("Could not connect to filesystem server on http://localhost:3000")
-        logger.info("Start it with: npx -y @modelcontextprotocol/server-filesystem --port 3000 /path/to/files")
-        return None
-        
-    return mcp
-
-
-async def example_postgres_server():
-    """Example: Connect to a PostgreSQL MCP server."""
-    # Skip MCP server connections during tests
-    if os.getenv("PYTEST_CURRENT_TEST"):
-        logger.info("Skipping MCP server connection during tests")
-        return None
-        
-    mcp = MCPAdapter()
-    
-    # Connect to a PostgreSQL server
-    # This assumes you have a PostgreSQL MCP server running
-    connected = await mcp.connect(
-        name="postgres",
-        transport="stdio",
-        command="npx",
-        args=["-y", "@modelcontextprotocol/server-postgres", "postgresql://user:pass@localhost/dbname"]
-    )
-    
-    if not connected:
-        logger.error("Could not connect to PostgreSQL MCP server")
-        return None
-        
-    return mcp
-
-
-async def example_multiple_servers():
-    """Example: Connect to multiple MCP servers."""
-    # Skip MCP server connections during tests
-    if os.getenv("PYTEST_CURRENT_TEST"):
-        logger.info("Skipping MCP server connection during tests")
-        return None
-        
-    mcp = MCPAdapter()
-    
-    # Connect to multiple servers
-    servers = [
-        {
-            "name": "filesystem",
-            "transport": "sse",
-            "url": "http://localhost:3000/sse"
-        },
-        {
-            "name": "github",
-            "transport": "stdio",
-            "command": "npx",
-            "args": ["-y", "@modelcontextprotocol/server-github"],
-            "env": {"GITHUB_PERSONAL_ACCESS_TOKEN": os.environ.get("GITHUB_TOKEN", "")}
+    agent = Agent(
+        name="FileAssistant",
+        model_name="gpt-4o-mini",
+        mcp={
+            "connect_on_init": True,
+            "servers": [
+                {"name": "filesystem", "transport": "sse", "url": "http://localhost:3000/sse"}
+            ]
         }
-    ]
-    
-    connected_servers = []
-    for server in servers:
-        name = server.pop("name")
-        transport = server.pop("transport")
-        if await mcp.connect(name, transport, **server):
-            connected_servers.append(name)
-            logger.info(f"Connected to {name}")
-        else:
-            logger.warning(f"Failed to connect to {name}")
-    
-    if not connected_servers:
-        logger.error("No servers connected")
+    )
+    return agent
+
+
+async def example_postgres_agent():
+    """Example: Create an Agent that connects to a PostgreSQL MCP server via stdio."""
+    if os.getenv("PYTEST_CURRENT_TEST"):
+        logger.info("Skipping MCP server connection during tests")
         return None
-        
-    return mcp, connected_servers
+    
+    agent = Agent(
+        name="PostgresAssistant",
+        model_name="gpt-4o-mini",
+        mcp={
+            "connect_on_init": True,
+            "servers": [
+                {
+                    "name": "postgres",
+                    "transport": "stdio",
+                    "command": "npx",
+                    "args": ["-y", "@modelcontextprotocol/server-postgres", "postgresql://user:pass@localhost/dbname"]
+                }
+            ]
+        }
+    )
+    return agent
+
+
+async def example_multiple_agents():
+    """Example: Create Agents that connect to multiple MCP servers."""
+    if os.getenv("PYTEST_CURRENT_TEST"):
+        logger.info("Skipping MCP server connection during tests")
+        return None
+    
+    agents = []
+    # Filesystem-backed agent
+    agents.append(Agent(
+        name="FSAssistant",
+        model_name="gpt-4o-mini",
+        mcp={
+            "connect_on_init": True,
+            "servers": [{"name": "filesystem", "transport": "sse", "url": "http://localhost:3000/sse"}]
+        }
+    ))
+    # GitHub-backed agent (requires token)
+    agents.append(Agent(
+        name="GitHubAssistant",
+        model_name="gpt-4o-mini",
+        mcp={
+            "connect_on_init": True,
+            "servers": [
+                {
+                    "name": "github",
+                    "transport": "stdio",
+                    "command": "npx",
+                    "args": ["-y", "@modelcontextprotocol/server-github"],
+                    "env": {"GITHUB_PERSONAL_ACCESS_TOKEN": os.environ.get("GITHUB_TOKEN", "")}
+                }
+            ]
+        }
+    ))
+    return agents
 
 
 async def main():
     """Run examples of connecting to existing MCP servers."""
     
     # Example 1: Simple filesystem server
-    logger.info("\n=== Example 1: Filesystem Server ===")
-    mcp = await example_filesystem_server()
-    
-    if mcp:
-        tools = mcp.get_tools_for_agent()
-        logger.info(f"Available tools: {[t['definition']['function']['name'] for t in tools]}")
-        
-        # Create an agent with filesystem tools
-        agent = Agent(
-            name="FileAssistant",
-            model_name="gpt-4o-mini",
-            tools=tools
-        )
-        
-        # Use the agent
+    logger.info("\n=== Example 1: Filesystem Server (via Agent.mcp) ===")
+    agent_fs = await example_filesystem_agent()
+    if agent_fs:
         thread = Thread()
-        thread.add_message(Message(
-            role="user",
-            content="List the files in the current directory"
-        ))
-        
-        result = await agent.go(thread)
+        thread.add_message(Message(role="user", content="List the files in the current directory"))
+        result = await agent_fs.go(thread)
         print("\nAgent response:")
         print(result.content)
-        
-        # Show execution details
-        
-        await mcp.disconnect_all()
     
     # Example 2: Multiple servers
-    logger.info("\n=== Example 2: Multiple Servers ===")
-    result = await example_multiple_servers()
-    
-    if result:
-        mcp, connected = result
-        
-        # Get tools from specific servers
-        fs_tools = mcp.get_tools_for_agent(["filesystem"])
-        github_tools = mcp.get_tools_for_agent(["github"])
-        
-        logger.info(f"Filesystem tools: {len(fs_tools)}")
-        logger.info(f"GitHub tools: {len(github_tools)}")
-        
-        # Create agent with all tools
-        agent = Agent(
-            name="MultiToolAssistant",
-            model_name="gpt-4o-mini",
-            tools=mcp.get_tools_for_agent()  # All tools from all servers
-        )
-        
-        # Clean up
-        await mcp.disconnect_all()
+    logger.info("\n=== Example 2: Multiple Servers (via Agent.mcp) ===")
+    agents = await example_multiple_agents()
+    if agents:
+        logger.info(f"Created {len(agents)} agents with different MCP servers")
 
 
 if __name__ == "__main__":

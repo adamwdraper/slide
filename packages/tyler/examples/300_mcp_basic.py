@@ -23,7 +23,6 @@ import weave
 from typing import List, Dict, Any
 
 from tyler import Agent, Thread, Message
-from tyler.mcp import MCPAdapter
 
 # Add the parent directory to the path so we can import the example utils
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -38,69 +37,46 @@ except Exception as e:
 
 async def main():
     """Run the example."""
-    # Create MCP adapter
-    mcp = MCPAdapter()
-    
-    logger.info("Connecting to Brave Search MCP server...")
-    
-    # Connect to the Brave Search server running on stdio
+    # Create an agent that connects to the Brave Search MCP server on init
     # The server should already be running with:
     # BRAVE_API_KEY=xxx npx -y @modelcontextprotocol/server-brave-search
-    connected = await mcp.connect(
-        name="brave",
-        transport="stdio",
-        command="npx",
-        args=["-y", "@modelcontextprotocol/server-brave-search"],
-        env={"BRAVE_API_KEY": os.environ.get("BRAVE_API_KEY", "")}
+    agent = Agent(
+        name="Tyler",
+        model_name="gpt-4o-mini",
+        mcp={
+            "connect_on_init": True,
+            "servers": [
+                {
+                    "name": "brave",
+                    "transport": "stdio",
+                    "command": "npx",
+                    "args": ["-y", "@modelcontextprotocol/server-brave-search"],
+                    "env": {"BRAVE_API_KEY": os.environ.get("BRAVE_API_KEY", "")}
+                }
+            ]
+        }
     )
     
-    if not connected:
-        logger.error("Failed to connect to Brave Search MCP server.")
-        logger.info("Make sure you have BRAVE_API_KEY set and the server is accessible.")
-        return
+    # Create a thread
+    thread = Thread()
     
-    try:
-        # Get the MCP tools for the agent
-        mcp_tools = mcp.get_tools_for_agent(["brave"])
+    # Add a user message
+    thread.add_message(Message(
+        role="user",
+        content="What's the latest news about quantum computing breakthroughs?"
+    ))
         
-        if not mcp_tools:
-            logger.error("No tools discovered from the Brave Search MCP server.")
-            return
-            
-        logger.info(f"Discovered {len(mcp_tools)} tools from the Brave Search MCP server.")
-        
-        # Create an agent with the MCP tools
-        agent = Agent(
-            name="Tyler",
-            model_name="gpt-4o-mini",
-            tools=mcp_tools
-        )
-        
-        # Create a thread
-        thread = Thread()
-        
-        # Add a user message
-        thread.add_message(Message(
-            role="user",
-            content="What's the latest news about quantum computing breakthroughs?"
-        ))
-        
-        # Process the thread with streaming
-        logger.info("Processing thread with streaming...")
-        async for event in agent.go(thread, stream=True):
-            if event.type.name == "LLM_STREAM_CHUNK":
-                print(event.data.get("content_chunk", ""), end="", flush=True)
-            elif event.type.name == "MESSAGE_CREATED":
-                message = event.data.get("message")
-                if message and message.role == "tool":
-                    print(f"\n[Tool execution: {message.name}]\n")
-            elif event.type.name == "EXECUTION_COMPLETE":
-                print("\n\nProcessing complete!")
-                
-    finally:
-        # Clean up
-        logger.info("Disconnecting from MCP server...")
-        await mcp.disconnect_all()
+    # Process the thread with streaming
+    logger.info("Processing thread with streaming...")
+    async for event in agent.go(thread, stream=True):
+        if event.type.name == "LLM_STREAM_CHUNK":
+            print(event.data.get("content_chunk", ""), end="", flush=True)
+        elif event.type.name == "MESSAGE_CREATED":
+            message = event.data.get("message")
+            if message and message.role == "tool":
+                print(f"\n[Tool execution: {message.name}]\n")
+        elif event.type.name == "EXECUTION_COMPLETE":
+            print("\n\nProcessing complete!")
 
 
 if __name__ == "__main__":
