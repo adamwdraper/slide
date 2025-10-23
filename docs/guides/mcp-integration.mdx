@@ -255,16 +255,36 @@ for task in tasks:
     await agent.cleanup()  # ← Prevent connection leak
 ```
 
-**Short scripts DON'T need cleanup:**
+**Short scripts DON'T need cleanup** (except streamablehttp):
 ```python
 async def main():
-    agent = Agent(mcp={...})
+    agent = Agent(
+        mcp={"servers": [{"transport": "stdio", ...}]}  # stdio, sse, websocket
+    )
     await agent.connect_mcp()
     result = await agent.go(thread)
     # Done - no cleanup needed!
 
 asyncio.run(main())  # Connections close when process ends
 ```
+
+**Exception: streamablehttp transport requires cleanup:**
+```python
+async def main():
+    agent = Agent(
+        mcp={"servers": [{"transport": "streamablehttp", ...}]}  # Mintlify
+    )
+    await agent.connect_mcp()
+    result = await agent.go(thread)
+    await agent.cleanup()  # ← Required for streamablehttp to avoid asyncio errors
+
+asyncio.run(main())
+```
+
+<Note>
+The `streamablehttp` transport uses asyncio task groups that require explicit cleanup,
+even in simple scripts. Other transports (stdio, sse, websocket) clean up automatically.
+</Note>
 
 ## Security Best Practices
 
