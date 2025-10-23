@@ -4,22 +4,21 @@
 
 ### Tyler MCP Module (HIGH Impact - New Feature)
 
-#### New Module
-- **`packages/tyler/tyler/mcp/config_loader.py`** (NEW, ~200-250 lines)
-  - `load_mcp_config(config: Dict) -> Tuple[List[Dict], Callable]`
-  - `connect_from_config(config: Dict) -> Tuple[List[Dict], Callable]` - public API
+#### New Module (Internal)
+- **`packages/tyler/tyler/mcp/config_loader.py`** (NEW, ~150-200 lines)
+  - `_load_mcp_config(config: Dict) -> Tuple[List[Dict], Callable]` - internal helper
   - `_validate_server_config(server: Dict) -> None`
   - `_connect_server(server: Dict, adapter: MCPAdapter) -> bool`
   - `_apply_tool_filters(tools: List[Dict], server: Dict) -> List[Dict]`
   - `_namespace_tools(tools: List[Dict], prefix: str) -> List[Dict]`
 
 #### Existing Modules
-- **`packages/tyler/tyler/mcp/__init__.py`** (2-3 lines)
-  - Export `connect_from_config` alongside `MCPAdapter`
+- **`packages/tyler/tyler/mcp/__init__.py`** (1-2 lines)
+  - No new exports needed (config_loader is internal only)
 
 - **`packages/tyler/tyler/mcp/adapter.py`** (10-15 lines)
   - Update `_create_tyler_name()` to use single underscore (`_`) instead of double (`__`)
-  - Add docstring note at top: "Note: Most users should use the config approach via `connect_from_config()`. This low-level API is for advanced use cases only."
+  - Add docstring note at top: "Note: Most users should use `Agent.create(mcp={...})`. This low-level API is for advanced use cases only."
   - Update existing docstrings to mention config approach where relevant
 
 ### Tyler CLI (MEDIUM Impact)
@@ -30,12 +29,14 @@
   - Update `ChatManager.initialize_agent()` to merge MCP tools (10-15 lines)
   - Add error handling for MCP connection failures
 
-### Tyler Agent (LOW Impact)
+### Tyler Agent (MEDIUM Impact)
 
-- **`packages/tyler/tyler/models/agent.py`** (NO CHANGES for MVP)
-  - Config approach uses existing `tools` parameter
-  - Optional future enhancement: Add `mcp` parameter to `Agent.__init__`
-  - Not required for MVP (can be added later)
+- **`packages/tyler/tyler/models/agent.py`** (40-60 lines)
+  - Add `mcp: Optional[Dict[str, Any]]` field
+  - Add `_mcp_adapter: Optional[Callable]` private attribute for cleanup
+  - Add `@classmethod async def create(cls, **kwargs)` - async factory method
+  - Add `async def cleanup()` - disconnect MCP servers
+  - Update docstrings to show `Agent.create()` for MCP usage
 
 ### Configuration Files (LOW Impact)
 
@@ -197,46 +198,64 @@
 
 ### New Public API
 
-**Python API:**
+**Agent.create() classmethod:**
 ```python
-from tyler.mcp import connect_from_config
+from tyler import Agent
 
-# New function signature
-async def connect_from_config(
-    config: Dict[str, Any],
-    fail_silent: bool = True
-) -> Tuple[List[Dict], Callable]:
+# New async factory method
+@classmethod
+async def create(cls, **kwargs) -> Agent:
     """
-    Connect to MCP servers from config and return tools.
+    Create an Agent with optional MCP server configuration.
+    
+    Accepts all standard Agent parameters plus:
     
     Args:
-        config: Dict with "servers" key containing server configs
-        fail_silent: If True, log warnings on connection failures but continue
-                    If False, raise exception on first failure
+        mcp: Optional Dict with "servers" key containing MCP server configs.
+             If provided, connects to servers and merges discovered tools.
     
     Returns:
-        Tuple of (tool_definitions, disconnect_callback)
-        - tool_definitions: List of Tyler tool dicts ready for Agent
-        - disconnect_callback: Async function to call for cleanup
+        Agent instance with MCP tools registered (if mcp config provided)
     
     Raises:
-        ValueError: If config is invalid or server connection fails (when fail_silent=False)
+        ValueError: If MCP config is invalid or server connection fails
+    
+    Example:
+        agent = await Agent.create(
+            name="Tyler",
+            model_name="gpt-4.1",
+            tools=["web"],
+            mcp={
+                "servers": [{
+                    "name": "mintlify",
+                    "transport": "sse",
+                    "url": "https://docs.wandb.ai/mcp"
+                }]
+            }
+        )
+    """
+```
+
+**Agent.cleanup() method:**
+```python
+async def cleanup(self) -> None:
+    """
+    Cleanup MCP connections and resources.
+    
+    Call this when done with the agent to properly close MCP server connections.
     """
 ```
 
 **Usage:**
 ```python
-mcp_tools, disconnect = await connect_from_config({
-    "servers": [{
-        "name": "mintlify",
-        "transport": "sse",
-        "url": "https://docs.wandb.ai/mcp"
-    }]
-})
+agent = await Agent.create(
+    tools=["web"],
+    mcp={"servers": [{...}]}
+)
 
-agent = Agent(tools=[*mcp_tools, "web"])
 # ... use agent ...
-await disconnect()  # cleanup
+
+await agent.cleanup()  # cleanup MCP connections
 ```
 
 ### Config Schema (YAML)
@@ -661,7 +680,7 @@ logger.debug("Namespaced MCP tools", extra={
 
 **For existing MCPAdapter users (minimal, likely none in the wild):**
 
-The low-level `MCPAdapter` API continues to work unchanged (no breaking changes), but all documentation and examples will guide users to the config approach:
+The low-level `MCPAdapter` API continues to work unchanged (no breaking changes), but all documentation and examples will guide users to `Agent.create()`:
 
 **Old way (still works, not recommended):**
 ```python
@@ -673,17 +692,20 @@ agent = Agent(tools=tools)
 
 **New way (recommended for everyone):**
 ```python
-from tyler.mcp import connect_from_config
-
-mcp_tools, disconnect = await connect_from_config({
-    "servers": [{"name": "mintlify", "transport": "sse", "url": "https://docs.wandb.ai/mcp"}]
-})
-agent = Agent(tools=mcp_tools)
-await disconnect()
+agent = await Agent.create(
+    model_name="gpt-4.1",
+    tools=["web"],
+    mcp={
+        "servers": [{"name": "mintlify", "transport": "sse", "url": "https://docs.wandb.ai/mcp"}]
+    }
+)
+# ... use agent ...
+await agent.cleanup()
 ```
 
 **Documentation strategy:**
-- ✅ All examples show config approach only
+- ✅ All examples show `Agent.create(mcp={...})` only
+- ✅ Python API matches YAML structure exactly
 - ✅ Docs have config approach as primary content
 - ✅ Small callout box in docs: "Advanced users can use `MCPAdapter` directly (not recommended)"
 - ✅ No migration guide needed (new feature, config is the default path)

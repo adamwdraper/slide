@@ -200,46 +200,65 @@ mcp:
 **Given** this Python code:
 ```python
 from tyler import Agent
-from tyler.mcp import connect_from_config
 
-config = {
-  "servers": [{
-    "name": "mintlify",
-    "transport": "sse",
-    "url": "https://docs.wandb.ai/mcp"
-  }]
-}
-
-mcp_tools, disconnect = await connect_from_config(config)
-agent = Agent(model_name="gpt-4.1", tools=[*mcp_tools, "web"])
+agent = await Agent.create(
+    name="Tyler",
+    model_name="gpt-4.1",
+    tools=["web"],
+    mcp={
+        "servers": [{
+            "name": "mintlify",
+            "transport": "sse",
+            "url": "https://docs.wandb.ai/mcp"
+        }]
+    }
+)
 ```
 
 **When** agent is used
 
 **Then**:
-- `mcp_tools` contains all discovered tools from Mintlify
-- Agent has both MCP tools and built-in "web" tools
-- `await disconnect()` cleanly closes MCP sessions
+- Agent is created with both MCP tools and built-in "web" tools
+- MCP servers are connected automatically during creation
+- All discovered tools are registered and ready to use
 
 ---
 
 **Given** namespace prefix override:
 ```python
-config = {
-  "servers": [{
-    "name": "mintlify",
-    "transport": "sse",
-    "url": "https://docs.wandb.ai/mcp",
-    "prefix": "docs"
-  }]
-}
+agent = await Agent.create(
+    model_name="gpt-4.1",
+    mcp={
+        "servers": [{
+            "name": "mintlify",
+            "transport": "sse",
+            "url": "https://docs.wandb.ai/mcp",
+            "prefix": "docs"
+        }]
+    }
+)
 ```
 
-**When** tools are registered
+**When** agent is created and tools are registered
 
 **Then**:
 - Tool names use `docs_` prefix instead of `mintlify_`
 - Example: `docs_search` instead of `mintlify_search`
+
+---
+
+**Given** cleanup is needed:
+```python
+agent = await Agent.create(mcp={...})
+# ... use agent ...
+await agent.cleanup()  # or await agent.disconnect_mcp()
+```
+
+**When** cleanup is called
+
+**Then**:
+- All MCP connections are closed cleanly
+- Resources are freed
 
 ### Negative Cases
 
