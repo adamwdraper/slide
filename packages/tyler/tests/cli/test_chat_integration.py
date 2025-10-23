@@ -19,7 +19,7 @@ async def test_cli_works_without_weave():
     manager = ChatManager()
     
     # Initialize agent
-    manager.initialize_agent({
+    await manager.initialize_agent({
         'model_name': 'gpt-4o',
         'purpose': 'Test assistant'
     })
@@ -52,7 +52,7 @@ async def test_cli_works_with_weave(mock_weave):
     mock_weave.init.assert_called_once_with('test-integration')
     
     # Initialize agent
-    manager.initialize_agent({
+    await manager.initialize_agent({
         'model_name': 'gpt-4o',
         'purpose': 'Test assistant'
     })
@@ -72,7 +72,7 @@ async def test_multiple_threads_without_weave():
     from tyler.cli.chat import ChatManager
     
     manager = ChatManager()
-    manager.initialize_agent({'model_name': 'gpt-4o'})
+    await manager.initialize_agent({'model_name': 'gpt-4o'})
     
     # Create multiple threads - verifies no issues with @weave.op() decorators
     thread1 = await manager.create_thread(title="Thread 1")
