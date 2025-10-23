@@ -69,13 +69,19 @@ Adding reactions to messages.
 ## MCP & Observability Examples (300-399)
 
 ### 300_mcp_basic.py
-Model Context Protocol (MCP) basic usage.
+Model Context Protocol (MCP) basic usage with declarative config. Connect to Brave Search MCP server using `Agent(mcp={...})`.
 
 ### 301_mcp_connect_existing.py
-Connecting to existing MCP servers.
+Multiple MCP servers with advanced config: tool filtering, custom prefixes, authentication headers.
+
+### 302_mcp_config_cli.py
+Loading MCP configuration from YAML files (CLI-style). Shows how tyler-chat works internally.
+
+### 303_mcp_mintlify.py
+Real-world example: Search W&B documentation using Mintlify MCP server. Copy-paste ready!
 
 ### 302_execution_observability.py
-Execution observability and monitoring.
+Execution observability and monitoring with ExecutionEvents.
 
 ## Agent Delegation & A2A Examples (400-499)
 
