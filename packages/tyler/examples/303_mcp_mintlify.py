@@ -35,23 +35,30 @@ async def main():
     print("=" * 70)
     
     # Create agent with W&B docs MCP server
-    agent = Agent(
-        name="DocsBot",
-        model_name="gpt-4o-mini",
-        purpose="To help users find information in W&B documentation",
-        tools=["web"],  # Can combine MCP tools with built-in tools!
-        mcp={
-            "servers": [{
-                "name": "wandb_docs",
-                "transport": "sse",
-                "url": "https://docs.wandb.ai/mcp",
-                "fail_silent": False  # Fail if docs server is down
-            }]
-        }
-    )
+    try:
+        agent = Agent(
+            name="DocsBot",
+            model_name="gpt-4o-mini",
+            purpose="To help users find information in W&B documentation",
+            tools=["web"],  # Can combine MCP tools with built-in tools!
+            mcp={
+                "servers": [{
+                    "name": "wandb_docs",
+                    "transport": "sse",
+                    "url": "https://docs.wandb.ai/mcp",
+                    "fail_silent": False  # Fail fast if docs server is down
+                }]
+            }
+        )
+        print("✓ Agent created (config schema validated)")
+    except ValueError as e:
+        print(f"✗ Config validation failed: {e}")
+        return
     
     # Connect to MCP servers (fail fast!)
     print("\n🔗 Connecting to W&B documentation server...")
+    print("   URL: https://docs.wandb.ai/mcp")
+    
     try:
         await agent.connect_mcp()
         print("✓ Connected successfully!")
@@ -66,8 +73,8 @@ async def main():
         
     except Exception as e:
         print(f"✗ Failed to connect: {e}")
-        print("\nNote: This example requires the Mintlify MCP server to be accessible.")
-        print("If the server is down, this is expected to fail (fail_silent=False).")
+        print("\nNote: fail_silent=False means connection errors are raised.")
+        print("The server may be temporarily unavailable or the URL changed.")
         return
     
     # Create a thread with a documentation question

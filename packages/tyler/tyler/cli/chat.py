@@ -683,7 +683,16 @@ def _main_inner(config: Optional[str], title: Optional[str]):
     finally:
         # Cleanup MCP connections on exit
         if chat_manager.agent and chat_manager.agent.mcp:
-            asyncio.run(chat_manager.agent.cleanup())
+            try:
+                asyncio.run(chat_manager.agent.cleanup())
+            except RuntimeError:
+                # If already in event loop, try with get_event_loop
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    # Can't cleanup synchronously, skip
+                    pass
+                else:
+                    loop.run_until_complete(chat_manager.agent.cleanup())
 
 if __name__ == "__main__":
     main() 

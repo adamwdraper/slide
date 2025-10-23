@@ -8,12 +8,16 @@ NOT A PUBLIC API - use Agent(mcp={...}) with agent.connect_mcp() instead.
 import os
 import re
 import logging
+import copy
 from typing import Dict, List, Any, Callable, Awaitable, Tuple, Optional
 import asyncio
 
 from .adapter import MCPAdapter
 
 logger = logging.getLogger(__name__)
+
+# Regex pattern for environment variable substitution: ${VAR_NAME}
+ENV_VAR_PATTERN = r'\$\{([^}]+)\}'
 
 
 def _validate_mcp_config(config: Dict[str, Any]) -> None:
@@ -23,10 +27,25 @@ def _validate_mcp_config(config: Dict[str, Any]) -> None:
     Called from Agent.__init__ to fail fast on invalid config.
     
     Args:
-        config: MCP configuration dict
+        config: MCP configuration dict with this structure:
+            {
+                "servers": [
+                    {
+                        "name": "server_name",
+                        "transport": "sse|websocket|stdio",
+                        "url": "https://...",  # for sse/websocket
+                        "command": "...",      # for stdio
+                        ...
+                    }
+                ]
+            }
     
     Raises:
         ValueError: If config schema is invalid
+    
+    Example:
+        config = {"servers": [{"name": "test", "transport": "sse", "url": "https://..."}]}
+        _validate_mcp_config(config)  # Validates, raises if invalid
     """
     if "servers" not in config:
         raise ValueError("MCP config must have 'servers' key")
@@ -95,14 +114,12 @@ def _substitute_env_vars(obj: Any) -> Any:
     elif isinstance(obj, list):
         return [_substitute_env_vars(item) for item in obj]
     elif isinstance(obj, str):
-        # Match ${VAR_NAME} pattern
-        pattern = r'\$\{([^}]+)\}'
-        
+        # Substitute environment variables using ${VAR_NAME} pattern
         def replacer(match):
             var_name = match.group(1)
             return os.getenv(var_name, match.group(0))  # Return original if not found
         
-        return re.sub(pattern, replacer, obj)
+        return re.sub(ENV_VAR_PATTERN, replacer, obj)
     
     return obj
 
@@ -153,8 +170,6 @@ def _namespace_tools(tools: List[Dict], prefix: str) -> List[Dict]:
     Returns:
         List of tools with namespaced names (originals unchanged)
     """
-    import copy
-    
     # Sanitize prefix (alphanumeric + underscore only)
     clean_prefix = re.sub(r'[^a-zA-Z0-9_]', '_', prefix)
     
