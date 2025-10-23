@@ -41,8 +41,8 @@ dependencies = [
     "requests>=2.32.0",
     # Core utilities
     "pydantic>=2.10.0",
-    "openai>=1.97.0",
-    "litellm>=1.74.4",
+    "openai>=1.99.2",
+    "litellm>=1.75.3",
 ]
 
 [project.optional-dependencies]
