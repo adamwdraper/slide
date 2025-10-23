@@ -35,3 +35,23 @@ tools:
   - "notion"        # Notion integration tools
   - "command_line"  # System command execution tools
   # - "./my_tools.py"  # Example custom tools (uncomment to use)
+
+# MCP (Model Context Protocol) Server Configuration
+# Connect to external documentation, APIs, databases via MCP servers
+# Uncomment to enable:
+# mcp:
+#   servers:
+#     # Example: Mintlify documentation server
+#     - name: docs
+#       transport: sse              # Transport: sse, websocket, or stdio
+#       url: https://docs.example.com/mcp
+#       # Optional: Custom headers for authentication
+#       # headers:
+#       #   Authorization: "Bearer ${MCP_TOKEN}"  # Use env vars for secrets
+#       # Optional: Filter tools
+#       # include_tools: ["search", "query"]
+#       # exclude_tools: ["delete"]
+#       # Optional: Custom namespace prefix (default: server name)
+#       # prefix: "docs"
+#       # Optional: Fail silently if server unavailable (default: true)
+#       # fail_silent: true
