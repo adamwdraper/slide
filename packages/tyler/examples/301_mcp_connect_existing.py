@@ -83,7 +83,8 @@ async def example_multiple_servers():
     result = await agent.go(thread)
     print(f"\nResponse: {result.content}\n")
     
-    # Cleanup
+    # Cleanup (optional for scripts, but shown here for demonstration)
+    # Useful in long-running apps or when creating/destroying many agents
     await agent.cleanup()
 
 

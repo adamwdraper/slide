@@ -1,3 +1,26 @@
+## [tyler-v4.0.0] - 2025-10-23
+
+### 🚀 Features
+
+- *(mcp-config)* Add Agent MCP support with connect_mcp() (TDD Phase 1)
+- *(mcp-config)* Add CLI auto-connect for MCP servers (Phase 2)
+- *(mcp-config)* Add streamablehttp transport for Mintlify MCP servers
+
+### 🚜 Refactor
+
+- Address copilot review feedback
+- Update examples to use Slide MCP server
+
+### 📚 Documentation
+
+- *(mcp-config)* Add MCP examples to config templates (Phase 3)
+- *(mcp-config)* Rewrite MCP examples with Agent.connect_mcp() (Phase 4)
+- *(mcp-config)* Update all docs to show streamablehttp as primary transport
+
+### 🧪 Testing
+
+- *(mcp-config)* Add config_loader tests and implementation (TDD Phase 1)
+- *(mcp-config)* Add integration tests and fix CLI tests (Phase 6-7)
 ## [tyler-v3.1.2] - 2025-10-15
 
 ### 🐛 Bug Fixes

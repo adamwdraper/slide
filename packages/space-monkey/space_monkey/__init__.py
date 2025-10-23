@@ -14,7 +14,7 @@ from .message_classifier_prompt import format_classifier_prompt
 from .utils import get_logger
 
 # Version
-__version__ = "3.1.2"
+__version__ = "4.0.0"
 
 # Main exports
 __all__ = [

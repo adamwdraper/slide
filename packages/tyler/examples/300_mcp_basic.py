@@ -81,10 +81,9 @@ async def main():
         elif event.type.name == "EXECUTION_COMPLETE":
             print("\n\n✓ Complete!")
     
-    # Cleanup MCP connections
-    logger.info("Disconnecting from MCP servers...")
-    await agent.cleanup()
     logger.info("Done!")
+    
+    # Note: No cleanup needed - script ends and connections close automatically
 
 
 if __name__ == "__main__":

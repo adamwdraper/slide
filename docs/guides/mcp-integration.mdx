@@ -34,8 +34,9 @@ thread = Thread()
 thread.add_message(Message(role="user", content="How do I create a Tyler agent?"))
 result = await agent.go(thread)
 
-# Cleanup when done
-await agent.cleanup()
+# Optional: Cleanup MCP connections (not needed for scripts)
+# Useful for long-running apps or when creating many agents
+# await agent.cleanup()
 ```
 
 ### CLI (tyler-chat)
@@ -225,6 +226,65 @@ Control failure behavior per server:
     ]
 }
 ```
+
+## Resource Management
+
+### When to Use `cleanup()`
+
+**MCP connections are automatically cleaned up** when your process ends. You only need explicit cleanup in:
+
+**Long-running applications:**
+```python
+# Web server creating agents per request
+@app.post("/chat")
+async def chat_endpoint(request):
+    agent = Agent(mcp={...})
+    await agent.connect_mcp()
+    result = await agent.go(thread)
+    await agent.cleanup()  # ← Important! Free connection
+    return result
+```
+
+**Testing or batch processing:**
+```python
+# Creating/destroying many agents
+for task in tasks:
+    agent = Agent(mcp={...})
+    await agent.connect_mcp()
+    await agent.go(thread)
+    await agent.cleanup()  # ← Prevent connection leak
+```
+
+**Short scripts DON'T need cleanup** (except streamablehttp):
+```python
+async def main():
+    agent = Agent(
+        mcp={"servers": [{"transport": "stdio", ...}]}  # stdio, sse, websocket
+    )
+    await agent.connect_mcp()
+    result = await agent.go(thread)
+    # Done - no cleanup needed!
+
+asyncio.run(main())  # Connections close when process ends
+```
+
+**Exception: streamablehttp transport requires cleanup:**
+```python
+async def main():
+    agent = Agent(
+        mcp={"servers": [{"transport": "streamablehttp", ...}]}  # Mintlify
+    )
+    await agent.connect_mcp()
+    result = await agent.go(thread)
+    await agent.cleanup()  # ← Required for streamablehttp to avoid asyncio errors
+
+asyncio.run(main())
+```
+
+<Note>
+The `streamablehttp` transport uses asyncio task groups that require explicit cleanup,
+even in simple scripts. Other transports (stdio, sse, websocket) clean up automatically.
+</Note>
 
 ## Security Best Practices
 

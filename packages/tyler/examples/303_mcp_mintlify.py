@@ -98,10 +98,10 @@ async def main():
         elif event.type.name == "EXECUTION_COMPLETE":
             print("\n\n✓ Complete!")
     
-    # Cleanup
-    print("\n🧹 Cleaning up...")
+    # Cleanup (required for streamablehttp to avoid asyncio errors)
     await agent.cleanup()
-    print("✓ Done!\n")
+    
+    print("\n✓ Done!\n")
 
 
 if __name__ == "__main__":

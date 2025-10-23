@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "slide-space-monkey"
-version = "3.1.2"
+version = "4.0.0"
 description = "A simple, powerful way to deploy Tyler AI agents as Slack agents"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -26,8 +26,8 @@ classifiers = [
 ]
 dependencies = [
     # Core Tyler ecosystem packages
-    "slide-tyler>=3.1.2",
-    "slide-narrator>=3.1.2",
+    "slide-tyler>=4.0.0",
+    "slide-narrator>=4.0.0",
     # Slack integration
     "slack-bolt>=1.23.0",
     # Web framework
@@ -36,13 +36,13 @@ dependencies = [
     # Environment and configuration
     "python-dotenv>=1.0.0",
     # Monitoring and logging
-    "weave>=0.51.0",
+    "weave>=0.52.11",
     # HTTP requests
     "requests>=2.32.0",
     # Core utilities
     "pydantic>=2.10.0",
-    "openai>=1.97.0",
-    "litellm>=1.74.4",
+    "openai>=1.99.2",
+    "litellm>=1.75.3",
 ]
 
 [project.optional-dependencies]
