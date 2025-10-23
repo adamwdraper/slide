@@ -31,12 +31,14 @@
 
 ### Tyler Agent (MEDIUM Impact)
 
-- **`packages/tyler/tyler/models/agent.py`** (40-60 lines)
+- **`packages/tyler/tyler/models/agent.py`** (30-40 lines)
   - Add `mcp: Optional[Dict[str, Any]]` field
-  - Add `_mcp_adapter: Optional[Callable]` private attribute for cleanup
-  - Add `@classmethod async def create(cls, **kwargs)` - async factory method
+  - Add `_mcp_initialized: bool` private attribute (tracks lazy init state)
+  - Add `_mcp_disconnect: Optional[Callable]` private attribute for cleanup
+  - Add `async def _initialize_mcp()` - lazy init helper (called on first go())
+  - Update `_go_complete()` and `_go_stream()` to lazy init MCP
   - Add `async def cleanup()` - disconnect MCP servers
-  - Update docstrings to show `Agent.create()` for MCP usage
+  - Update docstrings to show `Agent(mcp={...})` usage
 
 ### Configuration Files (LOW Impact)
 
@@ -198,42 +200,26 @@
 
 ### New Public API
 
-**Agent.create() classmethod:**
+**Agent mcp parameter (lazy initialization):**
 ```python
 from tyler import Agent
 
-# New async factory method
-@classmethod
-async def create(cls, **kwargs) -> Agent:
-    """
-    Create an Agent with optional MCP server configuration.
-    
-    Accepts all standard Agent parameters plus:
-    
-    Args:
-        mcp: Optional Dict with "servers" key containing MCP server configs.
-             If provided, connects to servers and merges discovered tools.
-    
-    Returns:
-        Agent instance with MCP tools registered (if mcp config provided)
-    
-    Raises:
-        ValueError: If MCP config is invalid or server connection fails
-    
-    Example:
-        agent = await Agent.create(
-            name="Tyler",
-            model_name="gpt-4.1",
-            tools=["web"],
-            mcp={
-                "servers": [{
-                    "name": "mintlify",
-                    "transport": "sse",
-                    "url": "https://docs.wandb.ai/mcp"
-                }]
-            }
-        )
-    """
+# Standard sync initialization
+agent = Agent(
+    name="Tyler",
+    model_name="gpt-4.1",
+    tools=["web"],
+    mcp={
+        "servers": [{
+            "name": "mintlify",
+            "transport": "sse",
+            "url": "https://docs.wandb.ai/mcp"
+        }]
+    }
+)
+
+# MCP servers connect lazily on first agent.go() call
+result = await agent.go(thread)
 ```
 
 **Agent.cleanup() method:**
@@ -246,16 +232,19 @@ async def cleanup(self) -> None:
     """
 ```
 
-**Usage:**
+**Full usage:**
 ```python
-agent = await Agent.create(
+# Create agent (sync, stores config)
+agent = Agent(
     tools=["web"],
     mcp={"servers": [{...}]}
 )
 
-# ... use agent ...
+# Use agent (lazy MCP init on first call)
+result = await agent.go(thread)
 
-await agent.cleanup()  # cleanup MCP connections
+# Cleanup when done
+await agent.cleanup()
 ```
 
 ### Config Schema (YAML)
@@ -680,7 +669,7 @@ logger.debug("Namespaced MCP tools", extra={
 
 **For existing MCPAdapter users (minimal, likely none in the wild):**
 
-The low-level `MCPAdapter` API continues to work unchanged (no breaking changes), but all documentation and examples will guide users to `Agent.create()`:
+The low-level `MCPAdapter` API continues to work unchanged (no breaking changes), but all documentation and examples will guide users to `Agent(mcp={...})`:
 
 **Old way (still works, not recommended):**
 ```python
@@ -692,20 +681,26 @@ agent = Agent(tools=tools)
 
 **New way (recommended for everyone):**
 ```python
-agent = await Agent.create(
+# Simple, just add mcp parameter
+agent = Agent(
     model_name="gpt-4.1",
     tools=["web"],
     mcp={
         "servers": [{"name": "mintlify", "transport": "sse", "url": "https://docs.wandb.ai/mcp"}]
     }
 )
-# ... use agent ...
+
+# Use normally (MCP connects lazily on first call)
+result = await agent.go(thread)
+
+# Cleanup when done
 await agent.cleanup()
 ```
 
 **Documentation strategy:**
-- ✅ All examples show `Agent.create(mcp={...})` only
-- ✅ Python API matches YAML structure exactly
+- ✅ All examples show `Agent(mcp={...})` only
+- ✅ Python API matches YAML structure exactly (no factory needed!)
+- ✅ Lazy initialization on first use (transparent to users)
 - ✅ Docs have config approach as primary content
 - ✅ Small callout box in docs: "Advanced users can use `MCPAdapter` directly (not recommended)"
 - ✅ No migration guide needed (new feature, config is the default path)

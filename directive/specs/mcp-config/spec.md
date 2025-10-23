@@ -201,7 +201,7 @@ mcp:
 ```python
 from tyler import Agent
 
-agent = await Agent.create(
+agent = Agent(
     name="Tyler",
     model_name="gpt-4.1",
     tools=["web"],
@@ -213,20 +213,24 @@ agent = await Agent.create(
         }]
     }
 )
+
+# First use connects to MCP lazily
+result = await agent.go(thread)
 ```
 
 **When** agent is used
 
 **Then**:
-- Agent is created with both MCP tools and built-in "web" tools
-- MCP servers are connected automatically during creation
-- All discovered tools are registered and ready to use
+- Agent is created normally (sync, no async needed)
+- On first `agent.go()` call, MCP servers connect lazily
+- All discovered tools are registered and available
+- Subsequent calls reuse existing connections
 
 ---
 
 **Given** namespace prefix override:
 ```python
-agent = await Agent.create(
+agent = Agent(
     model_name="gpt-4.1",
     mcp={
         "servers": [{
@@ -239,7 +243,7 @@ agent = await Agent.create(
 )
 ```
 
-**When** agent is created and tools are registered
+**When** agent is used and tools are registered
 
 **Then**:
 - Tool names use `docs_` prefix instead of `mintlify_`
@@ -249,9 +253,9 @@ agent = await Agent.create(
 
 **Given** cleanup is needed:
 ```python
-agent = await Agent.create(mcp={...})
+agent = Agent(mcp={...})
 # ... use agent ...
-await agent.cleanup()  # or await agent.disconnect_mcp()
+await agent.cleanup()
 ```
 
 **When** cleanup is called

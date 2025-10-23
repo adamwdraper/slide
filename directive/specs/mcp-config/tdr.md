@@ -29,11 +29,14 @@ await mcp.disconnect_all()
 
 **Example (after - Python matches YAML):**
 ```python
-# Clean, symmetric API
-agent = await Agent.create(
+# Clean, symmetric API - no factory needed!
+agent = Agent(
     tools=["web"],
     mcp={"servers": [{"name": "mintlify", "transport": "sse", "url": "https://docs.wandb.ai/mcp"}]}
 )
+
+# MCP connects lazily on first use
+result = await agent.go(thread)
 await agent.cleanup()
 ```
 
@@ -42,7 +45,8 @@ await agent.cleanup()
 ## 2. Decision Drivers & Non‑Goals
 
 ### Drivers
-- **API Symmetry** - Python and YAML should have identical structure (`mcp={...}`)
+- **API Symmetry** - Python `Agent(mcp={...})` and YAML `mcp:` have identical structure
+- **Simplicity** - No factory pattern needed, standard sync init, lazy connection
 - **Developer experience** - Make MCP trivial to use (config-first, zero boilerplate)
 - **Discoverability** - MCP should feel like a core feature, not an advanced addon
 - **Ecosystem alignment** - Mintlify and other MCP servers are proliferating; make Tyler compatible
@@ -55,6 +59,7 @@ await agent.cleanup()
 - Connection pooling across agents (YAGNI for now)
 - URL validation/filtering (document security, don't enforce)
 - Public helper functions (all config logic is internal to Agent)
+- Async factory pattern (lazy init handles async, no factory needed)
 
 ## 3. Current State — Codebase Map
 
@@ -162,77 +167,67 @@ Tools are currently namespaced as `servername__toolname` (double underscore). We
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### Core API: `Agent.create()` Async Factory
+### Core API: Lazy MCP Initialization
 
 **Agent class additions:**
 ```python
 class Agent(Model):
-    # New field
+    # New field - stores config, doesn't connect yet
     mcp: Optional[Dict[str, Any]] = Field(
         default=None,
         description="MCP server configuration (same structure as YAML config)"
     )
     
-    # Private attribute for cleanup
+    # Private attributes for lazy initialization
+    _mcp_initialized: bool = PrivateAttr(default=False)
     _mcp_disconnect: Optional[Callable[[], Awaitable[None]]] = PrivateAttr(default=None)
     
-    @classmethod
-    async def create(cls, **kwargs) -> "Agent":
+    def __init__(self, **kwargs):
+        """Standard sync initialization - MCP config stored, not connected."""
+        super().__init__(**kwargs)
+        # mcp field is just stored, connection happens lazily
+    
+    async def _initialize_mcp(self) -> None:
         """
-        Create an Agent with optional MCP server configuration.
+        Lazy initialization of MCP servers.
         
-        This is the recommended way to create agents when using MCP.
-        
-        Args:
-            **kwargs: All standard Agent parameters, plus:
-                mcp: Optional Dict with "servers" key containing MCP server configs.
-                     Structure matches YAML config exactly.
-        
-        Returns:
-            Agent instance with MCP tools registered (if mcp config provided)
-        
-        Raises:
-            ValueError: If MCP config is invalid or server connection fails
-        
-        Example:
-            agent = await Agent.create(
-                name="Tyler",
-                model_name="gpt-4.1",
-                tools=["web"],
-                mcp={
-                    "servers": [{
-                        "name": "mintlify",
-                        "transport": "sse",
-                        "url": "https://docs.wandb.ai/mcp"
-                    }]
-                }
-            )
+        Called automatically on first agent.go() if mcp config is present.
+        Connects to servers, discovers tools, and registers them.
         """
-        # Extract MCP config
-        mcp_config = kwargs.pop('mcp', None)
+        if not self.mcp or self._mcp_initialized:
+            return
         
-        # Create agent instance (sync init)
-        agent = cls(**kwargs)
+        logger.info("Initializing MCP servers...")
         
-        # Connect to MCP servers if configured (async)
-        if mcp_config:
-            from tyler.mcp.config_loader import _load_mcp_config
-            mcp_tools, disconnect_callback = await _load_mcp_config(mcp_config)
-            
-            # Store disconnect callback for cleanup
-            agent._mcp_disconnect = disconnect_callback
-            
-            # Merge MCP tools
-            if not isinstance(agent.tools, list):
-                agent.tools = list(agent.tools) if agent.tools else []
-            agent.tools.extend(mcp_tools)
-            
-            # Re-process tools (existing ToolManager logic)
-            from tyler.models.tool_manager import ToolManager
-            tool_manager = ToolManager(tools=agent.tools, agents=agent.agents)
-            agent._processed_tools = tool_manager.register_all_tools()
+        from tyler.mcp.config_loader import _load_mcp_config
         
-        return agent
+        # Connect and get tools
+        mcp_tools, disconnect_callback = await _load_mcp_config(self.mcp)
+        
+        # Store disconnect callback
+        self._mcp_disconnect = disconnect_callback
+        
+        # Merge MCP tools
+        if not isinstance(self.tools, list):
+            self.tools = list(self.tools) if self.tools else []
+        self.tools.extend(mcp_tools)
+        
+        # Re-process tools with ToolManager
+        from tyler.models.tool_manager import ToolManager
+        tool_manager = ToolManager(tools=self.tools, agents=self.agents)
+        self._processed_tools = tool_manager.register_all_tools()
+        
+        # Regenerate system prompt with new tools
+        self._system_prompt = self._prompt.system_prompt(
+            self.purpose, 
+            self.name, 
+            self.model_name, 
+            self._processed_tools, 
+            self.notes
+        )
+        
+        self._mcp_initialized = True
+        logger.info(f"MCP initialized with {len(mcp_tools)} tools")
     
     async def cleanup(self) -> None:
         """
@@ -243,6 +238,26 @@ class Agent(Model):
         if self._mcp_disconnect:
             await self._mcp_disconnect()
             self._mcp_disconnect = None
+            self._mcp_initialized = False
+```
+
+**Update agent.go() to lazy init:**
+```python
+async def _go_complete(self, thread_or_id: Union[Thread, str]) -> AgentResult:
+    """Non-streaming implementation."""
+    # Lazy initialize MCP if needed
+    if self.mcp and not self._mcp_initialized:
+        await self._initialize_mcp()
+    
+    # ... rest of existing logic ...
+
+async def _go_stream(self, thread_or_id: Union[Thread, str]) -> AsyncGenerator:
+    """Streaming implementation."""
+    # Lazy initialize MCP if needed
+    if self.mcp and not self._mcp_initialized:
+        await self._initialize_mcp()
+    
+    # ... rest of existing logic ...
 ```
 
 **Internal helper `_load_mcp_config()` (in config_loader.py):**
@@ -253,7 +268,7 @@ async def _load_mcp_config(
     """
     Internal helper to load MCP configuration.
     
-    NOT A PUBLIC API - used by Agent.create() and CLI.
+    NOT A PUBLIC API - used by Agent and CLI.
     
     Implementation flow:
     1. Validate config schema
@@ -535,23 +550,31 @@ agent = Agent(tools=tools)
 **Cons:** ❌ Two-step process, ❌ Python API doesn't match YAML, ❌ Manual tool merging  
 **Decision:** Inconsistent with YAML experience
 
-### Option B: CLI-only feature (NOT CHOSEN)
+### Option B: Async factory `Agent.create()` (NOT CHOSEN)
+```python
+agent = await Agent.create(mcp={"servers": [...]})
+```
+
+**Pros:** Python matches YAML  
+**Cons:** ❌ New pattern for users, ❌ Factory methods feel heavyweight, ❌ Extra API surface  
+**Decision:** Unnecessary - lazy init is simpler
+
+### Option C: CLI-only feature (NOT CHOSEN)
 Only add MCP config to tyler-chat, not Python API.
 
 **Pros:** Fewer components  
 **Cons:** ❌ Inconsistent experience, ❌ Python users still write boilerplate  
 **Decision:** Both CLI + Python need it
 
-### Option C: CHOSEN - `Agent.create()` async factory
+### Option D: CHOSEN - Lazy initialization in `Agent(mcp={...})`
 ```python
-agent = await Agent.create(
-    mcp={"servers": [...]}
-)
+agent = Agent(mcp={"servers": [...]})  # Sync init, stores config
+result = await agent.go(thread)         # Lazy connect on first use
 ```
 
-**Pros:** ✅ Python matches YAML exactly, ✅ One-step creation, ✅ Auto cleanup, ✅ Symmetric API  
-**Cons:** Requires async (acceptable - MCP is async by nature)  
-**Decision:** Best developer experience, matches config perfectly
+**Pros:** ✅ Standard sync init, ✅ Python matches YAML exactly, ✅ No factory pattern, ✅ Transparent to users  
+**Cons:** First call has connection latency (acceptable - logged clearly)  
+**Decision:** Simplest, most intuitive API
 
 ## 6. Data Model & Contract Changes
 
@@ -579,20 +602,29 @@ mcp:
 
 ### New Public API
 
-**Agent.create() classmethod:**
+**Agent mcp parameter (with lazy initialization):**
 ```python
 from tyler import Agent
 
-# Primary API - matches YAML structure
-agent = await Agent.create(
+# Primary API - matches YAML structure exactly
+agent = Agent(
     name="Tyler",
     model_name="gpt-4.1",
     tools=["web"],
-    mcp={"servers": [...]}
+    mcp={"servers": [...]}  # Stored in __init__, connected on first go()
 )
 
-# Cleanup
+# Use normally - MCP connects lazily on first call
+result = await agent.go(thread)
+
+# Cleanup when done
 await agent.cleanup()
+```
+
+**Agent.cleanup() method (new):**
+```python
+async def cleanup(self) -> None:
+    """Disconnect MCP servers and free resources."""
 ```
 
 **No new exports from `tyler.mcp`:**
@@ -760,8 +792,8 @@ from tyler.mcp import connect_from_config
 from unittest.mock import patch, AsyncMock
 
 @pytest.mark.asyncio
-async def test_agent_create_with_mcp_minimal():
-    """Test Agent.create() with minimal MCP config."""
+async def test_agent_with_mcp_lazy_init():
+    """Test Agent(mcp={...}) with lazy initialization."""
     mcp_config = {
         "servers": [{
             "name": "test",
@@ -771,35 +803,44 @@ async def test_agent_create_with_mcp_minimal():
     }
     
     # Mock MCP connection
-    with patch('tyler.mcp.config_loader.MCPAdapter') as mock_adapter_class:
-        mock_adapter = AsyncMock()
-        mock_adapter.connect.return_value = True
-        mock_adapter.get_tools_for_agent.return_value = [
-            {
-                "definition": {"type": "function", "function": {"name": "search"}},
-                "implementation": lambda: None
-            }
-        ]
-        mock_adapter_class.return_value = mock_adapter
+    with patch('tyler.mcp.config_loader._load_mcp_config') as mock_load:
+        mock_load.return_value = (
+            [{
+                "definition": {"type": "function", "function": {"name": "test_search"}},
+                "implementation": AsyncMock()
+            }],
+            AsyncMock()  # disconnect callback
+        )
         
-        # Create agent with MCP
-        agent = await Agent.create(
+        # Create agent with MCP (sync, no connection yet)
+        agent = Agent(
             name="TestAgent",
             model_name="gpt-4o-mini",
             mcp=mcp_config
         )
         
-        # Verify connection happened
-        mock_adapter.connect.assert_called_once_with(
-            "test", "sse", url="https://example.com/mcp"
-        )
+        # MCP not initialized yet
+        assert not agent._mcp_initialized
+        mock_load.assert_not_called()
+        
+        # Use agent - triggers lazy init
+        thread = Thread()
+        thread.add_message(Message(role="user", content="test"))
+        
+        # Mock the completion to avoid real API call
+        with patch.object(agent, 'step'):
+            await agent.go(thread)
+        
+        # Now MCP should be initialized
+        assert agent._mcp_initialized
+        mock_load.assert_called_once()
         
         # Verify tools registered
         assert any("test_search" in str(t) for t in agent._processed_tools)
         
         # Verify cleanup works
         await agent.cleanup()
-        mock_adapter.disconnect_all.assert_called_once()
+        assert not agent._mcp_initialized
 
 @pytest.mark.asyncio
 async def test_tool_filtering_include_exclude():
@@ -917,7 +958,7 @@ def test_missing_required_field_error():
 ```python
 @pytest.mark.asyncio
 async def test_end_to_end_agent_with_mcp_config():
-    """Test full flow: Agent.create() → tool execution."""
+    """Test full flow: Agent(mcp={...}) → lazy init → tool execution."""
     mcp_config = {
         "servers": [{
             "name": "test",
@@ -926,20 +967,18 @@ async def test_end_to_end_agent_with_mcp_config():
         }]
     }
     
-    # Mock MCP server
-    with patch('tyler.mcp.config_loader.MCPAdapter') as mock_adapter_class:
+    # Mock MCP config loader
+    with patch('tyler.mcp.config_loader._load_mcp_config') as mock_load:
         # Setup mock tool
         async def mock_search(query: str) -> str:
             return f"Results for: {query}"
         
-        mock_adapter = AsyncMock()
-        mock_adapter.connect.return_value = True
-        mock_adapter.get_tools_for_agent.return_value = [
-            {
+        mock_load.return_value = (
+            [{
                 "definition": {
                     "type": "function",
                     "function": {
-                        "name": "search",
+                        "name": "test_search",
                         "description": "Search docs",
                         "parameters": {
                             "type": "object",
@@ -949,12 +988,12 @@ async def test_end_to_end_agent_with_mcp_config():
                     }
                 },
                 "implementation": mock_search
-            }
-        ]
-        mock_adapter_class.return_value = mock_adapter
+            }],
+            AsyncMock()  # disconnect callback
+        )
         
-        # Create agent with MCP
-        agent = await Agent.create(
+        # Create agent with MCP (sync init)
+        agent = Agent(
             name="test",
             model_name="gpt-4o-mini",
             mcp=mcp_config
@@ -964,9 +1003,14 @@ async def test_end_to_end_agent_with_mcp_config():
         thread = Thread()
         thread.add_message(Message(role="user", content="Search for MCP"))
         
-        # Execute (would call test_search tool)
-        # ... rest of test ...
+        # Execute (lazy init happens here)
+        result = await agent.go(thread)
         
+        # Verify MCP was initialized
+        assert agent._mcp_initialized
+        mock_load.assert_called_once()
+        
+        # Cleanup
         await agent.cleanup()
 ```
 
@@ -1055,7 +1099,7 @@ def test_cli_loads_mcp_config_from_yaml(tmp_path):
 
 ## 12. Milestones / Plan (post‑approval)
 
-### Phase 1: Core Config Loader + Agent.create() (Day 1-2)
+### Phase 1: Core Config Loader + Agent Lazy Init (Day 1-2)
 1. ✅ Create `packages/tyler/tyler/mcp/config_loader.py`
 2. ✅ Implement `_load_mcp_config()` internal function
 3. ✅ Implement validation (`_validate_server_config`)
@@ -1064,64 +1108,66 @@ def test_cli_loads_mcp_config_from_yaml(tmp_path):
 6. ✅ Implement namespacing (`_namespace_tools`)
 7. ✅ Update `adapter.py` namespace format (__ → _)
 8. ✅ Add `mcp` field to Agent model
-9. ✅ Add `Agent.create()` classmethod
-10. ✅ Add `Agent.cleanup()` method
-11. ✅ Write unit tests (`test_config_loader.py`, `test_agent_create_mcp.py`)
+9. ✅ Add `_mcp_initialized` and `_mcp_disconnect` private attributes
+10. ✅ Add `Agent._initialize_mcp()` lazy init method
+11. ✅ Update `_go_complete()` and `_go_stream()` to call lazy init
+12. ✅ Add `Agent.cleanup()` method
+13. ✅ Write unit tests (`test_config_loader.py`, `test_agent_mcp_lazy_init.py`)
 
 **DoD:** All unit tests pass, 100% coverage on new code
 
 ### Phase 2: CLI Integration (Day 2)
-12. ✅ Update `tyler/cli/chat.py` with `_load_mcp_servers()`
-13. ✅ Update `load_config()` to process `mcp` section
-14. ✅ Add MCP cleanup on CLI exit
-15. ✅ Write CLI tests (`test_chat_mcp.py`)
+14. ✅ Update `tyler/cli/chat.py` with `_load_mcp_servers()`
+15. ✅ Update `load_config()` to process `mcp` section
+16. ✅ Add MCP cleanup on CLI exit
+17. ✅ Write CLI tests (`test_chat_mcp.py`)
 
 **DoD:** tyler-chat loads MCP servers from YAML, tests pass
 
 ### Phase 3: Config Templates (Day 2)
-16. ✅ Update `tyler-chat-config.yaml` with MCP example (commented)
-17. ✅ Update `tyler-chat-config-wandb.yaml` with MCP example
+18. ✅ Update `tyler-chat-config.yaml` with MCP example (commented)
+19. ✅ Update `tyler-chat-config-wandb.yaml` with MCP example
 
 **DoD:** Templates have clear MCP examples with inline docs
 
 ### Phase 4: Examples (Day 3)
-18. ✅ Rewrite `examples/300_mcp_basic.py` (Agent.create, config-only)
-19. ✅ Rewrite `examples/301_mcp_connect_existing.py` (Agent.create, config-only)
-20. ✅ Create `examples/302_mcp_config_cli.py` (YAML loading)
-21. ✅ Create `examples/303_mcp_mintlify.py` (W&B docs example)
-22. ✅ Update `examples/README.md` (add new examples)
+20. ✅ Rewrite `examples/300_mcp_basic.py` (Agent(mcp={...}), config-only)
+21. ✅ Rewrite `examples/301_mcp_connect_existing.py` (Agent(mcp={...}), config-only)
+22. ✅ Create `examples/302_mcp_config_cli.py` (YAML loading)
+23. ✅ Create `examples/303_mcp_mintlify.py` (W&B docs example)
+24. ✅ Update `examples/README.md` (add new examples)
 
-**DoD:** All examples runnable, Agent.create() approach
+**DoD:** All examples runnable, Agent(mcp={...}) lazy init approach
 
 ### Phase 5: Documentation (Day 3-4)
-23. ✅ Rewrite `docs/guides/mcp-integration.mdx` (Agent.create first, config-first)
-24. ✅ Update `docs/concepts/mcp.mdx` (Agent.create examples)
-25. ✅ Update `docs/apps/tyler-cli.mdx` (add MCP section)
-26. ✅ Update `docs/introduction.mdx` (mention MCP config)
-27. ✅ Update `docs/concepts/tools.mdx` (MCP as tool source)
-28. ✅ Update `docs/guides/adding-tools.mdx` (MCP config)
-29. ✅ Update `docs/concepts/how-agents-work.mdx` (terminology)
-30. ✅ Update `docs/concepts/architecture.mdx` (config layer)
-31. ✅ Update main `README.md` (features section)
-32. ✅ Update `packages/tyler/README.md` (MCP section)
-33. ✅ Update `packages/tyler/ARCHITECTURE.md` (config module)
+25. ✅ Rewrite `docs/guides/mcp-integration.mdx` (Agent(mcp={...}) first, config-first)
+26. ✅ Update `docs/concepts/mcp.mdx` (Agent(mcp={...}) examples)
+27. ✅ Update `docs/apps/tyler-cli.mdx` (add MCP section)
+28. ✅ Update `docs/introduction.mdx` (mention MCP config)
+29. ✅ Update `docs/concepts/tools.mdx` (MCP as tool source)
+30. ✅ Update `docs/guides/adding-tools.mdx` (MCP config)
+31. ✅ Update `docs/concepts/how-agents-work.mdx` (terminology)
+32. ✅ Update `docs/concepts/architecture.mdx` (config layer)
+33. ✅ Update main `README.md` (features section)
+34. ✅ Update `packages/tyler/README.md` (MCP section)
+35. ✅ Update `packages/tyler/ARCHITECTURE.md` (config module)
 
-**DoD:** All docs updated, Agent.create() shown as primary API, Python matches YAML
+**DoD:** All docs updated, Agent(mcp={...}) shown as primary API, Python matches YAML exactly
 
 ### Phase 6: Integration Tests (Day 4)
-34. ✅ Write `test_mcp_integration.py` (end-to-end flows with Agent.create)
-35. ✅ Test with real Mintlify server (manual)
-36. ✅ Test error scenarios (manual)
+36. ✅ Write `test_mcp_integration.py` (end-to-end flows with Agent(mcp={...}))
+37. ✅ Test with real Mintlify server (manual)
+38. ✅ Test error scenarios (manual)
 
 **DoD:** All integration tests pass, manual testing complete
 
 ### Phase 7: Polish & Review (Day 5)
-37. ✅ Run full test suite
-38. ✅ Check test coverage (aim for 90%+)
-39. ✅ Run linter/formatter
-40. ✅ Update CHANGELOG
-41. ✅ Create PR
-42. ✅ Address review comments
+39. ✅ Run full test suite
+40. ✅ Check test coverage (aim for 90%+)
+41. ✅ Run linter/formatter
+42. ✅ Update CHANGELOG
+43. ✅ Create PR
+44. ✅ Address review comments
 
 **DoD:** PR ready for merge, all CI checks pass
 
