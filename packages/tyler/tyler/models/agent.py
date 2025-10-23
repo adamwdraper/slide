@@ -4,7 +4,7 @@ import weave
 from weave import Model, Prompt
 import json
 import types
-from typing import List, Dict, Any, Optional, Union, AsyncGenerator, Tuple, Callable, overload, Literal
+from typing import List, Dict, Any, Optional, Union, AsyncGenerator, Tuple, Callable, Awaitable, overload, Literal
 from datetime import datetime, UTC
 from pydantic import Field, PrivateAttr
 from litellm import acompletion
@@ -176,12 +176,15 @@ class Agent(Model):
     agents: List["Agent"] = Field(default_factory=list, description="List of agents that this agent can delegate tasks to.")
     thread_store: Optional[ThreadStore] = Field(default=None, description="Thread store instance for managing conversation threads", exclude=True)
     file_store: Optional[FileStore] = Field(default=None, description="File store instance for managing file attachments", exclude=True)
+    mcp: Optional[Dict[str, Any]] = Field(default=None, description="MCP server configuration. Same structure as YAML config. Call connect_mcp() after creating agent to connect to servers.")
     
     _prompt: AgentPrompt = PrivateAttr(default_factory=AgentPrompt)
     _iteration_count: int = PrivateAttr(default=0)
     _processed_tools: List[Dict] = PrivateAttr(default_factory=list)
     _system_prompt: str = PrivateAttr(default="")
     _tool_attributes_cache: Dict[str, Optional[Dict[str, Any]]] = PrivateAttr(default_factory=dict)
+    _mcp_connected: bool = PrivateAttr(default=False)
+    _mcp_disconnect: Optional[Callable[[], Awaitable[None]]] = PrivateAttr(default=None)
     step_errors_raise: bool = Field(default=False, description="If True, step() will raise exceptions instead of returning an error message tuple for backward compatibility.")
 
     model_config = {
@@ -195,6 +198,11 @@ class Agent(Model):
             data['api_base'] = data.pop('base_url')
             
         super().__init__(**data)
+        
+        # Validate MCP config schema immediately (fail fast!)
+        if self.mcp:
+            from tyler.mcp.config_loader import _validate_mcp_config
+            _validate_mcp_config(self.mcp)
         
         # Generate system prompt once at initialization
         self._prompt = AgentPrompt()
@@ -1669,4 +1677,71 @@ class Agent(Model):
         except Exception as e:
             error_msg = f"Error in raw streaming mode: {str(e)}"
             logger.error(error_msg)
-            raise 
+            raise
+    
+    async def connect_mcp(self) -> None:
+        """
+        Connect to MCP servers configured in the mcp field.
+        
+        Call this after creating an Agent with mcp config and before using it.
+        Connects to servers, discovers tools, and registers them.
+        
+        Raises:
+            ValueError: If connection fails and fail_silent=False for a server
+        
+        Example:
+            agent = Agent(mcp={"servers": [...]})
+            await agent.connect_mcp()  # Fails immediately if server unreachable
+            result = await agent.go(thread)
+        """
+        if not self.mcp:
+            logger.warning("connect_mcp() called but no mcp config provided")
+            return
+        
+        if self._mcp_connected:
+            logger.debug("MCP already connected, skipping")
+            return
+        
+        logger.info("Connecting to MCP servers...")
+        
+        from tyler.mcp.config_loader import _load_mcp_config
+        
+        # Connect and get tools (fails fast if server unreachable)
+        mcp_tools, disconnect_callback = await _load_mcp_config(self.mcp)
+        
+        # Store disconnect callback
+        self._mcp_disconnect = disconnect_callback
+        
+        # Merge MCP tools
+        if not isinstance(self.tools, list):
+            self.tools = list(self.tools) if self.tools else []
+        self.tools.extend(mcp_tools)
+        
+        # Re-process tools with ToolManager
+        from tyler.models.tool_manager import ToolManager
+        tool_manager = ToolManager(tools=self.tools, agents=self.agents)
+        self._processed_tools = tool_manager.register_all_tools()
+        
+        # Regenerate system prompt with new tools
+        self._system_prompt = self._prompt.system_prompt(
+            self.purpose, 
+            self.name, 
+            self.model_name, 
+            self._processed_tools, 
+            self.notes
+        )
+        
+        self._mcp_connected = True
+        logger.info(f"MCP connected with {len(mcp_tools)} tools")
+    
+    async def cleanup(self) -> None:
+        """
+        Cleanup MCP connections and resources.
+        
+        Call this when done with the agent to properly close MCP connections.
+        Agent can be reused by calling connect_mcp() again if needed.
+        """
+        if self._mcp_disconnect:
+            await self._mcp_disconnect()
+            self._mcp_disconnect = None
+            self._mcp_connected = False 
