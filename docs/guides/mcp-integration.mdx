@@ -1,464 +1,333 @@
 ---
-title: 'MCP integration' 
-description: 'Connect your agents to Model Context Protocol servers'
+title: 'MCP Integration' 
+description: 'Connect your agents to Model Context Protocol servers using declarative config'
 ---
 
-Model Context Protocol (MCP) is an open standard for connecting AI applications to external data sources and tools. Tyler has built-in support for MCP, allowing your agents to use any MCP-compatible server.
+Model Context Protocol (MCP) is an open standard for connecting AI applications to external data sources and tools. Tyler has first-class support for MCP through declarative configuration—no boilerplate code needed!
 
-## What is MCP?
+## Quick Start
 
-MCP provides a standardized way to:
-- Connect to external tools and services
-- Access data sources (databases, APIs, files)
-- Execute code in sandboxed environments
-- Share context between AI applications
-
-## Quick start
-
-### Using an MCP Server
+### Python API
 
 ```python
-import asyncio
-from tyler import Agent, Thread, Message
-from tyler.mcp import MCPAdapter
+from tyler import Agent
 
-async def main():
-    # Create MCP adapter
-    adapter = MCPAdapter()
-    
-    # Connect to an MCP server
-    await adapter.connect("stdio://./path/to/mcp-server")
-    
-    # Create agent with MCP tools
-    agent = Agent(
-        name="mcp-agent",
-        model_name="gpt-4",
-        purpose="To help with tasks using MCP tools",
-        mcp_adapter=adapter
-    )
-    
-    # Use the agent - it now has access to all MCP tools
-    thread = Thread()
-    message = Message(role="user", content="List available tools")
-    thread.add_message(message)
-    
-    result = await agent.go(thread)
-
-asyncio.run(main())
-```
-
-## Connection Types
-
-### Standard I/O (stdio)
-For local MCP servers:
-
-```python
-# Connect to a local executable
-await adapter.connect("stdio://./mcp-filesystem-server")
-
-# With arguments
-await adapter.connect("stdio://python3 my_server.py --config config.json")
-```
-
-### WebSocket
-For remote MCP servers:
-
-```python
-# Connect via WebSocket
-await adapter.connect("ws://localhost:8080/mcp")
-
-# With authentication
-await adapter.connect("wss://mcp.example.com/server", {
-    "headers": {
-        "Authorization": "Bearer token123"
+# Create agent with MCP config
+agent = Agent(
+    name="Tyler",
+    model_name="gpt-4.1",
+    tools=["web"],
+    mcp={
+        "servers": [{
+            "name": "wandb_docs",
+            "transport": "sse",
+            "url": "https://docs.wandb.ai/mcp"
+        }]
     }
-})
-```
+)
 
-### HTTP/SSE
-For servers using Server-Sent Events:
+# Connect to MCP servers (fail fast!)
+await agent.connect_mcp()
 
-```python
-# Connect via HTTP with SSE
-await adapter.connect("http://localhost:3000/mcp")
-```
-
-## Popular MCP Servers
-
-### Filesystem server
-Access and manipulate files:
-
-```python
-# Install: npm install -g @modelcontextprotocol/server-filesystem
-await adapter.connect("stdio://mcp-server-filesystem --allowed-dir /path/to/files")
-
-# Now your agent can read/write files in the allowed directory
+# Use normally - MCP tools are now available
 thread = Thread()
-message = Message(role="user", content="Read the contents of config.json")
-thread.add_message(message)
-```
-
-### Database server
-Query databases:
-
-```python
-# Install: npm install -g @modelcontextprotocol/server-sqlite
-await adapter.connect("stdio://mcp-server-sqlite --db-path ./mydatabase.db")
-
-# Agent can now query the database
-message = Message(role="user", content="Show me all users created this week")
-```
-
-### Code execution server
-Run code safely:
-
-```python
-# Install: npm install -g @modelcontextprotocol/server-code
-await adapter.connect("stdio://mcp-server-code --lang python")
-
-# Agent can execute Python code
-message = Message(role="user", content="Calculate the fibonacci sequence up to 100")
-```
-
-## Building custom MCP servers
-
-### Basic MCP Server (Python)
-
-```python
-# my_mcp_server.py
-import json
-import sys
-from typing import Any, Dict
-
-class SimpleMCPServer:
-    def __init__(self):
-        self.tools = {
-            "get_time": {
-                "description": "Get the current time",
-                "parameters": {}
-            },
-            "calculate": {
-                "description": "Perform a calculation",
-                "parameters": {
-                    "expression": {
-                        "type": "string",
-                        "description": "Math expression to evaluate"
-                    }
-                }
-            }
-        }
-    
-    async def handle_request(self, request: Dict[str, Any]) -> Dict[str, Any]:
-        method = request.get("method")
-        
-        if method == "initialize":
-            return {
-                "protocolVersion": "1.0",
-                "serverInfo": {
-                    "name": "my-mcp-server",
-                    "version": "1.0.0"
-                }
-            }
-        
-        elif method == "tools/list":
-            return {
-                "tools": [
-                    {
-                        "name": name,
-                        "description": info["description"],
-                        "inputSchema": {
-                            "type": "object",
-                            "properties": info["parameters"]
-                        }
-                    }
-                    for name, info in self.tools.items()
-                ]
-            }
-        
-        elif method == "tools/call":
-            tool_name = request["params"]["name"]
-            args = request["params"]["arguments"]
-            
-            if tool_name == "get_time":
-                from datetime import datetime
-                return {"content": str(datetime.now())}
-            
-            elif tool_name == "calculate":
-                try:
-                    result = eval(args["expression"])
-                    return {"content": str(result)}
-                except:
-                    return {"error": "Invalid expression"}
-    
-    def run(self):
-        # Simple stdio implementation
-        while True:
-            line = sys.stdin.readline()
-            if not line:
-                break
-            
-            request = json.loads(line)
-            response = asyncio.run(self.handle_request(request))
-            
-            sys.stdout.write(json.dumps(response) + "\n")
-            sys.stdout.flush()
-
-if __name__ == "__main__":
-    server = SimpleMCPServer()
-    server.run()
-```
-
-Use your custom server:
-
-```python
-await adapter.connect("stdio://python3 my_mcp_server.py")
-```
-
-## Advanced usage
-
-### Multiple MCP Servers
-
-Connect to multiple servers simultaneously:
-
-```python
-# Create adapters for different servers
-fs_adapter = MCPAdapter()
-await fs_adapter.connect("stdio://mcp-server-filesystem")
-
-db_adapter = MCPAdapter()
-await db_adapter.connect("stdio://mcp-server-sqlite --db-path data.db")
-
-api_adapter = MCPAdapter()
-await api_adapter.connect("ws://api.example.com/mcp")
-
-# Create agent with all adapters
-agent = Agent(
-    name="multi-mcp-agent",
-    model_name="gpt-4",
-    purpose="To work with files, databases, and APIs",
-    mcp_adapters=[fs_adapter, db_adapter, api_adapter]
-)
-```
-
-### Dynamic tool discovery
-
-List available tools from MCP servers:
-
-```python
-async def discover_tools(adapter: MCPAdapter):
-    # Get tool list
-    tools = await adapter.list_tools()
-    
-    print("Available MCP Tools:")
-    for tool in tools:
-        print(f"\n- {tool['name']}")
-        print(f"  Description: {tool['description']}")
-        if 'inputSchema' in tool:
-            print(f"  Parameters: {tool['inputSchema']['properties']}")
-
-# Use it
-await discover_tools(adapter)
-```
-
-### Error handling
-
-Handle MCP connection errors gracefully:
-
-```python
-from tyler.mcp import MCPConnectionError
-
-async def connect_with_retry(adapter: MCPAdapter, uri: str, max_retries: int = 3):
-    for attempt in range(max_retries):
-        try:
-            await adapter.connect(uri)
-            print(f"Connected to {uri}")
-            return True
-        except MCPConnectionError as e:
-            print(f"Attempt {attempt + 1} failed: {e}")
-            if attempt < max_retries - 1:
-                await asyncio.sleep(2 ** attempt)  # Exponential backoff
-    
-    return False
-
-# Use it
-success = await connect_with_retry(adapter, "stdio://mcp-server")
-if not success:
-    print("Failed to connect to MCP server")
-```
-
-## MCP with Existing Tools
-
-Combine MCP tools with Lye tools:
-
-```python
-from lye import WEB_TOOLS, FILES_TOOLS
-
-# Connect to MCP server
-mcp_adapter = MCPAdapter()
-await mcp_adapter.connect("stdio://mcp-server-code")
-
-# Create agent with both MCP and Lye tools
-agent = Agent(
-    name="hybrid-agent",
-    model_name="gpt-4",
-    purpose="To use both MCP and built-in tools",
-    tools=[*WEB_TOOLS, *FILES_TOOLS],
-    mcp_adapter=mcp_adapter
-)
-
-# Agent can now use both tool sets
-thread = Thread()
-message = Message(
-    role="user",
-    content="Search for Python tutorials, then write a simple Python script"
-)
-thread.add_message(message)
-
+thread.add_message(Message(role="user", content="Search W&B docs for Weave"))
 result = await agent.go(thread)
+
+# Cleanup when done
+await agent.cleanup()
 ```
 
-## Security Considerations
+### CLI (tyler-chat)
 
-### Sandboxing
-Always run untrusted MCP servers in sandboxed environments:
+Add this to your `tyler-chat-config.yaml`:
 
-```python
-# Run MCP server in Docker
-await adapter.connect("stdio://docker run --rm -i mcp-server")
+```yaml
+name: "Tyler"
+model_name: "gpt-4.1"
 
-# Or use a virtual environment
-await adapter.connect("stdio://./venv/bin/python mcp_server.py")
+tools:
+  - "web"
+
+mcp:
+  servers:
+    - name: wandb_docs
+      transport: sse
+      url: https://docs.wandb.ai/mcp
 ```
 
-### Access control
-Limit MCP server permissions:
+Then run:
+```bash
+tyler chat  # MCP servers connect automatically on startup!
+```
+
+## How It Works
+
+1. **Agent Creation**: `Agent(mcp={...})` validates config schema immediately (fail fast!)
+2. **Connection**: `await agent.connect_mcp()` connects to servers and discovers tools
+3. **Tool Registration**: Discovered tools are namespaced (`servername_toolname`) and merged with built-in tools
+4. **Usage**: Tools are available in `agent.go()` like any other tool
+5. **Cleanup**: `await agent.cleanup()` disconnects MCP servers
+
+## Configuration Reference
+
+### Server Configuration
+
+Each MCP server requires:
 
 ```python
-# Filesystem server with restricted access
-await adapter.connect(
-    "stdio://mcp-server-filesystem",
-    env={
-        "MCP_ALLOWED_PATHS": "/tmp/safe-dir",
-        "MCP_READ_ONLY": "true"
+{
+    "name": str,        # Required: Unique server identifier
+    "transport": str,   # Required: "stdio", "sse", or "websocket"
+    
+    # Transport-specific fields (choose based on transport):
+    "url": str,         # Required for sse/websocket
+    "command": str,     # Required for stdio
+    "args": List[str],  # Optional for stdio
+    "env": Dict,        # Optional for stdio
+    
+    # Optional fields:
+    "headers": Dict,           # Custom HTTP headers (for sse/websocket)
+    "include_tools": List[str],  # Whitelist specific tools
+    "exclude_tools": List[str],  # Blacklist specific tools
+    "prefix": str,             # Custom namespace (default: server name)
+    "fail_silent": bool        # Continue if connection fails (default: true)
+}
+```
+
+### Transport Types
+
+**SSE (Server-Sent Events)** - For HTTP-based MCP servers:
+```python
+{
+    "name": "docs",
+    "transport": "sse",
+    "url": "https://docs.example.com/mcp"
+}
+```
+
+**WebSocket** - For WebSocket MCP servers:
+```python
+{
+    "name": "api",
+    "transport": "websocket",
+    "url": "wss://api.example.com/mcp",
+    "headers": {
+        "Authorization": "Bearer ${API_TOKEN}"  # Use env vars!
+    }
+}
+```
+
+**stdio** - For local process MCP servers:
+```python
+{
+    "name": "filesystem",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+}
+```
+
+## Advanced Usage
+
+### Multiple Servers
+
+Connect to multiple MCP servers simultaneously:
+
+```python
+agent = Agent(
+    mcp={
+        "servers": [
+            {"name": "docs", "transport": "sse", "url": "https://docs.example.com/mcp"},
+            {"name": "db", "transport": "sse", "url": "https://db.example.com/mcp"},
+            {"name": "files", "transport": "stdio", "command": "mcp-server-files"}
+        ]
     }
 )
 
-# Database server with read-only access
-await adapter.connect(
-    "stdio://mcp-server-sqlite --read-only --db-path data.db"
-)
+await agent.connect_mcp()  # Connects to all servers in parallel
 ```
 
-### Authentication
-Use authentication for remote MCP servers:
+### Tool Filtering
+
+Control which tools are registered:
 
 ```python
-# WebSocket with auth
-await adapter.connect(
-    "wss://mcp.example.com",
-    headers={
-        "Authorization": f"Bearer {os.getenv('MCP_TOKEN')}"
-    }
-)
-
-# Custom auth handler
-async def auth_handler():
-    # Refresh token if needed
-    return {"token": await refresh_token()}
-
-await adapter.connect(
-    "wss://mcp.example.com",
-    auth_handler=auth_handler
-)
+{
+    "name": "filesystem",
+    "transport": "stdio",
+    "command": "mcp-server-filesystem",
+    "include_tools": ["read_file", "list_directory"],  # Whitelist
+    "exclude_tools": ["write_file", "delete_file"]   # Blacklist (applied after include)
+}
 ```
 
-## Real-World Example: Data Analysis Agent
+### Custom Namespace
+
+Override the default namespace prefix:
 
 ```python
-import asyncio
-from tyler import Agent, Thread, Message, ThreadStore
-from tyler.mcp import MCPAdapter
-from lye import FILES_TOOLS
-
-async def create_data_analyst():
-    # Connect to multiple MCP servers
-    code_adapter = MCPAdapter()
-    await code_adapter.connect("stdio://mcp-server-code --lang python")
-    
-    db_adapter = MCPAdapter()
-    await db_adapter.connect("stdio://mcp-server-sqlite --db-path analytics.db")
-    
-    # Set up persistent storage
-    thread_store = await ThreadStore.create("sqlite+aiosqlite:///analyst.db")
-    
-    # Create specialized data analyst
-    agent = Agent(
-        name="data-analyst",
-        model_name="gpt-4",
-        purpose="""To analyze data using SQL queries and Python code.
-        Can query databases, perform statistical analysis, and create visualizations.""",
-        tools=FILES_TOOLS,  # For saving results
-        mcp_adapters=[code_adapter, db_adapter],
-        thread_store=thread_store
-    )
-    
-    return agent
-
-async def analyze_sales_data():
-    agent = await create_data_analyst()
-    
-    thread = Thread()
-    message = Message(
-        role="user",
-        content="""
-        Analyze our sales data:
-        1. Query the sales table for Q4 2023 performance
-        2. Calculate month-over-month growth
-        3. Create a Python visualization of the trends
-        4. Save the analysis as a report
-        """
-    )
-    thread.add_message(message)
-    
-    # Process - agent will use SQL via MCP, Python via MCP, and files via Lye
-    result = await agent.go(thread)
-    
-    # Print results
-    for msg in result.new_messages:
-        if msg.role == "assistant":
-            print(f"\n📊 Analysis: {msg.content}")
-        elif msg.role == "tool" and "save" in msg.name:
-            print(f"\n💾 Saved: {msg.content}")
-
-asyncio.run(analyze_sales_data())
+{
+    "name": "wandb_documentation_server",  # Long name
+    "prefix": "docs",  # Short, clean prefix
+    "transport": "sse",
+    "url": "https://docs.wandb.ai/mcp"
+}
+# Tools: docs_search, docs_query (instead of wandb_documentation_server_search)
 ```
+
+### Environment Variables
+
+Use environment variables for secrets (recommended!):
+
+```yaml
+mcp:
+  servers:
+    - name: api
+      transport: websocket
+      url: wss://api.example.com/mcp
+      headers:
+        Authorization: "Bearer ${API_TOKEN}"  # Substituted from env
+```
+
+Set the environment variable:
+```bash
+export API_TOKEN=your_secret_token
+tyler chat
+```
+
+### Graceful Degradation
+
+Control failure behavior per server:
+
+```python
+{
+    "servers": [
+        {
+            "name": "critical_server",
+            "url": "...",
+            "fail_silent": False  # Fail startup if unavailable
+        },
+        {
+            "name": "optional_server",
+            "url": "...",
+            "fail_silent": True  # Continue if unavailable (default)
+        }
+    ]
+}
+```
+
+## Security Best Practices
+
+<Warning>
+Never hardcode API keys or secrets in config files!
+Always use environment variable substitution (`${VAR}`).
+</Warning>
+
+**DO:**
+```yaml
+mcp:
+  servers:
+    - name: api
+      url: https://api.example.com/mcp
+      headers:
+        Authorization: "Bearer ${API_TOKEN}"  # ✓ Good
+```
+
+**DON'T:**
+```yaml
+mcp:
+  servers:
+    - name: api
+      url: https://api.example.com/mcp
+      headers:
+        Authorization: "Bearer sk-1234567890"  # ✗ Bad - secret exposed!
+```
+
+**Trust only verified MCP servers:**
+- Only connect to MCP servers you trust
+- MCP tools execute with your agent's permissions
+- Review tool capabilities before enabling
 
 ## Troubleshooting
 
-<AccordionGroup>
-  <Accordion title="Connection Refused">
-    1. Check if MCP server is running
-    2. Verify the connection URI is correct
-    3. Check firewall settings
-    4. For stdio, ensure executable path is correct
-  </Accordion>
-  
-  <Accordion title="Tools Not Available">
-    1. Check server initialization completed
-    2. Verify tool permissions
-    3. Check server logs for errors
-    4. Try listing tools manually with `adapter.list_tools()`
-  </Accordion>
-  
-  <Accordion title="Performance Issues">
-    1. Use connection pooling for WebSocket
-    2. Consider running MCP server locally
-    3. Cache tool responses when appropriate
-    4. Monitor server resource usage
-  </Accordion>
-</AccordionGroup>
+### Connection refused
 
-## Next steps
+**Error:** `Failed to connect to MCP server 'xyz': Connection refused`
+
+**Solutions:**
+1. Verify the server URL is correct
+2. Check if the MCP server is running
+3. For stdio servers, verify the command path is correct
+4. Check firewall settings
+
+### Invalid config schema
+
+**Error:** `Server 'xyz' with transport 'sse' requires 'url' field`
+
+**Solution:** Ensure required fields are present for the transport type:
+- SSE/WebSocket: `url` required
+- stdio: `command` required
+
+### Tools not discovered
+
+**Error:** MCP connects but no tools available
+
+**Solutions:**
+1. Verify the MCP server is functioning (check server logs)
+2. Check if tools are being filtered out (remove `include_tools`/`exclude_tools`)
+3. Try connecting to the server manually to verify it exposes tools
+
+### Environment variable not substituted
+
+**Error:** Connection fails with literal `${VAR}` in URL
+
+**Solution:** Ensure the environment variable is set before running:
+```bash
+export MY_VAR=value
+python my_script.py
+```
+
+<Note>
+**Advanced Users:** Need more control? The low-level `MCPAdapter` API is available for
+advanced use cases, but the config approach is recommended for 99% of users.
+See the [API Reference](/api-reference/tyler-agent) for details.
+</Note>
+
+## Real-World Examples
+
+<CardGroup cols={2}>
+  <Card
+    title="Mintlify MCP"
+    icon="book"
+    href="/examples/303_mcp_mintlify"
+  >
+    Search documentation with Mintlify MCP servers
+  </Card>
+  <Card
+    title="Multiple Servers"
+    icon="server"
+    href="/examples/301_mcp_connect_existing"
+  >
+    Connect to multiple MCP servers with filtering
+  </Card>
+  <Card
+    title="Basic MCP"
+    icon="rocket"
+    href="/examples/300_mcp_basic"
+  >
+    Get started with Brave Search MCP
+  </Card>
+  <Card
+    title="Config from YAML"
+    icon="file-code"
+    href="/examples/302_mcp_config_cli"
+  >
+    Load MCP config from YAML files
+  </Card>
+</CardGroup>
+
+## Next Steps
 
 <CardGroup cols={2}>
   <Card
@@ -483,10 +352,10 @@ asyncio.run(analyze_sales_data())
     Build custom tools for agents
   </Card>
   <Card
-    title="Examples"
-    icon="code"
-    href="/examples/mcp-agents"
+    title="Tyler CLI"
+    icon="terminal"
+    href="/apps/tyler-cli"
   >
-    See MCP examples
+    Use MCP with tyler-chat CLI
   </Card>
-</CardGroup> 
+</CardGroup>

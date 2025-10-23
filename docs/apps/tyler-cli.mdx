@@ -102,7 +102,17 @@ tools:
   # Custom tool files
   - "./my_custom_tools.py"
   - "~/tools/special_tool.py"
+
+# MCP Server Configuration (optional)
+# Connect to external docs, APIs, databases
+# mcp:
+#   servers:
+#     - name: docs
+#       transport: sse
+#       url: https://docs.example.com/mcp
 ```
+
+See the [MCP Integration Guide](/guides/mcp-integration) for full MCP configuration options.
 
 ### Environment variable substitution
 
