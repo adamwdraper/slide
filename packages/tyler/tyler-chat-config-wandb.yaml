@@ -50,3 +50,13 @@ tools:
   - "notion"
   - "command_line"
 
+# MCP (Model Context Protocol) Server Configuration
+# Connect to external documentation, APIs, databases via MCP servers
+# Example: Slide documentation via Mintlify MCP
+# mcp:
+#   servers:
+#     - name: slide_docs
+#       transport: streamablehttp  # Mintlify uses streamablehttp transport
+#       url: https://slide.mintlify.app/mcp
+#       # Tools will be available as: slide_docs_SearchSlideFramework, etc.
+

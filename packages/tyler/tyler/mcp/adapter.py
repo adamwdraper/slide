@@ -1,6 +1,9 @@
 """Tyler MCP adapter for converting MCP tools to Tyler format.
 
 This module adapts MCP tools to work with Tyler's tool system.
+
+Note: Most users should use `Agent(mcp={...})` with `connect_mcp()`.
+This low-level API is for advanced use cases only.
 """
 
 import re
@@ -115,6 +118,8 @@ class MCPAdapter:
     def _create_tyler_name(self, server_name: str, tool_name: str) -> str:
         """Create a Tyler-safe tool name with server namespace.
         
+        Uses single underscore separator (servername_toolname).
+        
         Args:
             server_name: Name of the server
             tool_name: Original tool name
@@ -126,8 +131,8 @@ class MCPAdapter:
         clean_server = re.sub(r'[^a-zA-Z0-9_]', '_', server_name)
         clean_tool = re.sub(r'[^a-zA-Z0-9_]', '_', tool_name)
         
-        # Create namespaced name
-        tyler_name = f"{clean_server}__{clean_tool}"
+        # Create namespaced name with single underscore
+        tyler_name = f"{clean_server}_{clean_tool}"
         
         # Ensure it starts with a letter or underscore
         if tyler_name and tyler_name[0].isdigit():

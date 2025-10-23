@@ -1,12 +1,13 @@
-"""Example of using Tyler with the Brave Search MCP server.
+"""Example of using Tyler with MCP (Model Context Protocol) servers.
 
-This example demonstrates how to use Tyler with an MCP server.
-The server should be started separately before running this example.
+This example demonstrates the recommended way to use MCP with Tyler using
+the declarative config approach. No manual adapter code needed!
 
-To start the Brave Search server:
-    BRAVE_API_KEY=your_key npx -y @modelcontextprotocol/server-brave-search
+For this example, we'll use the Brave Search MCP server.
 
-Then run this example.
+Setup:
+    export BRAVE_API_KEY=your_api_key_here
+    python 300_mcp_basic.py
 """
 # Load environment variables and configure logging first
 from dotenv import load_dotenv
@@ -20,13 +21,7 @@ import asyncio
 import os
 import sys
 import weave
-from typing import List, Dict, Any
-
 from tyler import Agent, Thread, Message
-from tyler.mcp import MCPAdapter
-
-# Add the parent directory to the path so we can import the example utils
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Initialize weave tracing if WANDB_API_KEY is set
 try:
@@ -36,71 +31,60 @@ try:
 except Exception as e:
     logger.warning(f"Failed to initialize weave tracing: {e}. Continuing without weave.")
 
+
 async def main():
-    """Run the example."""
-    # Create MCP adapter
-    mcp = MCPAdapter()
+    """Run the example using declarative MCP config."""
     
-    logger.info("Connecting to Brave Search MCP server...")
-    
-    # Connect to the Brave Search server running on stdio
-    # The server should already be running with:
-    # BRAVE_API_KEY=xxx npx -y @modelcontextprotocol/server-brave-search
-    connected = await mcp.connect(
-        name="brave",
-        transport="stdio",
-        command="npx",
-        args=["-y", "@modelcontextprotocol/server-brave-search"],
-        env={"BRAVE_API_KEY": os.environ.get("BRAVE_API_KEY", "")}
+    # Create agent with MCP config (no manual adapter code!)
+    agent = Agent(
+        name="Tyler",
+        model_name="gpt-4o-mini",
+        mcp={
+            "servers": [{
+                "name": "brave",
+                "transport": "stdio",
+                "command": "npx",
+                "args": ["-y", "@modelcontextprotocol/server-brave-search"],
+                "env": {"BRAVE_API_KEY": os.environ.get("BRAVE_API_KEY", "")}
+            }]
+        }
     )
     
-    if not connected:
-        logger.error("Failed to connect to Brave Search MCP server.")
-        logger.info("Make sure you have BRAVE_API_KEY set and the server is accessible.")
+    # Connect to MCP servers (fail fast if server unavailable)
+    logger.info("Connecting to MCP servers...")
+    try:
+        await agent.connect_mcp()
+        logger.info(f"Connected! Tools discovered: {len(agent._processed_tools)}")
+    except Exception as e:
+        logger.error(f"Failed to connect to MCP servers: {e}")
+        logger.info("Make sure you have BRAVE_API_KEY set and npx is available.")
         return
     
-    try:
-        # Get the MCP tools for the agent
-        mcp_tools = mcp.get_tools_for_agent(["brave"])
-        
-        if not mcp_tools:
-            logger.error("No tools discovered from the Brave Search MCP server.")
-            return
-            
-        logger.info(f"Discovered {len(mcp_tools)} tools from the Brave Search MCP server.")
-        
-        # Create an agent with the MCP tools
-        agent = Agent(
-            name="Tyler",
-            model_name="gpt-4o-mini",
-            tools=mcp_tools
-        )
-        
-        # Create a thread
-        thread = Thread()
-        
-        # Add a user message
-        thread.add_message(Message(
-            role="user",
-            content="What's the latest news about quantum computing breakthroughs?"
-        ))
-        
-        # Process the thread with streaming
-        logger.info("Processing thread with streaming...")
-        async for event in agent.go(thread, stream=True):
-            if event.type.name == "LLM_STREAM_CHUNK":
-                print(event.data.get("content_chunk", ""), end="", flush=True)
-            elif event.type.name == "MESSAGE_CREATED":
-                message = event.data.get("message")
-                if message and message.role == "tool":
-                    print(f"\n[Tool execution: {message.name}]\n")
-            elif event.type.name == "EXECUTION_COMPLETE":
-                print("\n\nProcessing complete!")
-                
-    finally:
-        # Clean up
-        logger.info("Disconnecting from MCP server...")
-        await mcp.disconnect_all()
+    # Create a thread
+    thread = Thread()
+    
+    # Add a user message
+    thread.add_message(Message(
+        role="user",
+        content="What's the latest news about quantum computing breakthroughs?"
+    ))
+    
+    # Process the thread with streaming
+    logger.info("Processing thread with streaming...")
+    async for event in agent.go(thread, stream=True):
+        if event.type.name == "LLM_STREAM_CHUNK":
+            print(event.data.get("content_chunk", ""), end="", flush=True)
+        elif event.type.name == "MESSAGE_CREATED":
+            message = event.data.get("message")
+            if message and message.role == "tool":
+                print(f"\n\n[Tool: {message.name}]")
+        elif event.type.name == "EXECUTION_COMPLETE":
+            print("\n\n✓ Complete!")
+    
+    # Cleanup MCP connections
+    logger.info("Disconnecting from MCP servers...")
+    await agent.cleanup()
+    logger.info("Done!")
 
 
 if __name__ == "__main__":
@@ -111,4 +95,4 @@ if __name__ == "__main__":
         print("Example: export BRAVE_API_KEY=your_api_key_here")
         sys.exit(1)
         
-    asyncio.run(main()) 
+    asyncio.run(main())

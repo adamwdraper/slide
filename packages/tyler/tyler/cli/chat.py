@@ -139,7 +139,7 @@ class ChatManager:
             with suppress_output():
                 weave.init(weave_project)
         
-    def initialize_agent(self, config: Dict[str, Any] = None) -> None:
+    async def initialize_agent(self, config: Dict[str, Any] = None) -> None:
         """Initialize the agent with optional configuration"""
         if config is None:
             config = {}
@@ -147,6 +147,16 @@ class ChatManager:
         # Create agent with provided config, suppressing initialization errors
         with suppress_output():
             self.agent = Agent(**config)
+        
+        # Auto-connect to MCP servers if configured
+        if self.agent.mcp:
+            try:
+                console.print("[yellow]Connecting to MCP servers...[/]")
+                await self.agent.connect_mcp()
+                console.print("[green]✓ MCP servers connected successfully[/]")
+            except Exception as e:
+                console.print(f"[red]✗ Failed to connect to MCP servers: {e}[/]")
+                raise  # Fail startup if MCP configured but broken
         
     async def create_thread(self, 
                           title: Optional[str] = None,
@@ -634,7 +644,7 @@ def _main_inner(config: Optional[str], title: Optional[str]):
         
         # Initialize chat manager
         chat_manager = ChatManager()
-        chat_manager.initialize_agent(config_data)
+        asyncio.run(chat_manager.initialize_agent(config_data))
         
         # Create initial thread
         asyncio.run(chat_manager.create_thread(title=title))
@@ -670,6 +680,19 @@ def _main_inner(config: Optional[str], title: Optional[str]):
     except Exception as e:
         console.print(f"[red]Error: {str(e)}[/]")
         raise
+    finally:
+        # Cleanup MCP connections on exit
+        if chat_manager.agent and chat_manager.agent.mcp:
+            try:
+                asyncio.run(chat_manager.agent.cleanup())
+            except RuntimeError:
+                # If already in event loop, try with get_event_loop
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    # Can't cleanup synchronously, skip
+                    pass
+                else:
+                    loop.run_until_complete(chat_manager.agent.cleanup())
 
 if __name__ == "__main__":
     main() 

@@ -3,6 +3,11 @@ title: 'Model Context Protocol (MCP)'
 description: 'Using MCP to extend Slide agents with external tools and services'
 ---
 
+<Note>
+**Updated API**: Tyler now supports MCP through declarative configuration with `Agent(mcp={...})`.
+See the [MCP Integration Guide](/guides/mcp-integration) for the complete, up-to-date documentation.
+</Note>
+
 ## What is MCP?
 
 The Model Context Protocol (MCP) is an open standard that enables seamless communication between AI applications and external tools. Slide's Tyler package includes first-class MCP support, allowing your agents to:
@@ -28,30 +33,27 @@ graph LR
 
 ## Quick Start
 
-### Connecting to an MCP Server
+### Python API (Recommended)
 
 ```python
-import asyncio
 from tyler import Agent, Thread, Message
-from tyler.mcp import MCPAdapter
 
-async def main():
-    # Create MCP adapter
-    adapter = MCPAdapter()
-    
-    # Connect to a local MCP server
-    await adapter.connect("stdio://./my-mcp-server")
-    
-    # Or connect to a remote server
-    # await adapter.connect("ws://localhost:8080")
-    
-    # Create agent with MCP tools
-    agent = Agent(
-        name="mcp-enhanced-agent",
-        model_name="gpt-4",
-        purpose="To use MCP tools for tasks",
-        mcp_adapter=adapter
-    )
+# Create agent with MCP config (validates schema)
+agent = Agent(
+    name="Tyler",
+    model_name="gpt-4.1",
+    tools=["web"],
+    mcp={
+        "servers": [{
+            "name": "docs",
+            "transport": "streamablehttp",  # Use for Mintlify and hosted servers
+            "url": "https://slide.mintlify.app/mcp"
+        }]
+    }
+)
+
+# Connect to MCP servers (fail fast!)
+await agent.connect_mcp()
     
     # List available tools
     tools = await adapter.list_tools()
