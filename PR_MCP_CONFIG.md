@@ -4,6 +4,8 @@
 
 Add declarative MCP (Model Context Protocol) server configuration to Tyler, making it a first-class feature with **perfect API symmetry**: Python `Agent(mcp={...})` matches YAML `mcp:` exactly.
 
+**🎉 Includes Mintlify MCP Support!** Connects to Mintlify documentation servers (like `https://slide.mintlify.app/mcp`) using the `streamablehttp` transport.
+
 **Before (manual adapter code):**
 ```python
 # 15+ lines of boilerplate
