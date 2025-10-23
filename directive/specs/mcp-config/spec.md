@@ -201,6 +201,7 @@ mcp:
 ```python
 from tyler import Agent
 
+# Create agent (sync, validates MCP config schema)
 agent = Agent(
     name="Tyler",
     model_name="gpt-4.1",
@@ -214,17 +215,20 @@ agent = Agent(
     }
 )
 
-# First use connects to MCP lazily
+# Connect to MCP servers (async, fails fast if server unreachable)
+await agent.connect_mcp()
+
+# Use normally
 result = await agent.go(thread)
 ```
 
-**When** agent is used
+**When** agent is created and `connect_mcp()` is called
 
 **Then**:
-- Agent is created normally (sync, no async needed)
-- On first `agent.go()` call, MCP servers connect lazily
+- Agent.__init__ validates MCP config schema immediately (raises if invalid)
+- `connect_mcp()` connects to servers and raises if connection fails
 - All discovered tools are registered and available
-- Subsequent calls reuse existing connections
+- `agent.go()` works normally with MCP tools
 
 ---
 
@@ -241,9 +245,10 @@ agent = Agent(
         }]
     }
 )
+await agent.connect_mcp()
 ```
 
-**When** agent is used and tools are registered
+**When** `connect_mcp()` is called and tools are registered
 
 **Then**:
 - Tool names use `docs_` prefix instead of `mintlify_`
@@ -251,9 +256,56 @@ agent = Agent(
 
 ---
 
+**Given** invalid MCP config schema:
+```python
+agent = Agent(
+    mcp={
+        "servers": [{
+            "name": "test",
+            "transport": "sse"
+            # Missing required 'url' field
+        }]
+    }
+)
+```
+
+**When** agent is created
+
+**Then**:
+- Agent.__init__ raises `ValueError` immediately
+- Error message: "Server 'test' with transport 'sse' requires 'url' field"
+- Agent is not created
+
+---
+
+**Given** unreachable MCP server with `fail_silent: false`:
+```python
+agent = Agent(
+    mcp={
+        "servers": [{
+            "name": "broken",
+            "transport": "sse",
+            "url": "https://nonexistent.example.com/mcp",
+            "fail_silent": false
+        }]
+    }
+)
+await agent.connect_mcp()
+```
+
+**When** `connect_mcp()` is called
+
+**Then**:
+- `connect_mcp()` raises exception (connection refused)
+- Clear error message indicates which server failed
+- Agent tools remain unchanged (MCP tools not added)
+
+---
+
 **Given** cleanup is needed:
 ```python
 agent = Agent(mcp={...})
+await agent.connect_mcp()
 # ... use agent ...
 await agent.cleanup()
 ```
@@ -263,6 +315,7 @@ await agent.cleanup()
 **Then**:
 - All MCP connections are closed cleanly
 - Resources are freed
+- Agent can be reused (call `connect_mcp()` again if needed)
 
 ### Negative Cases
 

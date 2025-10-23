@@ -18,27 +18,27 @@
 
 - **`packages/tyler/tyler/mcp/adapter.py`** (10-15 lines)
   - Update `_create_tyler_name()` to use single underscore (`_`) instead of double (`__`)
-  - Add docstring note at top: "Note: Most users should use `Agent.create(mcp={...})`. This low-level API is for advanced use cases only."
+  - Add docstring note at top: "Note: Most users should use `Agent(mcp={...})` with `connect_mcp()`. This low-level API is for advanced use cases only."
   - Update existing docstrings to mention config approach where relevant
 
 ### Tyler CLI (MEDIUM Impact)
 
-- **`packages/tyler/tyler/cli/chat.py`** (40-60 lines)
-  - Add MCP config parsing in `load_config()` (15-20 lines)
-  - Add `_load_mcp_servers(mcp_config: Dict) -> List[Dict]` helper (20-30 lines)
-  - Update `ChatManager.initialize_agent()` to merge MCP tools (10-15 lines)
+- **`packages/tyler/tyler/cli/chat.py`** (20-30 lines)
+  - Update `ChatManager.initialize_agent()` to call `agent.connect_mcp()` if mcp config present
+  - Add MCP cleanup on CLI exit (call `agent.cleanup()`)
   - Add error handling for MCP connection failures
+  - Note: No need to manually load/merge tools - Agent.connect_mcp() handles it!
 
 ### Tyler Agent (MEDIUM Impact)
 
-- **`packages/tyler/tyler/models/agent.py`** (30-40 lines)
+- **`packages/tyler/tyler/models/agent.py`** (40-50 lines)
   - Add `mcp: Optional[Dict[str, Any]]` field
-  - Add `_mcp_initialized: bool` private attribute (tracks lazy init state)
+  - Add `_mcp_connected: bool` private attribute (tracks connection state)
   - Add `_mcp_disconnect: Optional[Callable]` private attribute for cleanup
-  - Add `async def _initialize_mcp()` - lazy init helper (called on first go())
-  - Update `_go_complete()` and `_go_stream()` to lazy init MCP
-  - Add `async def cleanup()` - disconnect MCP servers
-  - Update docstrings to show `Agent(mcp={...})` usage
+  - Update `__init__()` to validate MCP config schema (sync validation)
+  - Add `async def connect_mcp()` - connect to MCP servers (public method)
+  - Add `async def cleanup()` - disconnect MCP servers (public method)
+  - Update docstrings to show two-step pattern: `Agent(mcp={...})` → `await agent.connect_mcp()`
 
 ### Configuration Files (LOW Impact)
 
@@ -200,11 +200,11 @@
 
 ### New Public API
 
-**Agent mcp parameter (lazy initialization):**
+**Agent mcp parameter + connect_mcp() method:**
 ```python
 from tyler import Agent
 
-# Standard sync initialization
+# Standard sync initialization (validates MCP config schema)
 agent = Agent(
     name="Tyler",
     model_name="gpt-4.1",
@@ -218,8 +218,25 @@ agent = Agent(
     }
 )
 
-# MCP servers connect lazily on first agent.go() call
+# Connect to MCP servers (async, fails fast if unreachable)
+await agent.connect_mcp()
+
+# Use normally
 result = await agent.go(thread)
+```
+
+**Agent.connect_mcp() method:**
+```python
+async def connect_mcp(self) -> None:
+    """
+    Connect to MCP servers configured in the mcp field.
+    
+    Call this after creating an Agent with mcp config and before using it.
+    Connects to servers, discovers tools, and registers them.
+    
+    Raises:
+        ValueError: If connection fails and fail_silent=False for a server
+    """
 ```
 
 **Agent.cleanup() method:**
@@ -229,21 +246,25 @@ async def cleanup(self) -> None:
     Cleanup MCP connections and resources.
     
     Call this when done with the agent to properly close MCP server connections.
+    Agent can be reused by calling connect_mcp() again if needed.
     """
 ```
 
-**Full usage:**
+**Full usage pattern:**
 ```python
-# Create agent (sync, stores config)
+# 1. Create agent (sync, validates config schema)
 agent = Agent(
     tools=["web"],
     mcp={"servers": [{...}]}
 )
 
-# Use agent (lazy MCP init on first call)
+# 2. Connect to MCP servers (async, fails fast)
+await agent.connect_mcp()
+
+# 3. Use normally
 result = await agent.go(thread)
 
-# Cleanup when done
+# 4. Cleanup when done
 await agent.cleanup()
 ```
 
@@ -681,7 +702,7 @@ agent = Agent(tools=tools)
 
 **New way (recommended for everyone):**
 ```python
-# Simple, just add mcp parameter
+# Two-step init (fail fast!)
 agent = Agent(
     model_name="gpt-4.1",
     tools=["web"],
@@ -690,17 +711,28 @@ agent = Agent(
     }
 )
 
-# Use normally (MCP connects lazily on first call)
+# Connect to MCP servers (fails immediately if unreachable)
+await agent.connect_mcp()
+
+# Use normally
 result = await agent.go(thread)
 
 # Cleanup when done
 await agent.cleanup()
 ```
 
+**CLI usage (automatic, transparent):**
+```python
+# ChatManager automatically calls agent.connect_mcp() after creating agent
+# Users just run: tyler chat
+# MCP servers connect on startup, failures are shown immediately
+```
+
 **Documentation strategy:**
-- ✅ All examples show `Agent(mcp={...})` only
-- ✅ Python API matches YAML structure exactly (no factory needed!)
-- ✅ Lazy initialization on first use (transparent to users)
+- ✅ All examples show `Agent(mcp={...})` + `await agent.connect_mcp()`
+- ✅ Python API matches YAML structure exactly (two-step explicit init)
+- ✅ Fail-fast design (errors at init, not at runtime)
+- ✅ CLI handles connect_mcp() automatically (transparent to CLI users)
 - ✅ Docs have config approach as primary content
 - ✅ Small callout box in docs: "Advanced users can use `MCPAdapter` directly (not recommended)"
 - ✅ No migration guide needed (new feature, config is the default path)
