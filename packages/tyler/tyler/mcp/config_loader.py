@@ -78,13 +78,13 @@ def _validate_server_config(server: Dict[str, Any]) -> None:
     transport = server["transport"]
     
     # Validate transport type
-    if transport not in ["stdio", "sse", "websocket"]:
+    if transport not in ["stdio", "sse", "websocket", "streamablehttp"]:
         raise ValueError(
-            f"Invalid transport '{transport}'. Must be one of: stdio, sse, websocket"
+            f"Invalid transport '{transport}'. Must be one of: stdio, sse, websocket, streamablehttp"
         )
     
     # Transport-specific required fields
-    if transport in ["sse", "websocket"]:
+    if transport in ["sse", "websocket", "streamablehttp"]:
         if "url" not in server:
             raise ValueError(
                 f"Server '{server['name']}' with transport '{transport}' requires 'url' field"
@@ -228,7 +228,7 @@ async def _load_mcp_config(
         
         # Build connection kwargs
         kwargs = {}
-        if transport in ["sse", "websocket"]:
+        if transport in ["sse", "websocket", "streamablehttp"]:
             kwargs["url"] = server["url"]
             if "headers" in server:
                 kwargs["headers"] = server["headers"]

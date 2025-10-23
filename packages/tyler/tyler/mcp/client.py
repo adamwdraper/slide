@@ -11,6 +11,7 @@ from contextlib import AsyncExitStack
 from mcp import ClientSession
 from mcp.client.stdio import stdio_client, StdioServerParameters
 from mcp.client.sse import sse_client
+from mcp.client.streamable_http import streamablehttp_client
 
 try:
     from mcp.client.websocket import websocket_client
@@ -38,11 +39,12 @@ class MCPClient:
         
         Args:
             name: Unique name for this connection
-            transport: Transport type ('stdio', 'sse', 'websocket')
+            transport: Transport type ('stdio', 'sse', 'websocket', 'streamablehttp')
             **kwargs: Transport-specific arguments:
                 - stdio: command (str), args (List[str]), env (Dict[str, str])
-                - sse: url (str)
-                - websocket: url (str)
+                - sse: url (str), headers (Dict[str, str]) optional
+                - websocket: url (str), headers (Dict[str, str]) optional
+                - streamablehttp: url (str), headers (Dict[str, str]) optional
                 
         Returns:
             bool: True if connection successful
@@ -81,6 +83,19 @@ class MCPClient:
                 read_stream, write_stream = await exit_stack.enter_async_context(
                     sse_client(url)
                 )
+                
+            elif transport == "streamablehttp":
+                url = kwargs.get("url")
+                if not url:
+                    raise ValueError("'url' is required for streamablehttp transport")
+                
+                headers = kwargs.get("headers")
+                
+                # streamablehttp_client returns a 3-tuple: (read, write, get_session_id)
+                transport_context = await exit_stack.enter_async_context(
+                    streamablehttp_client(url, headers=headers)
+                )
+                read_stream, write_stream, get_session_id = transport_context
                 
             elif transport == "websocket" and WEBSOCKET_AVAILABLE:
                 url = kwargs.get("url")

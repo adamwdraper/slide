@@ -44,7 +44,7 @@ async def main():
             mcp={
                 "servers": [{
                     "name": "slide_docs",
-                    "transport": "sse",
+                    "transport": "streamablehttp",  # Mintlify uses streamablehttp!
                     "url": "https://slide.mintlify.app/mcp",
                     "fail_silent": False  # Fail fast if docs server is down
                 }]

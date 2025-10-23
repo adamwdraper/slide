@@ -64,7 +64,7 @@ class TestValidation:
         """Test server validation fails with invalid transport type."""
         server = {
             "name": "test",
-            "transport": "http",  # Invalid
+            "transport": "http",  # Invalid (should be 'streamablehttp')
             "url": "https://example.com"
         }
         
@@ -126,6 +126,28 @@ class TestValidation:
         
         # Should not raise
         _validate_server_config(server)
+    
+    def test_validate_server_config_valid_streamablehttp(self):
+        """Test valid streamablehttp server config (for Mintlify)."""
+        server = {
+            "name": "mintlify",
+            "transport": "streamablehttp",
+            "url": "https://slide.mintlify.app/mcp"
+        }
+        
+        # Should not raise
+        _validate_server_config(server)
+    
+    def test_validate_server_config_streamablehttp_missing_url(self):
+        """Test streamablehttp server validation fails when 'url' is missing."""
+        server = {
+            "name": "test",
+            "transport": "streamablehttp"
+            # Missing 'url'
+        }
+        
+        with pytest.raises(ValueError, match="requires 'url' field"):
+            _validate_server_config(server)
 
 
 class TestEnvVarSubstitution:
