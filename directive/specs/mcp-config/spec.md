@@ -68,7 +68,7 @@ When configured, Tyler automatically connects, discovers tools, namespaces them 
 ## Requirements
 
 ### Must
-- Support all three transports: `stdio`, `sse`, `websocket`
+- Support all four MCP transports: `stdio`, `sse`, `websocket`, `streamablehttp`
 - Support environment variable substitution in URLs, headers, auth (already in CLI config loader)
 - Namespace tools by server name to avoid collisions (e.g., `servername_toolname`)
 - Register ALL discovered tools by default (no filtering unless explicitly configured)
@@ -302,6 +302,30 @@ await agent.connect_mcp()
 
 ---
 
+**Given** Mintlify MCP server (streamablehttp transport):
+```python
+agent = Agent(
+    mcp={
+        "servers": [{
+            "name": "slide_docs",
+            "transport": "streamablehttp",
+            "url": "https://slide.mintlify.app/mcp"
+        }]
+    }
+)
+await agent.connect_mcp()
+```
+
+**When** `connect_mcp()` is called
+
+**Then**:
+- Connects successfully to Mintlify MCP server
+- Discovers tools (at minimum: SearchSlideFramework)
+- Tools are registered as `slide_docs_SearchSlideFramework`
+- Agent can use the search tool to query Slide documentation
+
+---
+
 **Given** cleanup is needed:
 ```python
 agent = Agent(mcp={...})
@@ -324,14 +348,14 @@ await agent.cleanup()
 mcp:
   servers:
     - name: bad
-      transport: http  # invalid, should be 'sse'
+      transport: http  # invalid, should be 'streamablehttp'
       url: https://example.com
 ```
 
 **When** config is loaded
 
 **Then**:
-- Tyler raises `ValueError: Invalid transport 'http'. Must be one of: stdio, sse, websocket`
+- Tyler raises `ValueError: Invalid transport 'http'. Must be one of: stdio, sse, websocket, streamablehttp`
 
 ---
 

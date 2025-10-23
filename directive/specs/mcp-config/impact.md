@@ -7,7 +7,7 @@
 #### New Module (Internal)
 - **`packages/tyler/tyler/mcp/config_loader.py`** (NEW, ~150-200 lines)
   - `_load_mcp_config(config: Dict) -> Tuple[List[Dict], Callable]` - internal helper
-  - `_validate_server_config(server: Dict) -> None`
+  - `_validate_server_config(server: Dict) -> None` - validates stdio/sse/websocket/streamablehttp
   - `_connect_server(server: Dict, adapter: MCPAdapter) -> bool`
   - `_apply_tool_filters(tools: List[Dict], server: Dict) -> List[Dict]`
   - `_namespace_tools(tools: List[Dict], prefix: str) -> List[Dict]`

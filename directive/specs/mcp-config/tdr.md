@@ -315,10 +315,10 @@ async def _load_mcp_config(
 mcp:
   servers:
     - name: string              # Required: Unique server identifier
-      transport: string         # Required: "stdio" | "sse" | "websocket"
+      transport: string         # Required: "stdio" | "sse" | "websocket" | "streamablehttp"
       
       # Transport-specific (mutually exclusive based on transport)
-      url: string              # Required for sse/websocket
+      url: string              # Required for sse/websocket/streamablehttp
       command: string          # Required for stdio
       args: list[string]       # Optional for stdio
       env: dict[string, string] # Optional for stdio
@@ -370,13 +370,13 @@ def _validate_server_config(server: Dict) -> None:
         raise ValueError(f"Server '{server['name']}' missing required field 'transport'")
     
     transport = server["transport"]
-    if transport not in ["stdio", "sse", "websocket"]:
+    if transport not in ["stdio", "sse", "websocket", "streamablehttp"]:
         raise ValueError(
-            f"Invalid transport '{transport}'. Must be one of: stdio, sse, websocket"
+            f"Invalid transport '{transport}'. Must be one of: stdio, sse, websocket, streamablehttp"
         )
     
     # Transport-specific required fields
-    if transport in ["sse", "websocket"]:
+    if transport in ["sse", "websocket", "streamablehttp"]:
         if "url" not in server:
             raise ValueError(
                 f"Server '{server['name']}' with transport '{transport}' requires 'url' field"
