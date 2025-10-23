@@ -41,10 +41,10 @@ tools:
 # Uncomment to enable:
 # mcp:
 #   servers:
-#     # Example: Mintlify documentation server
+#     # Example: Mintlify documentation server (like Slide docs)
 #     - name: docs
-#       transport: sse              # Transport: sse, websocket, or stdio
-#       url: https://docs.example.com/mcp
+#       transport: streamablehttp   # Transports: streamablehttp (Mintlify), stdio, sse, websocket
+#       url: https://slide.mintlify.app/mcp
 #       # Optional: Custom headers for authentication
 #       # headers:
 #       #   Authorization: "Bearer ${MCP_TOKEN}"  # Use env vars for secrets

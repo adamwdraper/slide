@@ -20,7 +20,7 @@ agent = Agent(
     mcp={
         "servers": [{
             "name": "slide_docs",
-            "transport": "sse",
+            "transport": "streamablehttp",  # Mintlify uses streamablehttp
             "url": "https://slide.mintlify.app/mcp"
         }]
     }
@@ -52,7 +52,7 @@ tools:
 mcp:
   servers:
     - name: slide_docs
-      transport: sse
+      transport: streamablehttp  # Mintlify uses streamablehttp
       url: https://slide.mintlify.app/mcp
 ```
 
@@ -78,16 +78,16 @@ Each MCP server requires:
 ```python
 {
     "name": str,        # Required: Unique server identifier
-    "transport": str,   # Required: "stdio", "sse", or "websocket"
+    "transport": str,   # Required: "stdio", "streamablehttp", "sse", or "websocket"
     
     # Transport-specific fields (choose based on transport):
-    "url": str,         # Required for sse/websocket
+    "url": str,         # Required for streamablehttp/sse/websocket
     "command": str,     # Required for stdio
     "args": List[str],  # Optional for stdio
     "env": Dict,        # Optional for stdio
     
     # Optional fields:
-    "headers": Dict,           # Custom HTTP headers (for sse/websocket)
+    "headers": Dict,           # Custom HTTP headers (for streamablehttp/sse/websocket)
     "include_tools": List[str],  # Whitelist specific tools
     "exclude_tools": List[str],  # Blacklist specific tools
     "prefix": str,             # Custom namespace (default: server name)
@@ -97,24 +97,12 @@ Each MCP server requires:
 
 ### Transport Types
 
-**SSE (Server-Sent Events)** - For HTTP-based MCP servers:
+**Streamable HTTP** - For HTTP-based MCP servers (Mintlify, hosted servers):
 ```python
 {
-    "name": "docs",
-    "transport": "sse",
-    "url": "https://docs.example.com/mcp"
-}
-```
-
-**WebSocket** - For WebSocket MCP servers:
-```python
-{
-    "name": "api",
-    "transport": "websocket",
-    "url": "wss://api.example.com/mcp",
-    "headers": {
-        "Authorization": "Bearer ${API_TOKEN}"  # Use env vars!
-    }
+    "name": "slide_docs",
+    "transport": "streamablehttp",
+    "url": "https://slide.mintlify.app/mcp"
 }
 ```
 
@@ -125,6 +113,27 @@ Each MCP server requires:
     "transport": "stdio",
     "command": "npx",
     "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+}
+```
+
+**SSE (Server-Sent Events)** - Legacy HTTP transport (for backward compatibility):
+```python
+{
+    "name": "legacy_server",
+    "transport": "sse",
+    "url": "https://legacy.example.com/mcp"
+}
+```
+
+**WebSocket** - For WebSocket-based servers:
+```python
+{
+    "name": "api",
+    "transport": "websocket",
+    "url": "wss://api.example.com/mcp",
+    "headers": {
+        "Authorization": "Bearer ${API_TOKEN}"  # Use env vars!
+    }
 }
 ```
 

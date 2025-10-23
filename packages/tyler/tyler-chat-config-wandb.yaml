@@ -56,7 +56,7 @@ tools:
 # mcp:
 #   servers:
 #     - name: slide_docs
-#       transport: sse
+#       transport: streamablehttp  # Mintlify uses streamablehttp transport
 #       url: https://slide.mintlify.app/mcp
-#       # Tools will be available as: slide_docs_search, slide_docs_query, etc.
+#       # Tools will be available as: slide_docs_SearchSlideFramework, etc.
 

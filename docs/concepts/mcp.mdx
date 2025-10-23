@@ -46,8 +46,8 @@ agent = Agent(
     mcp={
         "servers": [{
             "name": "docs",
-            "transport": "sse",
-            "url": "https://docs.example.com/mcp"
+            "transport": "streamablehttp",  # Use for Mintlify and hosted servers
+            "url": "https://slide.mintlify.app/mcp"
         }]
     }
 )
