@@ -148,7 +148,7 @@ uv run pytest tests/mcp/ tests/models/test_agent_mcp.py tests/cli/test_chat_inte
 
 **Manual test with real Mintlify server:**
 ```bash
-# Run the W&B docs example (connects to real https://docs.wandb.ai/mcp)
+# Run the Slide docs example (connects to real https://slide.mintlify.app/mcp)
 python packages/tyler/examples/303_mcp_mintlify.py
 
 # Or test with Brave Search (requires BRAVE_API_KEY)

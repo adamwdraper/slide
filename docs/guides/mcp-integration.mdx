@@ -19,9 +19,9 @@ agent = Agent(
     tools=["web"],
     mcp={
         "servers": [{
-            "name": "wandb_docs",
+            "name": "slide_docs",
             "transport": "sse",
-            "url": "https://docs.wandb.ai/mcp"
+            "url": "https://slide.mintlify.app/mcp"
         }]
     }
 )
@@ -31,7 +31,7 @@ await agent.connect_mcp()
 
 # Use normally - MCP tools are now available
 thread = Thread()
-thread.add_message(Message(role="user", content="Search W&B docs for Weave"))
+thread.add_message(Message(role="user", content="How do I create a Tyler agent?"))
 result = await agent.go(thread)
 
 # Cleanup when done
@@ -51,9 +51,9 @@ tools:
 
 mcp:
   servers:
-    - name: wandb_docs
+    - name: slide_docs
       transport: sse
-      url: https://docs.wandb.ai/mcp
+      url: https://slide.mintlify.app/mcp
 ```
 
 Then run:

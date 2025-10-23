@@ -52,11 +52,11 @@ tools:
 
 # MCP (Model Context Protocol) Server Configuration
 # Connect to external documentation, APIs, databases via MCP servers
-# Example: W&B documentation via Mintlify MCP
+# Example: Slide documentation via Mintlify MCP
 # mcp:
 #   servers:
-#     - name: wandb_docs
+#     - name: slide_docs
 #       transport: sse
-#       url: https://docs.wandb.ai/mcp
-#       # Tools will be available as: wandb_docs_search, wandb_docs_query, etc.
+#       url: https://slide.mintlify.app/mcp
+#       # Tools will be available as: slide_docs_search, slide_docs_query, etc.
 

@@ -1,6 +1,6 @@
-"""Example of using Tyler with a Mintlify MCP server (W&B docs).
+"""Example of using Tyler with a Mintlify MCP server (Slide docs).
 
-This is a real-world example showing how to connect Tyler to W&B documentation
+This is a real-world example showing how to connect Tyler to Slide documentation
 via the Mintlify MCP server. Perfect copy-paste starter for your own use!
 
 No API key needed - Mintlify MCP servers are public for documentation search.
@@ -28,24 +28,24 @@ except Exception:
 
 
 async def main():
-    """Search W&B documentation using Mintlify MCP server."""
+    """Search Slide documentation using Mintlify MCP server."""
     
     print("=" * 70)
-    print("Tyler + Mintlify MCP Example: Search W&B Documentation")
+    print("Tyler + Mintlify MCP Example: Search Slide Documentation")
     print("=" * 70)
     
-    # Create agent with W&B docs MCP server
+    # Create agent with Slide docs MCP server
     try:
         agent = Agent(
             name="DocsBot",
-            model_name="gpt-4o-mini",
-            purpose="To help users find information in W&B documentation",
+            model_name="gpt-4.1",
+            purpose="To help users find information in Slide documentation",
             tools=["web"],  # Can combine MCP tools with built-in tools!
             mcp={
                 "servers": [{
-                    "name": "wandb_docs",
+                    "name": "slide_docs",
                     "transport": "sse",
-                    "url": "https://docs.wandb.ai/mcp",
+                    "url": "https://slide.mintlify.app/mcp",
                     "fail_silent": False  # Fail fast if docs server is down
                 }]
             }
@@ -56,8 +56,8 @@ async def main():
         return
     
     # Connect to MCP servers (fail fast!)
-    print("\n🔗 Connecting to W&B documentation server...")
-    print("   URL: https://docs.wandb.ai/mcp")
+    print("\n🔗 Connecting to Slide documentation server...")
+    print("   URL: https://slide.mintlify.app/mcp")
     
     try:
         await agent.connect_mcp()
@@ -67,7 +67,7 @@ async def main():
         mcp_tools = [
             t["function"]["name"]
             for t in agent._processed_tools
-            if "wandb_docs_" in t["function"]["name"]
+            if "slide_docs_" in t["function"]["name"]
         ]
         print(f"  MCP tools available: {mcp_tools}")
         
@@ -81,12 +81,12 @@ async def main():
     thread = Thread()
     thread.add_message(Message(
         role="user",
-        content="How do I use Weave for tracing my LLM applications? Give me a quick example."
+        content="How do I create my first Tyler agent? Give me a quick example."
     ))
     
     # Process with streaming
-    print("\n💬 User: How do I use Weave for tracing my LLM applications? Give me a quick example.")
-    print("\n🤖 Tyler: ", end="", flush=True)
+    print("\n💬 User: How do I create my first Tyler agent? Give me a quick example.")
+    print("\n🤖 DocsBot: ", end="", flush=True)
     
     async for event in agent.go(thread, stream=True):
         if event.type.name == "LLM_STREAM_CHUNK":
