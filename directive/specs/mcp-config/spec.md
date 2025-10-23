@@ -326,12 +326,14 @@ await agent.connect_mcp()
 
 ---
 
-**Given** cleanup is needed:
+**Given** long-running application that creates many agents:
 ```python
-agent = Agent(mcp={...})
-await agent.connect_mcp()
-# ... use agent ...
-await agent.cleanup()
+# Web server or batch processing
+for request in requests:
+    agent = Agent(mcp={...})
+    await agent.connect_mcp()
+    result = await agent.go(thread)
+    await agent.cleanup()  # ← Important! Prevent connection leak
 ```
 
 **When** cleanup is called
@@ -340,6 +342,8 @@ await agent.cleanup()
 - All MCP connections are closed cleanly
 - Resources are freed
 - Agent can be reused (call `connect_mcp()` again if needed)
+
+**Note:** Simple scripts don't need cleanup - connections close when process ends.
 
 ### Negative Cases
 

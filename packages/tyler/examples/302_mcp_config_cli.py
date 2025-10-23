@@ -61,9 +61,6 @@ mcp:
     except Exception as e:
         print(f"✗ Connection failed: {e}")
         print("  (This is expected if the server doesn't exist)")
-    
-    # Cleanup
-    await agent.cleanup()
 
 
 async def load_from_actual_file():
@@ -94,8 +91,6 @@ async def load_from_actual_file():
     
     print(f"Agent created: {agent.name}")
     print(f"Tools: {len(agent._processed_tools)}")
-    
-    await agent.cleanup()
 
 
 async def main():

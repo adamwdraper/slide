@@ -98,10 +98,9 @@ async def main():
         elif event.type.name == "EXECUTION_COMPLETE":
             print("\n\n✓ Complete!")
     
-    # Cleanup
-    print("\n🧹 Cleaning up...")
-    await agent.cleanup()
-    print("✓ Done!\n")
+    print("\n✓ Done!\n")
+    
+    # Note: No cleanup needed - script ends and connections close automatically
 
 
 if __name__ == "__main__":
