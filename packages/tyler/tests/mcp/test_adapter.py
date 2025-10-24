@@ -73,7 +73,7 @@ def test_convert_to_tyler_format(mock_mcp_tool):
     
     # Check definition
     definition = tyler_tool["definition"]["function"]
-    assert definition["name"] == "test_server_test_tool"  # Single underscore
+    assert definition["name"] == "test_tool"  # Original name (not namespaced by adapter)
     assert definition["description"] == "A test tool"
     assert definition["parameters"] == mock_mcp_tool.inputSchema
     
@@ -154,9 +154,9 @@ async def test_register_server_tools(mock_mcp_tool):
             mock_runner.register_tool.assert_called_once()
             call_args = mock_runner.register_tool.call_args
             
-            assert call_args.kwargs["name"] == "test_server_test_tool"  # Single underscore
+            assert call_args.kwargs["name"] == "test_tool"  # Original name (not namespaced by adapter)
             assert callable(call_args.kwargs["implementation"])
-            assert call_args.kwargs["definition"]["name"] == "test_server_test_tool"  # Single underscore
+            assert call_args.kwargs["definition"]["name"] == "test_tool"  # Original name
             
             # Verify attributes were registered
             mock_runner.register_tool_attributes.assert_called_once()
@@ -174,7 +174,7 @@ def test_get_tools_for_agent(mock_mcp_tool):
             # Get all tools
             tools = adapter.get_tools_for_agent()
             assert len(tools) == 1
-            assert tools[0]["definition"]["function"]["name"] == "server1_test_tool"  # Single underscore
+            assert tools[0]["definition"]["function"]["name"] == "test_tool"  # Original name (not namespaced by adapter)
             
             # Get tools from specific server
             with patch.object(adapter.client, 'is_connected', return_value=True):
