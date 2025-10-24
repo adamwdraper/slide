@@ -1,3 +1,9 @@
+## [tyler-v4.0.0] - 2025-10-23
+
+### ⚙️ Miscellaneous Tasks
+
+- Upgrade weave from v0.51.59 to v0.52.11
+- Update minimum version constraints for litellm and openai
 ## [tyler-v2.2.3] - 2025-10-14
 
 ### 🚀 Features
