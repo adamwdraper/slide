@@ -81,7 +81,7 @@ async def main():
     thread = Thread()
     thread.add_message(Message(
         role="user",
-        content="How do I create my first Tyler agent? Give me a quick example."
+        content="How do I create my first Tyler agent? Search the docs and give me a quick example in Python."
     ))
     
     # Process with streaming

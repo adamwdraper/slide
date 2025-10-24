@@ -128,8 +128,10 @@ def _apply_tool_filters(tools: List[Dict], server: Dict) -> List[Dict]:
     """
     Filter tools based on include/exclude lists.
     
+    Filters match against the original MCP tool names (before namespacing).
+    
     Args:
-        tools: List of tool dicts
+        tools: List of tool dicts (using original MCP names, not yet namespaced)
         server: Server config with optional include_tools/exclude_tools
     
     Returns:

@@ -663,61 +663,61 @@ def main(config: Optional[str], title: Optional[str]):
 
 def _main_inner(config: Optional[str], title: Optional[str]):
     """Inner main function with suppressed output"""
-    try:
-        # Load configuration
-        config_data = load_config(config)
-        
-        # Initialize chat manager
-        chat_manager = ChatManager()
-        asyncio.run(chat_manager.initialize_agent(config_data))
-        
-        # Create initial thread
-        asyncio.run(chat_manager.create_thread(title=title))
-        
-        console.print("[bold blue]Welcome to Tyler Chat![/]")
-        console.print(f"My name is {chat_manager.agent.name} and I am an agent based on {chat_manager.agent.model_name}.")
-        console.print("Type your message or /help for commands")
-        
-        # Main chat loop
-        while True:
-            # Get user input
-            user_input = Prompt.ask("\nYou")
+    # Use a single event loop for the entire session to maintain MCP connections
+    async def async_main():
+        try:
+            # Load configuration
+            config_data = load_config(config)
             
-            # Check if it's a command
-            if user_input.startswith('/'):
-                should_continue = asyncio.run(chat_manager.process_command(user_input))
-                if not should_continue:
-                    break
-                continue
+            # Initialize chat manager
+            chat_manager = ChatManager()
+            await chat_manager.initialize_agent(config_data)
             
-            # Add user message to thread
-            chat_manager.current_thread.add_message(Message(role="user", content=user_input))
+            # Create initial thread
+            await chat_manager.create_thread(title=title)
             
-            # Process with agent
-            async def process_message():
+            console.print("[bold blue]Welcome to Tyler Chat![/]")
+            console.print(f"My name is {chat_manager.agent.name} and I am an agent based on {chat_manager.agent.model_name}.")
+            console.print("Type your message or /help for commands")
+            
+            # Main chat loop
+            while True:
+                # Get user input (run in thread to avoid blocking the event loop)
+                user_input = await asyncio.to_thread(Prompt.ask, "\nYou")
+                
+                # Check if it's a command
+                if user_input.startswith('/'):
+                    should_continue = await chat_manager.process_command(user_input)
+                    if not should_continue:
+                        break
+                    continue
+                
+                # Add user message to thread
+                chat_manager.current_thread.add_message(Message(role="user", content=user_input))
+                
+                # Process with agent
                 async for event in chat_manager.agent.go(chat_manager.current_thread, stream=True):
                     await handle_stream_update(event, chat_manager)
-            
-            asyncio.run(process_message())
-            
+                
+        except KeyboardInterrupt:
+            console.print("\nGoodbye!")
+        except Exception as e:
+            console.print(f"[red]Error: {str(e)}[/]")
+            raise
+        finally:
+            # Cleanup MCP connections on exit
+            if chat_manager.agent and chat_manager.agent.mcp:
+                try:
+                    await chat_manager.agent.cleanup()
+                except Exception as e:
+                    # Ignore cleanup errors
+                    pass
+    
+    # Run the entire session in a single event loop
+    try:
+        asyncio.run(async_main())
     except KeyboardInterrupt:
         console.print("\nGoodbye!")
-    except Exception as e:
-        console.print(f"[red]Error: {str(e)}[/]")
-        raise
-    finally:
-        # Cleanup MCP connections on exit
-        if chat_manager.agent and chat_manager.agent.mcp:
-            try:
-                asyncio.run(chat_manager.agent.cleanup())
-            except RuntimeError:
-                # If already in event loop, try with get_event_loop
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    # Can't cleanup synchronously, skip
-                    pass
-                else:
-                    loop.run_until_complete(chat_manager.agent.cleanup())
 
 if __name__ == "__main__":
     main() 

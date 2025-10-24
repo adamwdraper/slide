@@ -84,6 +84,9 @@ class MCPAdapter:
     def _convert_to_tyler_format(self, server_name: str, mcp_tool: Any) -> Dict[str, Any]:
         """Convert an MCP tool to Tyler's tool format.
         
+        Returns tools with their original MCP names (not namespaced).
+        Namespacing is handled by the config_loader to support custom prefixes.
+        
         Args:
             server_name: Name of the server providing the tool
             mcp_tool: MCP tool object
@@ -91,8 +94,8 @@ class MCPAdapter:
         Returns:
             Tyler tool definition dictionary
         """
-        # Create a safe, namespaced tool name
-        tyler_name = self._create_tyler_name(server_name, mcp_tool.name)
+        # Use original MCP tool name (namespacing handled by config_loader)
+        tyler_name = mcp_tool.name
         
         # Create the Tyler tool definition
         tyler_tool = {
