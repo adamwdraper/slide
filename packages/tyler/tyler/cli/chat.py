@@ -155,10 +155,13 @@ class ChatManager:
                 await self.agent.connect_mcp()
                 
                 # Show what MCP tools are available
+                # Check tool_runner for MCP attributes (attributes are stored separately)
+                from tyler.utils.tool_runner import tool_runner
                 mcp_tools = [
                     t["function"]["name"]
                     for t in self.agent._processed_tools
-                    if t.get("attributes", {}).get("source") == "mcp"
+                    if tool_runner.get_tool_attributes(t["function"]["name"]) 
+                    and tool_runner.get_tool_attributes(t["function"]["name"]).get("source") == "mcp"
                 ]
                 
                 if mcp_tools:
