@@ -323,8 +323,17 @@ class MCPClient:
     async def disconnect(self, name: str) -> None:
         """Disconnect from a specific server."""
         if name in self.exit_stacks:
-            await self.exit_stacks[name].aclose()
-            del self.exit_stacks[name]
+            try:
+                await self.exit_stacks[name].aclose()
+            except RuntimeError as e:
+                # Ignore "generator didn't stop after athrow()" errors
+                # This can happen if the connection never fully established
+                if "generator didn't stop" not in str(e):
+                    logger.debug(f"Error closing exit stack for '{name}': {e}")
+            except Exception as e:
+                logger.debug(f"Error closing exit stack for '{name}': {e}")
+            finally:
+                del self.exit_stacks[name]
             
         if name in self.sessions:
             del self.sessions[name]
@@ -336,7 +345,9 @@ class MCPClient:
     
     async def disconnect_all(self) -> None:
         """Disconnect from all servers."""
-        names = list(self.sessions.keys())
+        # Get all server names from both sessions and exit_stacks
+        # (failed connections may have exit_stacks but no sessions)
+        names = set(list(self.sessions.keys()) + list(self.exit_stacks.keys()))
         for name in names:
             await self.disconnect(name)
     
