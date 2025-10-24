@@ -313,11 +313,15 @@ class MCPClient:
         Returns:
             Tool execution result
         """
+        logger.debug(f"call_tool: server={server_name}, tool={tool_name}, args={arguments}")
         session = self.sessions.get(server_name)
         if not session:
-            raise ValueError(f"Not connected to server '{server_name}'")
-            
+            available_servers = list(self.sessions.keys())
+            raise ValueError(f"Not connected to server '{server_name}'. Available servers: {available_servers}")
+        
+        logger.debug(f"Found session for server '{server_name}', calling tool...")
         result = await session.call_tool(tool_name, arguments)
+        logger.debug(f"Tool call completed successfully")
         return result
     
     async def disconnect(self, name: str) -> None:

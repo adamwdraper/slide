@@ -153,7 +153,9 @@ class MCPAdapter:
         async def call_mcp_tool(**kwargs):
             """Call the MCP tool with the provided arguments."""
             try:
+                logger.debug(f"Calling MCP tool {server_name}.{tool_name} with args: {kwargs}")
                 result = await self.client.call_tool(server_name, tool_name, kwargs)
+                logger.debug(f"MCP tool {server_name}.{tool_name} returned: {type(result)}")
                 
                 # Extract content from MCP response
                 if hasattr(result, 'content') and result.content:
@@ -173,6 +175,7 @@ class MCPAdapter:
             except Exception as e:
                 error_msg = f"Error calling MCP tool {server_name}.{tool_name}: {e}"
                 logger.error(error_msg)
+                logger.debug(f"MCP tool error details:", exc_info=True)
                 raise ValueError(error_msg)
         
         # Set function metadata for better debugging
