@@ -39,12 +39,13 @@ tools:
 # MCP (Model Context Protocol) Server Configuration
 # Connect to external documentation, APIs, databases via MCP servers
 # Uncomment to enable:
-# mcp:
-#   servers:
-#     # Example: Mintlify documentation server (like Slide docs)
-#     - name: docs
-#       transport: streamablehttp   # Transports: streamablehttp (Mintlify), stdio, sse, websocket
-#       url: https://slide.mintlify.app/mcp
+mcp:
+  servers:
+    # Example: Mintlify documentation server (like Slide docs)
+    - name: docs
+      transport: streamablehttp   # Transports: streamablehttp (Mintlify), stdio, sse, websocket
+      url: https://slide.mintlify.app/mcp
+      # fail_silent: true  # Default - continues if server unavailable
 #       # Optional: Custom headers for authentication
 #       # headers:
 #       #   Authorization: "Bearer ${MCP_TOKEN}"  # Use env vars for secrets
@@ -53,5 +54,3 @@ tools:
 #       # exclude_tools: ["delete"]
 #       # Optional: Custom namespace prefix (default: server name)
 #       # prefix: "docs"
-#       # Optional: Fail silently if server unavailable (default: true)
-#       # fail_silent: true

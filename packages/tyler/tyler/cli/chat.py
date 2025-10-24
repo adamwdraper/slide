@@ -153,7 +153,29 @@ class ChatManager:
             try:
                 console.print("[yellow]Connecting to MCP servers...[/]")
                 await self.agent.connect_mcp()
-                console.print("[green]✓ MCP servers connected successfully[/]")
+                
+                # Show what MCP tools are available
+                mcp_tools = [
+                    t["function"]["name"]
+                    for t in self.agent._processed_tools
+                    if t.get("attributes", {}).get("source") == "mcp"
+                ]
+                
+                if mcp_tools:
+                    console.print(f"[green]✓ MCP servers connected successfully[/]")
+                    console.print(f"[cyan]  MCP tools available ({len(mcp_tools)}): {', '.join(mcp_tools)}[/]")
+                else:
+                    # Check if any servers have fail_silent enabled
+                    fail_silent_servers = [
+                        s.get("name", "unknown") 
+                        for s in self.agent.mcp.get("servers", [])
+                        if s.get("fail_silent", True)  # Default is True
+                    ]
+                    if fail_silent_servers:
+                        console.print("[yellow]⚠ MCP configured but no tools available (connections may have failed silently)[/]")
+                        console.print(f"[dim]  Servers with fail_silent=true: {', '.join(fail_silent_servers)}[/]")
+                    else:
+                        console.print("[yellow]⚠ MCP servers connected but no tools discovered[/]")
             except Exception as e:
                 console.print(f"[red]✗ Failed to connect to MCP servers: {e}[/]")
                 raise  # Fail startup if MCP configured but broken
