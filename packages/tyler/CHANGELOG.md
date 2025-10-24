@@ -1,3 +1,28 @@
+## [tyler-v4.1.0] - 2025-10-24
+
+### 🚀 Features
+
+- Add automatic retry logic and improved error handling for MCP connections
+- Add debug logging for MCP tool calls
+
+### 🐛 Bug Fixes
+
+- Handle cleanup errors for failed MCP connections
+- Properly detect MCP tools in CLI using tool_runner attributes
+- Resolve MCP tool double-namespacing and event loop issues
+- Handle CancelledError during stdio connection cleanup
+
+### 🚜 Refactor
+
+- Consolidate MCP examples from 4 to 2
+
+### 📚 Documentation
+
+- Update tyler-chat-config example with recommended fail_silent setting
+
+### ⚙️ Miscellaneous Tasks
+
+- Remove duplicate 301_mcp_connect_existing.py
 ## [tyler-v4.0.0] - 2025-10-23
 
 ### 🚀 Features
@@ -6,10 +31,15 @@
 - *(mcp-config)* Add CLI auto-connect for MCP servers (Phase 2)
 - *(mcp-config)* Add streamablehttp transport for Mintlify MCP servers
 
+### 🐛 Bug Fixes
+
+- Add cleanup() to streamablehttp example to prevent asyncio errors
+
 ### 🚜 Refactor
 
 - Address copilot review feedback
 - Update examples to use Slide MCP server
+- Remove unnecessary cleanup() from simple examples
 
 ### 📚 Documentation
 
@@ -21,6 +51,11 @@
 
 - *(mcp-config)* Add config_loader tests and implementation (TDD Phase 1)
 - *(mcp-config)* Add integration tests and fix CLI tests (Phase 6-7)
+
+### ⚙️ Miscellaneous Tasks
+
+- Upgrade weave from v0.51.59 to v0.52.11
+- Update minimum version constraints for litellm and openai
 ## [tyler-v3.1.2] - 2025-10-15
 
 ### 🐛 Bug Fixes
