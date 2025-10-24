@@ -45,7 +45,7 @@ mcp:
     - name: docs
       transport: streamablehttp   # Transports: streamablehttp (Mintlify), stdio, sse, websocket
       url: https://slide.mintlify.app/mcp
-      fail_silent: false  # Show errors to debug
+      # fail_silent: true  # Default - continues if server unavailable (recommended)
 #       # Optional: Custom headers for authentication
 #       # headers:
 #       #   Authorization: "Bearer ${MCP_TOKEN}"  # Use env vars for secrets
