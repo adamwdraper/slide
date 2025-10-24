@@ -95,7 +95,11 @@ async def example_multiple_servers():
         elif event.type.name == "EXECUTION_COMPLETE":
             print("\n")
     
-    await agent.cleanup()
+    # Cleanup MCP connections (stdio connections may raise CancelledError)
+    try:
+        await agent.cleanup()
+    except asyncio.CancelledError:
+        pass  # Expected for stdio connections during cleanup
 
 
 async def example_tool_filtering():
