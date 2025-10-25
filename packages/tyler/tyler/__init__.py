@@ -4,6 +4,7 @@ __version__ = "4.1.0"
 
 from tyler.utils.logging import get_logger
 from tyler.models.agent import Agent
+from tyler.config import load_config
 from tyler.models.execution import (
     AgentResult,
     ExecutionEvent,
