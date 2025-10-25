@@ -307,7 +307,50 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-See the complete examples in the documentation.
+### Using Config Files
+
+Tyler supports creating agents from YAML configuration files, enabling you to share the same configuration between the CLI and Python code:
+
+```python
+from tyler import Agent, load_config
+import asyncio
+
+# Simple: Create agent from config file
+agent = Agent.from_config("my-config.yaml")
+
+# With overrides
+agent = Agent.from_config(
+    "my-config.yaml",
+    temperature=0.9,
+    model_name="gpt-4o"
+)
+
+# Auto-discovery (searches ./tyler-chat-config.yaml, ~/.tyler/chat-config.yaml, etc.)
+agent = Agent.from_config()
+
+# Advanced: Load and modify config before creating agent
+config = load_config("my-config.yaml")
+config["temperature"] = 0.9
+agent = Agent(**config)
+```
+
+Example `tyler-chat-config.yaml`:
+```yaml
+name: "MyAgent"
+model_name: "gpt-4.1"
+temperature: 0.7
+purpose: "A helpful AI assistant"
+tools:
+  - "web"
+  - "slack"
+mcp:
+  servers:
+    - name: "docs"
+      transport: "streamablehttp"
+      url: "https://slide.mintlify.app/mcp"
+```
+
+See `examples/003_agent_from_config.py` for complete examples and `tyler-chat-config.yaml` for a full configuration template.
 
 ## Running Examples and Tests
 
