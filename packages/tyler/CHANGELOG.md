@@ -1,3 +1,29 @@
+## [tyler-v4.2.0] - 2025-10-25
+
+### 🚀 Features
+
+- Implement tyler.config module for loading agent configs
+- Add Agent.from_config() class method
+- Export load_config from tyler package
+
+### 🐛 Bug Fixes
+
+- Improve test reliability for missing custom tool files
+- Address code review feedback
+
+### 🚜 Refactor
+
+- Migrate CLI to use shared config loading
+
+### 📚 Documentation
+
+- Add Agent.from_config() examples and documentation
+- Add prominent documentation links to README
+
+### 🧪 Testing
+
+- Add failing tests for config loading (AC-1 to AC-15)
+- Add failing tests for Agent.from_config() (AC-16 to AC-25)
 ## [tyler-v4.1.0] - 2025-10-24
 
 ### 🚀 Features
