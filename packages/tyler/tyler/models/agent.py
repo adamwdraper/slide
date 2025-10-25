@@ -244,6 +244,70 @@ class Agent(Model):
             self._processed_tools, 
             self.notes
         )
+    
+    @classmethod
+    def from_config(
+        cls,
+        config_path: Optional[str] = None,
+        **overrides
+    ) -> "Agent":
+        """Create an Agent from a YAML configuration file.
+        
+        Loads a Tyler config file (same format as tyler-chat CLI) and creates
+        an Agent instance with those settings. Allows the same configuration
+        to be used in both CLI and Python code.
+        
+        Args:
+            config_path: Path to YAML config file (.yaml or .yml).
+                        If None, searches standard locations:
+                        1. ./tyler-chat-config.yaml (current directory)
+                        2. ~/.tyler/chat-config.yaml (user home)
+                        3. /etc/tyler/chat-config.yaml (system-wide)
+            **overrides: Override any config values. These replace (not merge)
+                        config file values. For example, tools=["web"] will
+                        replace all tools from config, not add to them.
+        
+        Returns:
+            Agent instance initialized with config values and overrides
+        
+        Raises:
+            FileNotFoundError: If config_path specified but doesn't exist
+            ValueError: If no config found in standard locations (path=None)
+                       or if file extension is not .yaml/.yml
+            yaml.YAMLError: If YAML syntax is invalid
+            ValidationError: If config contains invalid Agent parameters
+        
+        Example:
+            >>> # Auto-discover config
+            >>> agent = Agent.from_config()
+            
+            >>> # Explicit config path
+            >>> agent = Agent.from_config("./my-config.yaml")
+            
+            >>> # With overrides
+            >>> agent = Agent.from_config(
+            ...     "config.yaml",
+            ...     temperature=0.9,
+            ...     model_name="gpt-4o"
+            ... )
+            
+            >>> # Then use normally
+            >>> await agent.connect_mcp()  # If MCP servers configured
+            >>> result = await agent.go(thread)
+        """
+        from tyler.config import load_config
+        
+        # Load config from file
+        logger.info(f"Creating agent from config: {config_path or 'auto-discovered'}")
+        config = load_config(config_path)
+        
+        # Apply overrides (replacement semantics - dict.update replaces)
+        if overrides:
+            logger.debug(f"Config overrides: {list(overrides.keys())}")
+            config.update(overrides)
+        
+        # Create agent using standard __init__
+        return cls(**config)
 
     def _get_timestamp(self) -> str:
         """Get current ISO timestamp."""
