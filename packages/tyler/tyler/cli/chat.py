@@ -500,9 +500,6 @@ async def handle_stream_update(event: ExecutionEvent, chat_manager: ChatManager)
         
         console.print(f"[red]Error: {event.data.get('message', 'Unknown error')}[/]")
 
-# Config loading functions now imported from tyler.config module
-# (See imports at top of file)
-
 def main(config: Optional[str], title: Optional[str]):
     """Tyler Chat CLI main function"""
     # Apply output filtering for the entire session

@@ -264,8 +264,12 @@ class Agent(Model):
                         2. ~/.tyler/chat-config.yaml (user home)
                         3. /etc/tyler/chat-config.yaml (system-wide)
             **overrides: Override any config values. These replace (not merge)
-                        config file values. For example, tools=["web"] will
-                        replace all tools from config, not add to them.
+                        config file values using shallow dict update semantics.
+                        
+                        Examples:
+                        - tools=["web"] replaces entire tools list
+                        - temperature=0.9 replaces temperature value
+                        - mcp={...} replaces entire mcp dict (not merged)
         
         Returns:
             Agent instance initialized with config values and overrides

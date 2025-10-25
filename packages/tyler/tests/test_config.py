@@ -174,6 +174,24 @@ TOOLS = [{"definition": {"type": "function", "function": {"name": "home_tool", "
         
         assert len(result["tools"]) == 1
     
+    def test_load_custom_tool_relative_without_prefix(self, tmp_path):
+        """Paths without ./ prefix should be treated as relative to config dir"""
+        # Create tool in same directory as config
+        tool_file = tmp_path / "my_tool.py"
+        tool_file.write_text('''
+TOOLS = [{"definition": {"type": "function", "function": {"name": "relative_tool", "description": "test", "parameters": {}}}, "implementation": lambda: "ok"}]
+''')
+        
+        config_file = tmp_path / "config.yaml"
+        config_data = {"tools": ["my_tool.py"]}  # No ./ prefix
+        config_file.write_text(yaml.dump(config_data))
+        
+        result = load_config(str(config_file))
+        
+        # Should resolve relative to config directory
+        assert len(result["tools"]) == 1
+        assert result["tools"][0]["definition"]["function"]["name"] == "relative_tool"
+    
     def test_load_custom_tool_missing_file(self, tmp_path, caplog):
         """AC-13: Log warning and skip tool if file missing"""
         import logging
@@ -319,14 +337,14 @@ class TestEmptyAndEdgeCases:
     """Test empty configs and edge cases"""
     
     def test_empty_config_file(self, tmp_path):
-        """Empty YAML should return empty dict or defaults"""
+        """Empty YAML should return empty dict"""
         config_file = tmp_path / "empty.yaml"
         config_file.write_text("")
         
         result = load_config(str(config_file))
         
-        # Empty YAML returns None, which we should handle
-        assert result is not None or result == {}
+        # Empty YAML returns empty dict (handled by load_config)
+        assert result == {}
     
     def test_config_with_yml_extension(self, tmp_path):
         """Should accept .yml extension too"""

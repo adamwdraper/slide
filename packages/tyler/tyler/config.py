@@ -135,16 +135,15 @@ def load_custom_tool(file_path: str, config_dir: Path) -> List[Dict]:
     # Resolve path
     tool_path = Path(file_path)
     
-    # Handle relative paths (relative to config directory)
-    if file_path.startswith('./') or file_path.startswith('../'):
-        tool_path = config_dir / file_path
-        tool_path = tool_path.resolve()
-    # Handle home directory
-    elif file_path.startswith('~'):
+    # Handle home directory expansion first
+    if file_path.startswith('~'):
         tool_path = tool_path.expanduser()
-    # Otherwise use as-is (absolute path)
+    # Handle absolute paths
+    elif tool_path.is_absolute():
+        tool_path = tool_path
+    # Otherwise, treat as relative to config_dir
     else:
-        tool_path = Path(file_path)
+        tool_path = (config_dir / file_path).resolve()
     
     logger.debug(f"Loading custom tools from {tool_path}")
     
@@ -237,7 +236,7 @@ def _substitute_env_vars(obj: Any) -> Any:
             var_name = match.group(1)
             value = os.getenv(var_name)
             if value is None:
-                logger.debug(f"Environment variable {var_name} not found, using literal")
+                logger.warning(f"Environment variable {var_name} not found, using literal value")
                 return match.group(0)  # Return original ${VAR_NAME}
             return value
         

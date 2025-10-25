@@ -211,6 +211,9 @@ TOOLS = [
         agent = Agent.from_config(str(config_file))
         
         # Verify custom tool is in processed tools
+        # Note: We test _processed_tools (private) to verify the full loading pipeline
+        # worked correctly (file loaded, parsed, and registered), not just that the
+        # raw tool string was stored. This is appropriate for integration testing.
         tool_names = [t['function']['name'] for t in agent._processed_tools]
         assert 'my_custom_tool' in tool_names
 
