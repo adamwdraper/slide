@@ -115,6 +115,101 @@ agent = Agent(
   This parameter is excluded from serialization.
 </ParamField>
 
+## Creating from Config Files
+
+<ParamField path="Agent.from_config" type="classmethod">
+  Create an Agent from a YAML configuration file. Enables reusing the same configuration between CLI and Python code.
+</ParamField>
+
+```python
+from tyler import Agent
+
+# Auto-discover config (searches standard locations)
+agent = Agent.from_config()
+
+# Load from specific path
+agent = Agent.from_config("my-config.yaml")
+
+# With parameter overrides
+agent = Agent.from_config(
+    "config.yaml",
+    temperature=0.9,
+    model_name="gpt-4o"
+)
+```
+
+### Parameters
+
+<ParamField path="config_path" type="string | None" default="None">
+  Path to YAML config file (.yaml or .yml). If None, searches standard locations:
+  1. `./tyler-chat-config.yaml` (current directory)
+  2. `~/.tyler/chat-config.yaml` (user home)
+  3. `/etc/tyler/chat-config.yaml` (system-wide)
+</ParamField>
+
+<ParamField path="**overrides" type="Any">
+  Override any config values. These replace (not merge) config file values using shallow dict update semantics.
+  
+  Examples:
+  - `tools=["web"]` replaces entire tools list
+  - `temperature=0.9` replaces temperature value
+  - `mcp={...}` replaces entire mcp dict (not merged)
+</ParamField>
+
+### Config File Format
+
+```yaml
+# Agent Identity
+name: "MyAgent"
+purpose: "To help with tasks"
+notes: "Additional instructions"
+
+# Model Configuration
+model_name: "gpt-4.1"
+temperature: 0.7
+max_tool_iterations: 10
+reasoning: "low"  # For models supporting thinking tokens
+
+# Tools
+tools:
+  - "web"           # Built-in tool module
+  - "slack"
+  - "./my_tools.py" # Custom tool file (relative to config)
+
+# MCP Servers (optional)
+mcp:
+  servers:
+    - name: "docs"
+      transport: "streamablehttp"
+      url: "https://example.com/mcp"
+
+# Environment variables (keeps secrets safe)
+api_key: "${OPENAI_API_KEY}"  # Reads from environment
+```
+
+<Tip>
+  Config files use the same format as `tyler-chat` CLI configs, so you can share configurations between interactive CLI sessions and your Python code.
+</Tip>
+
+### Advanced Config Loading
+
+For more control over config loading, use `load_config()` directly:
+
+```python
+from tyler import load_config, Agent
+
+# Load config into dict
+config = load_config("config.yaml")
+
+# Inspect and modify before creating agent
+print(f"Model: {config['model_name']}")
+config["temperature"] = 0.9
+config["notes"] += "\nModified programmatically"
+
+# Create agent from modified config
+agent = Agent(**config)
+```
+
 ## Processing Conversations
 
 The `go()` method is the primary interface for processing conversations. It supports three output modes controlled by the `stream` parameter:

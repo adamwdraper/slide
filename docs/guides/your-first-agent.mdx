@@ -331,6 +331,86 @@ weave.init("my-research-agent")
   Weave traces are invaluable for debugging complex agent behaviors. You can see exactly what prompts were sent to the LLM, what tools were called, and how the agent made its decisions.
 </Tip>
 
+## Alternative: Using Configuration Files
+
+Instead of defining agent settings in code, you can use YAML configuration files. This is especially useful when you want to share the same configuration between the CLI and your Python code.
+
+<Steps>
+  <Step title="Create a Config File">
+    Create `agent-config.yaml`:
+    
+    ```yaml
+    name: "research-assistant"
+    model_name: "gpt-4o"
+    temperature: 0.7
+    purpose: "To help with research by finding, analyzing, and summarizing information"
+    notes: |
+      - Be thorough and cite sources
+      - Save reports to files when requested
+    tools:
+      - "web"
+      - "files"
+    ```
+  </Step>
+
+  <Step title="Load Agent from Config">
+    Use `Agent.from_config()` to create your agent:
+    
+    ```python
+    from tyler import Agent, Thread, Message
+    import asyncio
+
+    async def main():
+        # Create agent from config file
+        agent = Agent.from_config("agent-config.yaml")
+        
+        # Or use auto-discovery (searches ./tyler-chat-config.yaml, etc.)
+        agent = Agent.from_config()
+        
+        # Or override specific settings
+        agent = Agent.from_config(
+            "agent-config.yaml",
+            temperature=0.9  # Override temperature
+        )
+        
+        # Use the agent normally
+        thread = Thread()
+        thread.add_message(Message(
+            role="user",
+            content="Research renewable energy trends"
+        ))
+        
+        result = await agent.go(thread)
+        print(result.content)
+
+    if __name__ == "__main__":
+        asyncio.run(main())
+    ```
+  </Step>
+
+  <Step title="Environment Variables in Config">
+    Keep secrets safe using environment variables:
+    
+    ```yaml
+    name: "secure-agent"
+    api_key: "${OPENAI_API_KEY}"  # Reads from environment
+    model_name: "gpt-4o"
+    ```
+    
+    The `${VAR_NAME}` syntax automatically substitutes values from your environment variables.
+  </Step>
+</Steps>
+
+<Tip>
+  Configuration files are great for:
+  - Sharing settings between CLI (`tyler-chat`) and Python code
+  - Environment-specific configurations (dev, staging, prod)
+  - Team collaboration (commit configs to version control)
+  - Quick experimentation without changing code
+</Tip>
+
+See the complete example at `examples/003_agent_from_config.py` in the Tyler package.
+
 ## Next steps
 
 You've built your first agent! Here's what to explore next:
