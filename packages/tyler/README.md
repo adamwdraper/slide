@@ -46,6 +46,11 @@ While Tyler can be used as a library, it comes with two interactive interfaces:
 ![Workflow Status](https://github.com/adamwdraper/tyler/actions/workflows/pytest.yml/badge.svg)
 [![PyPI version](https://img.shields.io/pypi/v/tyler-agent.svg?style=social)](https://pypi.org/project/tyler-agent/)
 
+---
+
+📚 **[Complete Documentation](https://slide.mintlify.app/)** | 🚀 **[Quickstart Guide](https://slide.mintlify.app/quickstart)** | 🎓 **[Your First Agent](https://slide.mintlify.app/guides/your-first-agent)**
+
+---
 
 ## Overview
 
