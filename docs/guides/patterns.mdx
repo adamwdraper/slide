@@ -5,6 +5,166 @@ description: 'Design patterns and best practices for building sophisticated AI a
 
 This guide covers advanced patterns for building production-ready AI applications with Slide. These patterns have been tested in real-world scenarios and represent best practices from the community.
 
+## Configuration Management
+
+### Configuration file pattern
+
+Use YAML configuration files to manage agent settings, especially useful for:
+- Sharing configuration between CLI and Python code
+- Environment-specific configurations (dev, staging, prod)
+- Team collaboration (version control)
+- Quick experimentation without code changes
+
+<Steps>
+  <Step title="Create a Config File">
+    Create `agent-config.yaml`:
+    
+    ```yaml
+    name: "research-assistant"
+    model_name: "gpt-4o"
+    temperature: 0.7
+    purpose: "To help with research by finding, analyzing, and summarizing information"
+    notes: |
+      - Be thorough and cite sources
+      - Save reports to files when requested
+    tools:
+      - "web"
+      - "files"
+    
+    # MCP servers (optional)
+    mcp:
+      servers:
+        - name: "docs"
+          transport: "streamablehttp"
+          url: "https://slide.mintlify.app/mcp"
+    ```
+  </Step>
+
+  <Step title="Load Agent from Config">
+    Use `Agent.from_config()` to create your agent:
+    
+    ```python
+    from tyler import Agent
+
+    # Auto-discover (searches ./tyler-chat-config.yaml, ~/.tyler/chat-config.yaml, /etc/tyler/chat-config.yaml)
+    agent = Agent.from_config()
+    
+    # Load from specific path
+    agent = Agent.from_config("agent-config.yaml")
+    
+    # Override specific settings
+    agent = Agent.from_config(
+        "agent-config.yaml",
+        temperature=0.9,  # Override config value
+        model_name="gpt-4.1"
+    )
+    ```
+  </Step>
+
+  <Step title="Environment Variables">
+    Keep secrets safe using environment variable substitution:
+    
+    ```yaml
+    name: "secure-agent"
+    api_key: "${OPENAI_API_KEY}"  # Reads from environment
+    base_url: "${API_BASE_URL}"
+    model_name: "gpt-4o"
+    extra_headers:
+      Authorization: "Bearer ${AUTH_TOKEN}"
+    ```
+    
+    The `${VAR_NAME}` syntax automatically substitutes values from your environment variables.
+  </Step>
+
+  <Step title="Custom Tools">
+    Load custom tools from Python files:
+    
+    ```yaml
+    tools:
+      - "web"                    # Built-in module
+      - "./my_tools.py"          # Relative to config file
+      - "~/shared/tools.py"      # Home directory
+      - "/opt/tools/company.py"  # Absolute path
+    ```
+    
+    Tool files should export a `TOOLS` list:
+    
+    ```python
+    # my_tools.py
+    TOOLS = [
+        {
+            "definition": {
+                "type": "function",
+                "function": {
+                    "name": "my_tool",
+                    "description": "Custom tool",
+                    "parameters": {...}
+                }
+            },
+            "implementation": my_tool_function
+        }
+    ]
+    ```
+  </Step>
+</Steps>
+
+### Advanced: Programmatic config manipulation
+
+For maximum flexibility, load and modify configs before creating the agent:
+
+```python
+from tyler import load_config, Agent
+
+# Load config
+config = load_config("base-config.yaml")
+
+# Inspect and modify
+print(f"Base model: {config['model_name']}")
+config["temperature"] = 0.9
+config["notes"] += "\nCustomized for production"
+
+# Add tools programmatically
+if "tools" not in config:
+    config["tools"] = []
+config["tools"].append("slack")
+
+# Create agent from modified config
+agent = Agent(**config)
+```
+
+### Multi-environment pattern
+
+Use different configs for different environments:
+
+```python
+import os
+from tyler import Agent
+
+# Select config based on environment
+env = os.getenv("ENVIRONMENT", "dev")
+config_map = {
+    "dev": "configs/dev-agent.yaml",
+    "staging": "configs/staging-agent.yaml",
+    "prod": "configs/prod-agent.yaml"
+}
+
+agent = Agent.from_config(config_map[env])
+```
+
+Or use environment variables in a single config:
+
+```yaml
+# Single config for all environments
+name: "agent-${ENVIRONMENT}"
+model_name: "${MODEL_NAME}"  # Different per environment
+temperature: 0.7
+api_base: "${API_BASE_URL}"  # dev vs prod endpoints
+```
+
+<Tip>
+  See `examples/003_agent_from_config.py` for complete runnable examples and the [Agent API reference](/api-reference/tyler-agent#creating-from-config-files) for full documentation.
+</Tip>
+
 ## Agent Patterns
 
 ### Tool selection pattern
