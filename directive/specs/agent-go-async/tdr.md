@@ -1,38 +1,43 @@
-# Technical Design Review (TDR) — Async Agent.go() Method
+# Technical Design Review (TDR) — Split Agent.go() into .go() and .stream()
 
 **Author**: AI Agent  
 **Date**: 2025-10-28  
 **Links**: 
 - Spec: `/directive/specs/agent-go-async/spec.md`
 - Impact: `/directive/specs/agent-go-async/impact.md`
+- Design Pivot Notes: `/directive/specs/agent-go-async/PIVOT_NOTES.md`
 
 ---
 
 ## 1. Summary
 
-We are converting `Agent.go()` from a synchronous function to an async method to create a clearer, more semantically correct API that properly expresses its async nature. This change makes async operations explicit in the method signature, follows Python async best practices, and enables proper observability tooling integration (like Weave).
+We are splitting `Agent.go()` into two distinct methods to follow industry best practices and overcome Python async/await limitations. The new design provides:
+- `agent.go(thread)` - async method that returns `AgentResult` (non-streaming only)
+- `agent.stream(thread, mode="events")` - async generator that yields events or raw chunks
 
-Currently, `.go()` appears synchronous but performs async operations internally (database calls, network requests, tool execution), creating confusion and breaking observability tools that expect async generators to come from async functions. By making it `async def`, we provide developers with clear API semantics, enable better IDE support, and ensure the method signature accurately represents its behavior.
+**Why the split?** We initially attempted to make `.go()` async while keeping the `stream` parameter, but discovered a fundamental Python limitation: **you cannot mix `return value` and `yield` in the same function**. After evaluating alternatives, we determined that splitting into two methods is the industry-standard pattern (httpx, aiohttp, FastAPI all do this) and provides superior developer experience.
 
-This is an intentional breaking change for v5.0.0. Non-streaming usage requires adding `await`, while streaming usage remains unchanged. The migration is straightforward (add `await`), with clear Python error messages guiding developers.
+This is an intentional breaking change for v5.0.0 that affects ALL users (both streaming and non-streaming). The migration is straightforward with clear patterns and regex examples provided.
 
 ## 2. Decision Drivers & Non‑Goals
 
 ### Drivers
-- **API clarity**: Method signature should reflect async nature (database I/O, network calls, tool execution)
-- **Python best practices**: Async generators should come from async functions, not sync functions returning them
-- **Developer experience**: Eliminate confusion about sync vs async behavior
+- **API clarity**: Separate methods for different behaviors (industry standard pattern)
+- **Python limitations**: Cannot mix `return value` and `yield` in same function
+- **Single responsibility**: Each method should do one thing well
+- **Type safety**: Eliminate complex Union return types
+- **Developer experience**: `.go()` vs `.stream()` is self-documenting
 - **Observability tooling**: Enable Weave and similar tools to properly trace execution
-- **Consistency**: Align public API with internal implementation (all internal methods are async)
-- **IDE support**: Better autocomplete, type hints, and error detection with proper async signatures
+- **Industry patterns**: Follow httpx, aiohttp, FastAPI conventions
+- **Better IDE support**: Simpler types mean better autocomplete and hints
 
 ### Non‑Goals
 - **Changing execution logic** - All tool execution, iteration limits, error handling stay identical
 - **Changing return types** - `AgentResult`, `ExecutionEvent`, raw chunks remain the same
 - **Backward compatibility** - This is an intentional breaking change for better DX
 - **New features** - No new streaming modes, no new capabilities, pure API refactor
-- **Performance optimization** - Async overhead is negligible; this is about correctness not speed
 - **Deprecation period** - Clean break for v5.0.0 (framework is new, few users)
+- **Keeping single method** - Tried this, Python doesn't allow it (SyntaxError)
 
 ## 3. Current State — Codebase Map
 
@@ -134,150 +139,140 @@ User Code
     │
     ├─ Non-streaming: await agent.go(thread)
     │       │
-    │       └─→ async def go(...)
-    │               └─→ return await self._go_complete(...)  ← Added await
+    │       └─→ async def go(thread)  ← NEW METHOD (no stream param)
+    │               └─→ return await self._go_complete(thread)
     │                       │
     │                       └─→ Returns AgentResult
     │
-    └─ Streaming: async for event in agent.go(thread, stream=True)
+    └─ Streaming: async for event in agent.stream(thread)
             │
-            └─→ async def go(...)
-                    └─→ async for event in self._go_stream(...):  ← Changed to yield from
-                            yield event
-                            │
-                            └─→ Yields ExecutionEvent objects
+            └─→ async def stream(thread, mode="events")  ← NEW METHOD
+                    │
+                    ├─ mode="events" → async for event in self._go_stream(thread):
+                    │                       yield event
+                    │                           │
+                    │                           └─→ Yields ExecutionEvent
+                    │
+                    └─ mode="raw" → async for chunk in self._go_stream_raw(thread):
+                                        yield chunk
+                                            │
+                                            └─→ Yields raw LiteLLM chunks
 ```
 
 ### Component Changes
 
-#### 1. Method Signature Change
+#### 1. Remove Old Unified Method
 ```python
-# BEFORE
-@weave.op()
-def go(
-    self, 
-    thread_or_id: Union[Thread, str],
-    stream: Union[bool, Literal["events", "raw"]] = False
-) -> Union[AgentResult, AsyncGenerator[ExecutionEvent, None], AsyncGenerator[Any, None]]:
-
-# AFTER
-@weave.op()
-async def go(  # ← Change: def → async def
-    self, 
-    thread_or_id: Union[Thread, str],
-    stream: Union[bool, Literal["events", "raw"]] = False
-) -> Union[AgentResult, AsyncGenerator[ExecutionEvent, None], AsyncGenerator[Any, None]]:
-```
-
-**No changes to**:
-- Parameter types
-- Return type annotations
-- `@overload` decorators (they also get `async def`)
-- Docstring structure
-
-#### 2. Implementation Changes
-
-**Non-streaming mode**:
-```python
-# BEFORE
-if stream_mode is None:
-    return self._go_complete(thread_or_id)
-
-# AFTER
-if stream_mode is None:
-    return await self._go_complete(thread_or_id)  # ← Add await
-```
-
-**Event streaming mode**:
-```python
-# BEFORE
-elif stream_mode == "events":
-    return self._go_stream(thread_or_id)
-
-# AFTER
-elif stream_mode == "events":
-    async for event in self._go_stream(thread_or_id):  # ← Yield from generator
-        yield event
-```
-
-**Raw streaming mode**:
-```python
-# BEFORE
-elif stream_mode == "raw":
-    return self._go_stream_raw(thread_or_id)
-
-# AFTER
-elif stream_mode == "raw":
-    async for chunk in self._go_stream_raw(thread_or_id):  # ← Yield from generator
-        yield chunk
-```
-
-### Complete Implementation
-
-```python
+# DELETE THIS (lines ~586-690 in agent.py)
 @overload
-async def go(  # ← async added
-    self, 
-    thread_or_id: Union[Thread, str],
-    stream: Literal[False] = False
-) -> AgentResult:
-    ...
+def go(...) -> AgentResult: ...
+
+@overload  
+def go(...) -> AsyncGenerator[ExecutionEvent, None]: ...
 
 @overload
-async def go(  # ← async added
-    self, 
-    thread_or_id: Union[Thread, str],
-    stream: Union[Literal[True], Literal["events"]]
-) -> AsyncGenerator[ExecutionEvent, None]:
-    ...
-
-@overload
-async def go(  # ← async added
-    self, 
-    thread_or_id: Union[Thread, str],
-    stream: Literal["raw"]
-) -> AsyncGenerator[Any, None]:
-    ...
+def go(...) -> AsyncGenerator[Any, None]: ...
 
 @weave.op()
-async def go(  # ← Change: def → async def
-    self, 
-    thread_or_id: Union[Thread, str],
-    stream: Union[bool, Literal["events", "raw"]] = False
-) -> Union[AgentResult, AsyncGenerator[ExecutionEvent, None], AsyncGenerator[Any, None]]:
-    """
-    Process the thread with the agent.
-    
-    [Docstring updated with await in examples]
-    """
-    # Normalize and validate stream parameter (unchanged)
-    if stream is True:
-        stream_mode = "events"
-    elif stream is False:
-        stream_mode = None
-    elif stream in ("events", "raw"):
-        stream_mode = stream
-    else:
-        raise ValueError(
-            f"Invalid stream value: {stream}. "
-            f"Must be False, True, 'events', or 'raw'"
-        )
-    
-    logger.debug(f"Agent.go() called with stream mode: {stream_mode}")
-    
-    # Route to appropriate implementation
+def go(self, thread_or_id, stream=False):
+    # ... routing logic ...
     if stream_mode is None:
-        return await self._go_complete(thread_or_id)  # ← Add await
+        return self._go_complete(thread_or_id)
     elif stream_mode == "events":
-        async for event in self._go_stream(thread_or_id):  # ← Yield from
-            yield event
+        return self._go_stream(thread_or_id)
     elif stream_mode == "raw":
-        async for chunk in self._go_stream_raw(thread_or_id):  # ← Yield from
+        return self._go_stream_raw(thread_or_id)
+```
+
+#### 2. Add New Non-Streaming Method
+```python
+# ADD THIS
+@weave.op()
+async def go(
+    self,
+    thread_or_id: Union[Thread, str]
+) -> AgentResult:
+    """
+    Execute agent and return complete result.
+    
+    This method runs the agent to completion and returns the final
+    result with all messages, content, and execution details.
+    
+    Args:
+        thread_or_id: Thread object or thread ID to process
+        
+    Returns:
+        AgentResult with complete execution details
+        
+    Example:
+        result = await agent.go(thread)
+        print(f"Response: {result.content}")
+    """
+    return await self._go_complete(thread_or_id)
+```
+
+#### 3. Add New Streaming Method
+```python
+# ADD THIS
+@weave.op()
+async def stream(
+    self,
+    thread_or_id: Union[Thread, str],
+    mode: Literal["events", "raw"] = "events"
+) -> AsyncGenerator[Union[ExecutionEvent, Any], None]:
+    """
+    Stream agent execution events or raw chunks in real-time.
+    
+    This method yields events as the agent executes, providing
+    real-time visibility into the agent's reasoning and actions.
+    
+    Args:
+        thread_or_id: Thread object or thread ID to process
+        mode: "events" for ExecutionEvent objects (default),
+              "raw" for raw LiteLLM chunks
+              
+    Yields:
+        ExecutionEvent objects (mode="events") or
+        Raw LiteLLM chunks (mode="raw")
+        
+    Example:
+        # Event streaming
+        async for event in agent.stream(thread):
+            if event.type == EventType.MESSAGE_CREATED:
+                print(event.data['message'].content)
+        
+        # Raw chunk streaming
+        async for chunk in agent.stream(thread, mode="raw"):
+            if hasattr(chunk.choices[0].delta, 'content'):
+                print(chunk.choices[0].delta.content, end="")
+    """
+    if mode == "events":
+        async for event in self._go_stream(thread_or_id):
+            yield event
+    elif mode == "raw":
+        async for chunk in self._go_stream_raw(thread_or_id):
             yield chunk
     else:
-        # Should never reach here due to validation above
-        raise ValueError(f"Unexpected stream mode: {stream_mode}")
+        raise ValueError(
+            f"Invalid mode: {mode}. Must be 'events' or 'raw'"
+        )
 ```
+
+### Complete Implementation Summary
+
+**Changes to agent.py**:
+1. Delete old `.go()` method (~105 lines including overloads)
+2. Add new `.go()` method (~20 lines)
+3. Add new `.stream()` method (~40 lines)
+4. Net change: ~-45 lines (simpler code!)
+
+**Type improvements**:
+- **Before**: `Union[AgentResult, AsyncGenerator[...]]` (complex)
+- **After**: 
+  - `.go()` → `AgentResult` (clear!)
+  - `.stream()` → `AsyncGenerator[ExecutionEvent | Any, None]` (clear!)
+
+**No overload decorators needed** - Each method has single clear signature
 
 ### Error Handling
 
@@ -311,115 +306,187 @@ raise ValueError("Invalid stream value...")
 
 ## 5. Alternatives Considered
 
-### Option A: Keep sync wrapper, remove `@weave.op()` from internal methods
-**Approach**: Leave `.go()` as `def`, remove `@weave.op()` from `._go_stream()` and `._go_stream_raw()`
+### The Discovery Process
 
-**Pros**:
-- No breaking changes
-- Simpler migration
-
-**Cons**:
-- ❌ Doesn't solve the core problem (API still misleading)
-- ❌ Loses granular Weave tracing for streaming modes
-- ❌ Still violates async best practices
-- ❌ Doesn't improve developer experience
-
-**Why rejected**: Fixes symptom (Weave), not disease (misleading API)
-
-### Option B: Provide both sync wrapper and async method
-**Approach**: Keep `.go()` as sync, add `.go_async()` as async alternative
+We initially planned to make `.go()` async while keeping the `stream` parameter. However, during implementation, we discovered:
 
 ```python
-def go(...):
-    """Deprecated wrapper"""
-    return self.go_async(...)
+# This causes SyntaxError!
+async def go(self, thread, stream=False):
+    if not stream:
+        return await self._go_complete(thread)  # return with value
+    else:
+        async for event in self._go_stream(thread):
+            yield event  # yield
 
-async def go_async(...):
-    """New async implementation"""
-    ...
+# Python Error: 'return' with value in async generator
+```
+
+**Python limitation**: You cannot mix `return value` and `yield` in the same function.
+
+This forced us to reconsider our approach and explore alternatives.
+
+### Option A: Make `.go()` always a generator (yield once for non-streaming)
+**Approach**: Always yield, even for non-streaming
+
+```python
+async def go(self, thread, stream=False):
+    if not stream:
+        result = await self._go_complete(thread)
+        yield result  # Yield once
+    else:
+        async for event in self._go_stream(thread):
+            yield event
 ```
 
 **Pros**:
-- Backward compatible
-- Gradual migration path
+- Single async method
+- Technically works
 
 **Cons**:
-- ❌ API fragmentation (two ways to do same thing)
-- ❌ Confusing for new users
-- ❌ Maintenance burden (two methods to maintain)
-- ❌ Sync wrapper still misleading
-- ❌ Delayed migration (tech debt lingers)
+- ❌ Terrible UX: `result = await anext(agent.go(thread))` 
+- ❌ Different consumption patterns for same method
+- ❌ Confusing semantics (why yield once?)
 
-**Why rejected**: Framework is new, clean break is better than API bloat
+**Why rejected**: Bad developer experience
 
-### Option C: Make entire Agent class async context manager
-**Approach**: Require `async with Agent(...) as agent:` pattern
+### Option B: Smart return object (awaitable + iterable)
+**Approach**: Return object that implements both `__await__()` and `__aiter__()`
+
+```python
+def go(self, thread, stream=False):
+    return _GoResult(self, thread, stream)
+
+class _GoResult:
+    def __await__(self):  # For: await agent.go()
+        return self._agent._go_complete(...)
+    
+    def __aiter__(self):  # For: async for x in agent.go()
+        return self._agent._go_stream(...)
+```
 
 **Pros**:
-- Clear async semantics
-- Could auto-connect/disconnect MCP
+- Could preserve exact API
+- Clever technical solution
 
 **Cons**:
-- ❌ Much larger breaking change
-- ❌ Unnecessary ceremony for non-MCP usage
-- ❌ Doesn't match existing patterns
-- ❌ Confusing scope implications
+- ❌ `.go()` still not async (Weave problem remains!)
+- ❌ Added complexity for wrapper class
+- ❌ Unusual pattern (less discoverable)
+- ❌ Doesn't solve root issue
 
-**Why rejected**: Over-engineered, doesn't match the problem
+**Why rejected**: Doesn't fix Weave observability, adds complexity
 
-### Option D (Chosen): Make `.go()` async, clean break
-**Approach**: Convert to `async def`, update all call sites, release as v5.0.0
+### Option C: Keep it as `def` (status quo)
+**Approach**: Accept current pattern, improve documentation
 
 **Pros**:
-- ✅ Semantically correct API
-- ✅ Follows Python best practices
-- ✅ Enables proper tooling (Weave, IDEs)
-- ✅ Clear migration path (add `await`)
-- ✅ No API fragmentation
-- ✅ Clean break while framework is young
+- Zero migration cost
+- Works functionally
 
 **Cons**:
-- ⚠️ Breaking change (but users expect this pre-v1.0)
-- ⚠️ ~60 files to update (manageable)
+- ❌ Doesn't fix Weave logging
+- ❌ Still misleading API
+- ❌ Still violates best practices
+- ❌ Missed opportunity for better design
 
-**Why chosen**: Best long-term solution, clean API, acceptable migration cost
+**Why rejected**: Doesn't solve any of our goals
+
+### Option D (Chosen): Split into `.go()` and `.stream()` 
+**Approach**: Two separate methods, each with single responsibility
+
+```python
+async def go(self, thread) -> AgentResult:
+    """Non-streaming only"""
+    return await self._go_complete(thread)
+
+async def stream(self, thread, mode="events"):
+    """Streaming only"""
+    if mode == "events":
+        async for event in self._go_stream(thread):
+            yield event
+    else:
+        async for chunk in self._go_stream_raw(thread):
+            yield chunk
+```
+
+**Pros**:
+- ✅ No Python syntax limitations (both methods work perfectly)
+- ✅ Clear intent (method name indicates behavior)
+- ✅ Single responsibility (each does one thing)
+- ✅ Industry standard (httpx, aiohttp, FastAPI all split these)
+- ✅ Better type safety (no Union return types)
+- ✅ Proper async (enables Weave observability)
+- ✅ Simpler code (~45 lines less)
+
+**Cons**:
+- ⚠️ Breaking change for streaming users too
+- ⚠️ More call sites to update (~100 streaming + ~150 non-streaming)
+
+**Why chosen**: 
+- Best long-term design
+- Follows industry best practices
+- Solves all our problems
+- Framework is young enough to make this change
+- Clear migration path with regex patterns
 
 ## 6. Data Model & Contract Changes
 
 ### API Changes
 
-#### Breaking Change: Method Signature
-```python
-# v4.x
-def go(...) -> Union[AgentResult, AsyncGenerator[...]]
+#### Breaking Change: Split into Two Methods
 
-# v5.0.0
-async def go(...) -> Union[AgentResult, AsyncGenerator[...]]
+```python
+# v4.x - Single overloaded method
+def go(
+    self,
+    thread_or_id: Union[Thread, str],
+    stream: Union[bool, Literal["events", "raw"]] = False
+) -> Union[AgentResult, AsyncGenerator[ExecutionEvent, None], AsyncGenerator[Any, None]]:
+    """Process thread (streaming or not based on parameter)"""
+
+# v5.0.0 - Two focused methods
+async def go(
+    self,
+    thread_or_id: Union[Thread, str]
+) -> AgentResult:
+    """Execute agent and return complete result."""
+
+async def stream(
+    self,
+    thread_or_id: Union[Thread, str],
+    mode: Literal["events", "raw"] = "events"
+) -> AsyncGenerator[Union[ExecutionEvent, Any], None]:
+    """Stream agent execution events or raw chunks."""
 ```
 
 **Impact**:
 - Non-streaming: `result = agent.go(thread)` → `result = await agent.go(thread)`
-- Streaming: No change (`async for event in agent.go(...)`)
+- Event streaming: `async for event in agent.go(thread, stream=True)` → `async for event in agent.stream(thread)`
+- Raw streaming: `async for chunk in agent.go(thread, stream="raw")` → `async for chunk in agent.stream(thread, mode="raw")`
 
 #### No Changes To
-- Return types (AgentResult, ExecutionEvent, raw chunks)
-- Parameter types (thread_or_id, stream)
+- Return data types (AgentResult, ExecutionEvent, raw chunks)
 - Event structures or data models
 - Thread/Message/Attachment schemas
 - Tool execution contracts
+- Internal implementation methods
 
 ### Backward Compatibility
 
-**None** - This is an intentional breaking change:
+**None** - This is an intentional breaking change for ALL users:
 
 ```python
 # v4.x (OLD)
 result = agent.go(thread)  # Works
-result = await agent.go(thread)  # Also works (awaiting returns AgentResult)
+async for event in agent.go(thread, stream=True):  # Works
 
 # v5.0.0 (NEW)
 result = agent.go(thread)  # RuntimeWarning: coroutine never awaited
-result = await agent.go(thread)  # Works ✅
+result = await agent.go(thread)  # ✅ Works
+
+async for event in agent.go(thread, stream=True):  # TypeError: unexpected keyword 'stream'
+async for event in agent.stream(thread):  # ✅ Works
 ```
 
 ### Deprecation Plan
@@ -427,8 +494,8 @@ result = await agent.go(thread)  # Works ✅
 **No deprecation period** - Clean break for v5.0.0:
 1. Framework is new (Tyler v4.x is months old)
 2. Limited production usage
-3. Simple migration (add `await`)
-4. Clear error messages guide users
+3. Clear migration patterns with regex examples
+4. Clear Python error messages guide users
 
 ## 7. Security, Privacy, Compliance
 
@@ -590,11 +657,11 @@ git revert <commit-hash>  # Reverts all changes
 ### TDD Commitment
 
 We will follow strict TDD:
-1. ✅ **Write failing test** - Add `await` to test, verify it passes
-2. ✅ **Confirm failure** - Remove `await`, verify test fails with "coroutine never awaited"
-3. ✅ **Implement** - Change `def go` → `async def go`
+1. ✅ **Write failing test** - Update test to use new `.go()` and `.stream()` methods
+2. ✅ **Confirm failure** - Test fails with AttributeError or TypeError (methods don't exist yet)
+3. ✅ **Implement** - Add new `.go()` and `.stream()` methods, remove old `.go()`
 4. ✅ **Verify pass** - All tests pass
-5. ✅ **Refactor** - Clean up, ensure consistency
+5. ✅ **Refactor** - Clean up docstrings, ensure consistency
 
 ### Spec → Test Mapping
 
@@ -602,22 +669,26 @@ From `spec.md` acceptance criteria:
 
 | Acceptance Criterion | Test ID(s) | Test File |
 |---------------------|------------|-----------|
-| **Non-Streaming Mode - Clear Async Semantics** | `test_agent_go_async_non_streaming` | `test_agent.py` |
-| Non-streaming returns AgentResult when awaited | `test_go_returns_agent_result` | `test_agent.py` |
-| Non-streaming processes messages correctly | `test_go_processes_thread` | `test_agent.py` |
-| **Event Streaming Mode - Consistent Async Pattern** | `test_agent_go_async_event_streaming` | `test_agent_streaming.py` |
-| Event streaming yields ExecutionEvents | `test_go_stream_events` | `test_agent_streaming.py` |
-| Event streaming works with async for | `test_go_stream_async_iteration` | `test_agent_streaming.py` |
-| **Raw Streaming Mode - Consistent Async Pattern** | `test_agent_go_async_raw_streaming` | `test_agent_streaming.py` |
-| Raw streaming yields LiteLLM chunks | `test_go_stream_raw_chunks` | `test_agent_streaming.py` |
-| **API Clarity - Developer Can See Async Nature** | `test_agent_go_signature_is_async` | `test_agent.py` |
-| Method signature shows async def | `test_go_is_coroutine_function` | `test_agent.py` |
-| **Invalid Stream Parameter (Negative Case)** | `test_go_invalid_stream_raises` | `test_agent.py` |
-| Invalid stream value raises ValueError | `test_go_invalid_stream_error_message` | `test_agent.py` |
-| **Observability Tooling Works (Validation)** | `test_weave_traces_go_correctly` | `test_agent_observability.py` |
-| Weave captures complete execution trace | `test_weave_streaming_trace` | `test_agent_observability.py` |
-| **Breaking Change - Clear Error Message** | `test_go_without_await_warns` | `test_agent.py` |
-| Forgetting await produces clear error | (manual validation - Python runtime) | - |
+| **Non-Streaming Mode - Clear, Focused Method** | `test_agent_go_non_streaming` | `test_agent.py` |
+| Returns AgentResult when awaited | `test_go_returns_agent_result` | `test_agent.py` |
+| No stream parameter exists | `test_go_no_stream_parameter` | `test_agent.py` |
+| **Event Streaming Mode - Separate Method** | `test_agent_stream_events` | `test_agent_streaming.py` |
+| `.stream()` yields ExecutionEvents | `test_stream_yields_events` | `test_agent_streaming.py` |
+| Works with async for iteration | `test_stream_async_iteration` | `test_agent_streaming.py` |
+| **Raw Streaming Mode - Same Method, Different Mode** | `test_agent_stream_raw` | `test_agent_streaming.py` |
+| `.stream(mode="raw")` yields chunks | `test_stream_raw_yields_chunks` | `test_agent_streaming.py` |
+| **API Clarity - Single Responsibility** | `test_api_clarity_split_methods` | `test_agent.py` |
+| `.go()` and `.stream()` both exist | `test_methods_exist_separately` | `test_agent.py` |
+| **Type Safety - No Union Types** | `test_go_type_is_agentresult` | `test_agent.py` |
+| `.go()` returns AgentResult only | `test_go_return_type_annotation` | `test_agent.py` |
+| `.stream()` returns AsyncGenerator | `test_stream_return_type_annotation` | `test_agent.py` |
+| **Invalid Stream Mode (Negative Case)** | `test_stream_invalid_mode_raises` | `test_agent_streaming.py` |
+| Invalid mode raises ValueError | `test_stream_invalid_mode_message` | `test_agent_streaming.py` |
+| **Observability Tooling Works (Validation)** | `test_weave_traces_go` | `test_agent_observability.py` |
+| Weave traces `.go()` correctly | `test_weave_traces_stream` | `test_agent_observability.py` |
+| Weave traces `.stream()` correctly | `test_weave_both_methods` | `test_agent_observability.py` |
+| **Breaking Change - Clear Migration Path** | (manual validation) | - |
+| Old `stream` parameter raises TypeError | `test_go_stream_parameter_error` | `test_agent.py` |
 
 ### Test Tiers
 
@@ -628,8 +699,20 @@ async def test_go_is_async():
     """Verify .go() is an async function"""
     assert inspect.iscoroutinefunction(Agent.go)
 
-async def test_go_non_streaming_requires_await():
-    """Verify non-streaming mode returns AgentResult when awaited"""
+async def test_stream_is_async():
+    """Verify .stream() is an async function"""
+    assert inspect.isasyncgenfunction(Agent.stream)
+
+async def test_go_no_stream_parameter():
+    """Verify .go() doesn't accept stream parameter"""
+    agent = Agent(tools=[])
+    thread = Thread()
+    
+    with pytest.raises(TypeError, match="unexpected keyword argument 'stream'"):
+        await agent.go(thread, stream=True)
+
+async def test_go_returns_agent_result():
+    """Verify .go() returns AgentResult when awaited"""
     agent = Agent(tools=[])
     thread = Thread()
     thread.add_message(Message(role="user", content="Hello"))
@@ -638,14 +721,14 @@ async def test_go_non_streaming_requires_await():
     assert isinstance(result, AgentResult)
     assert result.content is not None
 
-async def test_go_streaming_events():
-    """Verify event streaming yields ExecutionEvents"""
+async def test_stream_yields_events():
+    """Verify .stream() yields ExecutionEvents"""
     agent = Agent(tools=[])
     thread = Thread()
     thread.add_message(Message(role="user", content="Hello"))
     
     events = []
-    async for event in agent.go(thread, stream=True):
+    async for event in agent.stream(thread):
         events.append(event)
         if event.type == EventType.EXECUTION_COMPLETE:
             break
@@ -653,35 +736,35 @@ async def test_go_streaming_events():
     assert len(events) > 0
     assert all(isinstance(e, ExecutionEvent) for e in events)
 
-async def test_go_streaming_raw():
-    """Verify raw streaming yields chunks"""
+async def test_stream_raw_yields_chunks():
+    """Verify .stream(mode='raw') yields chunks"""
     agent = Agent(tools=[])
     thread = Thread()
     thread.add_message(Message(role="user", content="Hello"))
     
     chunks = []
-    async for chunk in agent.go(thread, stream="raw"):
+    async for chunk in agent.stream(thread, mode="raw"):
         chunks.append(chunk)
         if hasattr(chunk, 'choices') and chunk.choices[0].finish_reason:
             break
     
     assert len(chunks) > 0
 
-async def test_go_invalid_stream_raises():
-    """Verify invalid stream parameter raises ValueError"""
+async def test_stream_invalid_mode_raises():
+    """Verify invalid mode parameter raises ValueError"""
     agent = Agent(tools=[])
     thread = Thread()
     
-    with pytest.raises(ValueError, match="Invalid stream value"):
-        async for _ in agent.go(thread, stream="invalid"):
+    with pytest.raises(ValueError, match="Invalid mode"):
+        async for _ in agent.stream(thread, mode="invalid"):
             pass
 ```
 
 #### Integration Tests
 ```python
 # test_agent_observability.py
-async def test_weave_traces_async_go():
-    """Verify Weave captures complete trace with async .go()"""
+async def test_weave_traces_go():
+    """Verify Weave captures complete trace for .go()"""
     weave.init("test-project")
     
     agent = Agent(tools=["web"])
@@ -691,22 +774,33 @@ async def test_weave_traces_async_go():
     result = await agent.go(thread)
     
     # Verify Weave captured the call
-    # (Weave-specific assertions - check dashboard/API)
     assert result is not None
 
-async def test_weave_traces_streaming_go():
-    """Verify Weave captures streaming execution"""
+async def test_weave_traces_stream():
+    """Verify Weave captures streaming execution for .stream()"""
     weave.init("test-project")
     
     agent = Agent(tools=[])
     thread = Thread()
     thread.add_message(Message(role="user", content="Hello"))
     
-    async for event in agent.go(thread, stream=True):
+    async for event in agent.stream(thread):
         if event.type == EventType.EXECUTION_COMPLETE:
             break
     
     # Verify Weave captured streaming events
+
+async def test_weave_traces_stream_raw():
+    """Verify Weave captures raw streaming"""
+    weave.init("test-project")
+    
+    agent = Agent(tools=[])
+    thread = Thread()
+    thread.add_message(Message(role="user", content="Hello"))
+    
+    async for chunk in agent.stream(thread, mode="raw"):
+        if hasattr(chunk, 'choices') and chunk.choices[0].finish_reason:
+            break
 ```
 
 #### Examples Validation
@@ -888,65 +982,73 @@ async def test_go_performance_unchanged():
 
 ## 12. Milestones / Plan (post‑approval)
 
-### Milestone 1: Core Implementation (1 hour)
-**Goal**: Update agent.py with async .go()
+### Milestone 1: Core Implementation (2 hours)
+**Goal**: Split .go() into two methods in agent.py
 
 **Tasks**:
-1. ✅ Change method signature: `def go(...)` → `async def go(...)`
-2. ✅ Update all `@overload` decorators to `async def`
-3. ✅ Add `await` to non-streaming return: `return await self._go_complete(...)`
-4. ✅ Change streaming returns to yield from:
-   - `async for event in self._go_stream(...): yield event`
-   - `async for chunk in self._go_stream_raw(...): yield chunk`
-5. ✅ Update docstring examples to show `await`
-6. ✅ Run mypy type check
+1. ✅ Remove old `.go()` method (lines ~586-690)
+   - Delete `@overload` decorators
+   - Delete routing logic
+2. ✅ Add new `async def go(thread)` method (~20 lines)
+   - Simple signature: `thread_or_id` → `AgentResult`
+   - Implementation: `return await self._go_complete(thread_or_id)`
+   - Docstring with examples
+3. ✅ Add new `async def stream(thread, mode="events")` method (~40 lines)
+   - Signature: `thread_or_id, mode` → `AsyncGenerator[...]`
+   - Implementation: yield from `_go_stream()` or `_go_stream_raw()`
+   - Docstring with examples
+4. ✅ Run linter (ruff)
+5. ✅ Verify syntax (Python imports agent.py)
 
 **DoD**:
-- [ ] Code changes complete
-- [ ] Type checking passes
-- [ ] Docstring updated
+- [ ] Old `.go()` removed
+- [ ] New `.go()` added (non-streaming only)
+- [ ] New `.stream()` added (streaming only)
 - [ ] No linter errors
+- [ ] File imports successfully
 
 ---
 
-### Milestone 2: Test Updates (4 hours)
-**Goal**: Update all tests to use await
+### Milestone 2: Test Updates (6 hours)
+**Goal**: Update all tests for new API
 
 **Tasks**:
 1. ✅ Update `test_agent.py` (~17 functions)
-   - Add `await` to all non-streaming `.go()` calls
-   - Add new test: `test_go_is_async()`
-2. ✅ Update `test_agent_observability.py` (~8 functions)
-   - Add `await` where needed
-   - Add new test: `test_weave_traces_async_go()`
-3. ✅ Update `test_agent_delegation.py` (~3 functions)
-4. ✅ Update other test files (~5 functions total)
-5. ✅ Verify streaming tests unchanged (all pass)
+   - Add `await` to all `.go()` calls
+   - Add new test: `test_go_no_stream_parameter()`
+   - Add new test: `test_stream_is_async_gen()`
+2. ✅ Update `test_agent_streaming.py` (~30+ functions)
+   - Change ALL `agent.go(thread, stream=True)` → `agent.stream(thread)`
+   - Change `.go(stream="raw")` → `.stream(mode="raw")`
+3. ✅ Update `test_agent_observability.py` (~8 functions)
+   - Add `await` to `.go()` calls
+   - Change streaming calls to `.stream()`
+4. ✅ Update `test_agent_thinking_tokens.py` (~4 functions)
+   - Change all streaming calls to `.stream()`
+5. ✅ Update other test files (~8 functions)
 6. ✅ Run full test suite
 
 **DoD**:
 - [ ] All tests updated
 - [ ] All tests passing
 - [ ] Coverage maintained >95%
-- [ ] No coroutine warnings in test output
+- [ ] No coroutine warnings
 
 ---
 
-### Milestone 3: Examples Update (4 hours)
+### Milestone 3: Examples Update (6 hours)
 **Goal**: Update all example files
 
 **Tasks**:
-1. ✅ Update workspace examples (4 files)
-   - `examples/getting-started/quickstart.py`
-   - `examples/getting-started/basic-persistence.py`
-   - `examples/getting-started/tool-groups.py`
-   - `examples/integrations/cross-package.py`
+1. ✅ Update workspace examples (8 files)
+   - Add `await` to non-streaming
+   - Change `.go(stream=True)` → `.stream()`
 2. ✅ Update Tyler examples (~26 files)
-   - All files in `packages/tyler/examples/`
-   - Add `await` to non-streaming calls
-   - Verify streaming examples unchanged
+   - Mixed updates (await + method changes)
+   - ~15 files need `.stream()` changes
+   - ~11 files just need `await`
 3. ✅ Run each example manually
-4. ✅ Verify no coroutine warnings
+4. ✅ Verify no errors or warnings
 
 **DoD**:
 - [ ] All examples updated
@@ -956,48 +1058,47 @@ async def test_go_performance_unchanged():
 
 ---
 
-### Milestone 4: Documentation Update (6 hours)
+### Milestone 4: Documentation Update (8 hours)
 **Goal**: Update all documentation
 
 **Tasks**:
 1. ✅ Update API Reference (6 files)
-   - `docs/api-reference/tyler-agent.mdx` (~6 samples)
-   - `docs/api-reference/tyler-agentresult.mdx` (~5 samples)
-   - Other API ref files
+   - Document both `.go()` and `.stream()` methods
+   - Update all code samples (~15 samples mix of both)
 2. ✅ Update Guides (8 files)
-   - `docs/guides/your-first-agent.mdx` (~5 samples)
-   - `docs/guides/mcp-integration.mdx` (~6 samples)
-   - Other guide files
+   - `docs/guides/streaming-responses.mdx` - Major updates
+   - Other guides - Mixed updates
 3. ✅ Update Concepts (4 files)
-   - `docs/concepts/how-agents-work.mdx` (~7 samples)
-   - Other concept files
+   - Show both methods appropriately
 4. ✅ Update intro/quickstart (2 files)
-5. ✅ Create migration guide in CHANGELOG
+5. ✅ Create comprehensive migration guide in CHANGELOG
 
 **DoD**:
-- [ ] All code samples updated with `await`
-- [ ] Migration guide written
+- [ ] Both methods documented
+- [ ] All code samples updated
+- [ ] Migration guide complete with regex patterns
 - [ ] CHANGELOG updated
-- [ ] No outdated examples remain
+- [ ] No outdated examples
 
 ---
 
-### Milestone 5: Integration Verification (1 hour)
+### Milestone 5: Integration Verification (2 hours)
 **Goal**: Verify all integrations work
 
 **Tasks**:
-1. ✅ Verify Space Monkey
-   - Check `slack_app.py` (already has `await`)
+1. ✅ Update CLI
+   - Change `chat.py` line ~544 to `.stream()`
+   - Verify `init.py` has `await`
+   - Run CLI manually
+2. ✅ Verify Space Monkey
+   - Check `slack_app.py` (should have `await` already)
    - Run integration tests
-2. ✅ Verify CLI
-   - Check `init.py` (already has `await`)
-   - Run CLI commands
 3. ✅ Verify cross-package examples
 4. ✅ Run integration test suite
 
 **DoD**:
+- [ ] CLI updated and working
 - [ ] Space Monkey tests pass
-- [ ] CLI tests pass
 - [ ] Cross-package tests pass
 - [ ] No regressions found
 
@@ -1071,17 +1172,22 @@ async def test_go_performance_unchanged():
 
 | Milestone | Duration | Dependencies |
 |-----------|----------|--------------|
-| 1. Core Implementation | 1 hour | None |
-| 2. Test Updates | 4 hours | M1 complete |
-| 3. Examples Update | 4 hours | M1 complete |
-| 4. Documentation Update | 6 hours | M1 complete |
-| 5. Integration Verification | 1 hour | M2, M3 complete |
-| 6. Validation & Testing | 4 hours | M2, M3, M5 complete |
+| 1. Core Implementation | 2 hours | None |
+| 2. Test Updates | 6 hours | M1 complete |
+| 3. Examples Update | 6 hours | M1 complete |
+| 4. Documentation Update | 8 hours | M1 complete |
+| 5. Integration Verification | 2 hours | M2, M3 complete |
+| 6. Validation & Testing | 5 hours | M2, M3, M5 complete |
 | 7. Release Preparation | 2 hours | M6 complete |
 | 8. Post-Release | Ongoing | M7 complete |
 
-**Total Implementation Time**: ~22 hours (~3 days)  
+**Total Implementation Time**: ~31 hours (~4 days)  
 **Critical Path**: M1 → M2 → M6 → M7
+
+**Note**: Increased from initial async-only estimate due to:
+- All streaming calls need method changes (not just non-streaming)
+- Two methods to implement and test
+- More complex migration (await + method name changes)
 
 ---
 
