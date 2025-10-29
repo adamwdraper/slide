@@ -458,22 +458,39 @@ async def handle_stream_update(event: ExecutionEvent, chat_manager: ChatManager)
         ))
     
     elif event.type == EventType.MESSAGE_CREATED and event.data.get("message", {}).role == "assistant":
-        # Stop the thinking display if it exists
+        # Stop the thinking display if it exists and print final content
         if hasattr(handle_stream_update, 'thinking_live'):
             handle_stream_update.thinking_live.stop()
+            # Print the full thinking content to preserve it (Live may have truncated)
+            thinking_content = ''.join(handle_stream_update.thinking)
+            if thinking_content.strip():
+                console.print(Panel(
+                    Markdown(thinking_content),
+                    title="[dim]💭 Thinking[/]",
+                    border_style="dim",
+                    box=box.ROUNDED
+                ))
             delattr(handle_stream_update, 'thinking_live')
             delattr(handle_stream_update, 'thinking')
         
-        # Stop the live display if it exists
+        # Stop the live display if it exists and print final content
         if hasattr(handle_stream_update, 'live'):
             handle_stream_update.live.stop()
+            # Print the full content to preserve it (Live may have truncated)
+            full_content = ''.join(handle_stream_update.content)
+            if full_content.strip():
+                console.print(Panel(
+                    Markdown(full_content),
+                    title="[blue]Agent[/]",
+                    border_style="blue",
+                    box=box.ROUNDED
+                ))
             delattr(handle_stream_update, 'live')
             delattr(handle_stream_update, 'content')
             
         message = event.data.get("message")
-        # Only print tool calls if present
+        # Print tool calls if present
         if message and message.tool_calls:
-            console.print()  # New line after content chunks
             panels = chat_manager.format_message(message)
             if isinstance(panels, list):
                 for panel in panels:
