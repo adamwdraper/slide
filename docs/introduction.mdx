@@ -45,15 +45,6 @@ asyncio.run(main())
 
 That's it! Your agent can now search the web, analyze images, and complete complex tasks autonomously—and you can watch it happen in real-time.
 
-<Tip>
-**For batch processing**: Use `await agent.go(thread)` to get the final result without streaming:
-```python
-async def main():
-    result = await agent.go(thread)
-    print(result.content)
-```
-</Tip>
-
 ## Why use Slide?
 
 Slide gives you everything you need to build, test, and deploy intelligent AI agents. It is:
