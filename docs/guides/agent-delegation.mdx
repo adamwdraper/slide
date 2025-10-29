@@ -52,7 +52,7 @@ thread.add_message(Message(
     content="Research the latest AI trends and write a report"
 ))
 
-result = await coordinator.go(thread)
+result = await coordinator.run(thread)
 ```
 
 ## How Delegation Works
@@ -163,7 +163,7 @@ thread.add_message(Message(
 ))
 
 # The researcher might delegate to fact_checker and editor
-result = await agents["researcher"].go(thread)
+result = await agents["researcher"].run(thread)
 ```
 
 ### Dynamic agent selection
@@ -218,7 +218,7 @@ class DynamicCoordinator:
         
         thread = Thread()
         thread.add_message(Message(role="user", content=task))
-        return await coordinator.go(thread)
+        return await coordinator.run(thread)
 ```
 
 ## Best practices
@@ -311,7 +311,7 @@ async def run_pipeline(task: str):
     for agent in pipeline:
         thread = Thread()
         thread.add_message(Message(role="user", content=context))
-        result = await agent.go(thread)
+        result = await agent.run(thread)
         context = result.new_messages[-1].content
     return context
 ```
@@ -329,7 +329,7 @@ for agent in [optimist_agent, pessimist_agent, realist_agent]:
         role="user",
         content="What are the implications of AGI?"
     ))
-    result = await agent.go(thread)
+    result = await agent.run(thread)
     perspectives.append({
         "agent": agent.name,
         "view": result.new_messages[-1].content
@@ -346,7 +346,7 @@ thread.add_message(Message(
     role="user",
     content=f"Synthesize these perspectives on AGI: {perspectives}"
 ))
-result = await synthesizer.go(thread)
+result = await synthesizer.run(thread)
 ```
 
 ## Performance Considerations
@@ -374,7 +374,7 @@ async def parallel_research(topics: List[str]):
             content=f"Research {topic} and summarize findings"
         ))
         
-        research_tasks.append(agent.go(thread))
+        research_tasks.append(agent.run(thread))
     
     # Run all research in parallel
     results = await asyncio.gather(*research_tasks)
@@ -445,7 +445,7 @@ class ResilientCoordinator:
             try:
                 thread = Thread()
                 thread.add_message(Message(role="user", content=task))
-                result = await agent.go(thread)
+                result = await agent.run(thread)
                 return result
             except Exception as e:
                 print(f"Agent {agent.name} failed: {e}")
@@ -454,7 +454,7 @@ class ResilientCoordinator:
         # All agents failed, use fallback
         thread = Thread()
         thread.add_message(Message(role="user", content=task))
-        return await self.fallback.go(thread)
+        return await self.fallback.run(thread)
 ```
 
 ## Testing multi-agent systems

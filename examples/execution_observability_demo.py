@@ -20,7 +20,7 @@ async def basic_usage():
     thread.add_message(Message(role="user", content="Hello!"))
     
     # Simple usage - just get the output
-    result = await agent.go(thread)
+    result = await agent.run(thread)
     print(f"Response: {result.content}")
     
     # But you also have access to detailed execution info
@@ -35,7 +35,7 @@ async def monitoring_example():
     thread = Thread() 
     thread.add_message(Message(role="user", content="Explain quantum computing"))
     
-    result = await agent.go(thread)
+    result = await agent.run(thread)
     
     # Access detailed metrics
     print("\n=== Execution Metrics ===")
@@ -87,7 +87,7 @@ async def debugging_example():
     thread = Thread()
     thread.add_message(Message(role="user", content="Do something complex"))
     
-    result = await agent.go(thread)
+    result = await agent.run(thread)
     
     if not result.success:
         print("\n=== Debugging Failed Execution ===")

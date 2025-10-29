@@ -40,7 +40,7 @@ async def main():
 
     # 5. Run the agent. It will use the configured stores internally.
     print("Running agent...")
-    final_thread, new_messages = await agent.go(thread)
+    final_thread, new_messages = await agent.run(thread)
     print("Agent finished processing.")
 
     # 6. Print the assistant's response

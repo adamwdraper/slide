@@ -201,7 +201,7 @@ async def test_agent_delegation_tool_call(mock_litellm, mock_thread_store):
             ))
             
             # Execute parent agent
-            result = await parent_agent.go(thread)
+            result = await parent_agent.run(thread)
             
             # Check that the thread contains the delegation and response
             assert any("I'll delegate this to the specialist" in m.content for m in result.thread.messages if m.role == "assistant")
@@ -305,7 +305,7 @@ async def test_delegation_with_context(mock_litellm, mock_thread_store):
             ))
             
             # Execute parent agent
-            result = await parent_agent.go(thread)
+            result = await parent_agent.run(thread)
             
             # Verify delegation occurred
             assert any("Delegating with context" in m.content for m in result.thread.messages if m.role == "assistant")
@@ -422,7 +422,7 @@ async def test_nested_agent_delegation(mock_litellm, mock_thread_store):
             ))
             
             # Execute parent agent
-            result = await parent_agent.go(thread)
+            result = await parent_agent.run(thread)
             
             # Verify delegation chain occurred
             assert any("I'll delegate to the child agent" in m.content for m in result.thread.messages if m.role == "assistant")

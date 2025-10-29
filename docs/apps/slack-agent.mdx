@@ -167,7 +167,7 @@ async def handle_mention_with_persistence(event, say):
     thread.add_message(message)
     
     # Process and save
-    result = await app.agent.go(thread)
+    result = await app.agent.run(thread)
     await app.agent.thread_store.save_thread(result.thread)
     
     # Respond

@@ -107,7 +107,7 @@ async def main():
         thread.add_message(message)
 
         # Process the thread with the new API
-        result = await agent.go(thread)
+        result = await agent.run(thread)
 
         # Log response and execution details
         logger.info("Assistant: %s", result.content)

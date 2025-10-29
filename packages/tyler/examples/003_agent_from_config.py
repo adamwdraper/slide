@@ -57,7 +57,7 @@ async def example_basic():
         ))
         
         print("\n🤖 Agent response:")
-        result = await agent.go(thread)
+        result = await agent.run(thread)
         print(f"   {result.new_messages[-1].content[:200]}...")
         
     finally:

@@ -584,7 +584,7 @@ class Agent(Model):
         return thread, [m for m in new_messages if m.role != "user"]
 
     @weave.op()
-    async def go(
+    async def run(
         self, 
         thread_or_id: Union[Thread, str]
     ) -> AgentResult:
@@ -609,12 +609,15 @@ class Agent(Model):
                       but execution details are still available in the result
                       
         Example:
-            result = await agent.go(thread)
+            result = await agent.run(thread)
             print(f"Response: {result.content}")
             print(f"New messages: {len(result.new_messages)}")
         """
-        logger.debug("Agent.go() called (non-streaming mode)")
+        logger.debug("Agent.run() called (non-streaming mode)")
         return await self._go_complete(thread_or_id)
+    
+    # Backwards compatibility alias
+    go = run
     
     @weave.op()
     async def stream(

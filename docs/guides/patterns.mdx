@@ -233,7 +233,7 @@ class ValidatedAgent:
         """Process thread with output validation"""
         
         # Process normally
-        result = await self.agent.go(thread)
+        result = await self.agent.run(thread)
         result_thread = result.thread
         messages = result.new_messages
         
@@ -250,7 +250,7 @@ class ValidatedAgent:
                     ))
                     
                     # Retry
-                    return await self.agent.go(thread)
+                    return await self.agent.run(thread)
         
         return result_thread, messages
     
@@ -354,7 +354,7 @@ class ContextManager:
         ))
         
         # Get summary
-        result = await agent.go(summary_thread)
+        result = await agent.run(summary_thread)
         return result.new_messages[-1].content if result.new_messages else "No summary available"
 ```
 
@@ -639,7 +639,7 @@ class GracefulAgent:
         """Process with graceful error handling"""
         
         try:
-            return await self.agent.go(thread)
+            return await self.agent.run(thread)
         except Exception as e:
             # Find appropriate handler
             for error_type, handler in self.error_handlers.items():
@@ -677,7 +677,7 @@ async def handle_tool_error(thread, error):
         model_name="gpt-4",
         purpose="To complete tasks without tools"
     )
-    return await no_tool_agent.go(thread)
+    return await no_tool_agent.run(thread)
 
 graceful.register_error_handler(ToolExecutionError, handle_tool_error)
 ```
@@ -705,7 +705,7 @@ class AgentHealthMonitor:
         start_time = datetime.now()
         
         try:
-            result = await agent.go(thread)
+            result = await agent.run(thread)
             self.success_count += 1
             
             # Record response time

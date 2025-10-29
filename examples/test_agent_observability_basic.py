@@ -22,7 +22,7 @@ async def main():
     # Test that we can call the new go() method
     try:
         # The actual API call will fail without credentials, but we can test the structure
-        result = await agent.go(thread)
+        result = await agent.run(thread)
         print(f"✅ Got result of type: {type(result).__name__}")
         
         # Check the result structure
@@ -56,7 +56,7 @@ async def main():
     print("\n✅ All basic structure tests passed!")
     print("\nThe new agent execution observability API is working correctly.")
     print("You can now:")
-    print("- Use agent.go(thread) for non-streaming with full execution details")
+    print("- Use agent.run(thread) for non-streaming with full execution details")
     print("- Use agent.stream(thread) for real-time event streaming")
     print("- Access detailed metrics, tool usage, and execution events")
 

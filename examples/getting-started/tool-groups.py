@@ -111,7 +111,7 @@ async def main():
     message = Message(role="user", content="What tools do you have available?")
     thread.add_message(message)
     
-    processed_thread, new_messages = await agent1.go(thread)
+    processed_thread, new_messages = await agent1.run(thread)
     
     for msg in new_messages:
         if msg.role == "assistant":

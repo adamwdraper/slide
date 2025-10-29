@@ -113,7 +113,7 @@ async def main():
         
         try:
             # Process the thread with the new API
-            result = await agent.go(thread)
+            result = await agent.run(thread)
             
             # Log response and tool usage
             logger.info("Assistant: %s", result.content)
@@ -162,7 +162,7 @@ async def interactive_demo():
         message = Message(role="user", content=user_input)
         thread.add_message(message)
         
-        result = await agent.go(thread)
+        result = await agent.run(thread)
         
         print(f"\n🤖 Agent: {result.content}")
         

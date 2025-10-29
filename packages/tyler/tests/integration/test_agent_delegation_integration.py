@@ -209,7 +209,7 @@ async def test_parallel_agent_delegation(mock_thread_store):
         with patch.object(tool_runner, 'execute_tool_call', timed_tool_execution):
             # Run the coordinator agent
             start_time = datetime.now(UTC)
-            result = await coordinator_agent.go(thread)
+            result = await coordinator_agent.run(thread)
             total_time = (datetime.now(UTC) - start_time).total_seconds()
             
             # Verify all three delegations occurred
@@ -318,7 +318,7 @@ async def test_agent_delegation_error_handling(mock_thread_store):
         
         with patch.object(tool_runner, 'execute_tool_call', mock_tool_execution):
             # Run the coordinator agent
-            result = await coordinator_agent.go(thread)
+            result = await coordinator_agent.run(thread)
             
             # Verify both delegations were attempted
             tool_messages = [msg for msg in result.thread.messages if msg.role == "tool"]

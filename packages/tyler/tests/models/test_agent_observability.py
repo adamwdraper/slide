@@ -53,7 +53,7 @@ async def test_go_non_streaming_returns_agent_result(mock_completion):
     thread.add_message(Message(role="user", content="Hello"))
     
     # Run agent
-    result = await agent.go(thread)
+    result = await agent.run(thread)
     
     # Verify result type and structure
     assert isinstance(result, AgentResult)
@@ -157,7 +157,7 @@ async def test_execution_with_tool_calls(mock_completion):
         thread = Thread()
         thread.add_message(Message(role="user", content="What is 5 + 3?"))
         
-        result = await agent.go(thread)
+        result = await agent.run(thread)
         
         # Verify the result contains the expected content
         assert result.content == "The result is 8"
@@ -174,7 +174,7 @@ async def test_execution_error_handling(mock_completion):
     thread = Thread()
     thread.add_message(Message(role="user", content="Hello"))
     
-    result = await agent.go(thread)
+    result = await agent.run(thread)
     
     # Should still get a result, but with error
     assert isinstance(result, AgentResult)
@@ -239,7 +239,7 @@ async def test_tool_duration_tracking_non_streaming(mock_completion):
     thread.add_message(Message(role="user", content="Please use the slow tool"))
     
     # Execute
-    result = await agent.go(thread)
+    result = await agent.run(thread)
     
     # Verify tool was executed by checking messages
     tool_executed = False
@@ -387,7 +387,7 @@ async def test_json_parsing_error_handling(mock_completion):
     thread.add_message(Message(role="user", content="Test"))
     
     # Should handle gracefully without bare except
-    result = await agent.go(thread)
+    result = await agent.run(thread)
     
     # Verify tool was still executed (JSON parse errors should be handled gracefully)
     tool_messages = [msg for msg in result.new_messages if msg.role == "tool"]
@@ -406,7 +406,7 @@ async def test_type_hints_with_overloads():
     
     # Non-streaming returns AgentResult
     async def test_non_streaming():
-        result: AgentResult = await agent.go(thread)
+        result: AgentResult = await agent.run(thread)
         return result
     
     # Streaming returns AsyncGenerator[ExecutionEvent, None]

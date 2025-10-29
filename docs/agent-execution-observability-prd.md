@@ -6,7 +6,7 @@ This PRD outlines a redesign of the Tyler Agent's execution API to provide compr
 
 ## Problem Statement
 
-Currently, the agent's `.go()` method returns minimal information `(thread, new_messages)`, making it difficult for developers to:
+Currently, the agent's `.run()` method returns minimal information `(thread, new_messages)`, making it difficult for developers to:
 - Understand what tools were used during execution
 - Track token usage and costs
 - Debug complex multi-step agent workflows
@@ -182,12 +182,12 @@ class Agent:
                       
         Example:
             # Non-streaming usage
-            result = await agent.go(thread)
+            result = await agent.run(thread)
             print(f"Response: {result.content}")
             print(f"Tokens used: {result.execution.total_tokens}")
             
             # Streaming usage
-            async for event in agent.go(thread, stream=True):
+            async for event in agent.run(thread, stream=True):
                 if event.type == EventType.MESSAGE_CREATED:
                     print(f"New message: {event.data['message'].content}")
         """
@@ -278,7 +278,7 @@ async def _go_stream(self, thread: Union[Thread, str]) -> AsyncGenerator[Executi
 
 ```python
 # Simple usage - developers can ignore execution details
-result = await agent.go(thread)
+result = await agent.run(thread)
 print(result.content)
 ```
 
@@ -286,7 +286,7 @@ print(result.content)
 
 ```python
 # Rich telemetry for production monitoring
-result = await agent.go(thread)
+result = await agent.run(thread)
 
 # Log execution metrics
 if result.new_messages:
@@ -312,7 +312,7 @@ metrics.gauge("agent_cost", estimated_cost)
 
 ```python
 # Stream events for responsive UI
-async for event in agent.go(thread, stream=True):
+async for event in agent.run(thread, stream=True):
     match event.type:
         case EventType.LLM_STREAM_CHUNK:
             # Show typing indicator and content
@@ -350,7 +350,7 @@ async for event in agent.go(thread, stream=True):
 
 ```python
 # Detailed debugging during development
-result = await agent.go(thread)
+result = await agent.run(thread)
 
 if not result.success:
     # Find what went wrong
@@ -376,16 +376,16 @@ Since backward compatibility is not required, the migration is straightforward:
 
 ```python
 # Old API
-thread, messages = await agent.go(thread)
-async for event in agent.go(thread, stream=True):
+thread, messages = await agent.run(thread)
+async for event in agent.run(thread, stream=True):
     if event.type == EventType.LLM_STREAM_CHUNK:
         print(event.data.get("content_chunk", ""))
 
 # New API
-result = await agent.go(thread)
+result = await agent.run(thread)
 messages = result.new_messages  # Same messages as before
 
-async for event in agent.go(thread, stream=True):
+async for event in agent.run(thread, stream=True):
     if event.type == EventType.LLM_STREAM_CHUNK:
         print(event.data["content_chunk"])
 ```

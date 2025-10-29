@@ -111,7 +111,7 @@ async def main():
     message = Message(role="user", content="What tools do you have available?")
     thread.add_message(message)
     
-    result = await agent1.go(thread)
+    result = await agent1.run(thread)
     
     print(f"Multi-tool agent: {result.content}")
     print(f"\nAvailable tools: {len(agent1._processed_tools)}")
