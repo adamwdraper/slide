@@ -51,7 +51,7 @@ async def stream_response():
     print("🤖 Assistant: ", end="", flush=True)
     
     # Use stream=True or stream="events" (both work identically)
-    async for event in agent.go(thread, stream=True):
+    async for event in agent.stream(thread):
         if event.type == EventType.LLM_STREAM_CHUNK:
             print(event.data.get("content_chunk", ""), end="", flush=True)
     
@@ -84,7 +84,7 @@ async def raw_stream_response():
     thread.add_message(message)
     
     # Get raw OpenAI-compatible chunks
-    async for chunk in agent.go(thread, stream="raw"):
+    async for chunk in agent.stream(thread, mode="raw"):
         # chunk is a raw LiteLLM object
         if hasattr(chunk, 'choices') and chunk.choices:
             delta = chunk.choices[0].delta
@@ -178,7 +178,7 @@ async def openai_compatible_endpoint(messages: list):
         thread.add_message(Message(role=msg["role"], content=msg["content"]))
     
     async def generate():
-        async for chunk in agent.go(thread, stream="raw"):
+        async for chunk in agent.stream(thread, mode="raw"):
             yield serialize_chunk_to_sse(chunk)
     
     return StreamingResponse(generate(), media_type="text/event-stream")
@@ -193,7 +193,7 @@ ExecutionEvent objects provide detailed information about the agent's execution:
 ```python
 from tyler import EventType
 
-async for event in agent.go(thread, stream=True):
+async for event in agent.stream(thread):
     if event.type == EventType.LLM_STREAM_CHUNK:
         # Text being generated
         print(event.data.get("content_chunk", ""), end="", flush=True)
@@ -248,7 +248,7 @@ thread.add_message(Message(
 print("💭 Thinking: ", end="", flush=True)
 print("\n💬 Response: ", end="", flush=True)
 
-async for event in agent.go(thread, stream=True):
+async for event in agent.stream(thread):
     if event.type == EventType.LLM_THINKING_CHUNK:
         # Thinking/reasoning tokens (separate from content)
         thinking = event.data['thinking_chunk']
@@ -274,7 +274,7 @@ async for event in agent.go(thread, stream=True):
 After streaming completes, thinking content is stored as a top-level field on the message:
 
 ```python
-async for event in agent.go(thread, stream=True):
+async for event in agent.stream(thread):
     if event.type == EventType.MESSAGE_CREATED:
         msg = event.data['message']
         if msg.role == "assistant":
@@ -288,7 +288,7 @@ async for event in agent.go(thread, stream=True):
 Raw mode preserves all thinking fields from LiteLLM:
 
 ```python
-async for chunk in agent.go(thread, stream="raw"):
+async for chunk in agent.stream(thread, mode="raw"):
     if hasattr(chunk, 'choices') and chunk.choices:
         delta = chunk.choices[0].delta
         
@@ -313,7 +313,7 @@ A common pattern is showing thinking in a collapsible section:
 thinking_section = []
 response_section = []
 
-async for event in agent.go(thread, stream=True):
+async for event in agent.stream(thread):
     if event.type == EventType.LLM_THINKING_CHUNK:
         thinking_section.append(event.data['thinking_chunk'])
     elif event.type == EventType.LLM_STREAM_CHUNK:
@@ -352,7 +352,7 @@ Models without thinking support work unchanged - no `LLM_THINKING_CHUNK` events 
 ```python
 agent = Agent(name="regular", model_name="gpt-4o")  # No thinking
 
-async for event in agent.go(thread, stream=True):
+async for event in agent.stream(thread):
     if event.type == EventType.LLM_THINKING_CHUNK:
         # This won't execute for non-reasoning models
         pass
@@ -385,7 +385,7 @@ async def research_with_streaming(topic: str):
     )
     thread.add_message(message)
     
-    async for event in agent.go(thread, stream=True):
+    async for event in agent.stream(thread):
         if event.type == EventType.LLM_STREAM_CHUNK:
             print(event.data.get("content_chunk", ""), end="", flush=True)
         
@@ -442,7 +442,7 @@ class StreamingChat:
         
         print("\n🤖 ", end="", flush=True)
         
-        async for update in self.agent.go(self.thread, stream=True):
+        async for update in self.agent.stream(self.thread):
             if update.type == EventType.LLM_STREAM_CHUNK:
                 print(update.data.get("content_chunk", ""), end="", flush=True)
             elif update.type == EventType.EXECUTION_COMPLETE:
@@ -500,7 +500,7 @@ async def websocket_endpoint(websocket: WebSocket):
         thread.add_message(message)
         
         # Stream response
-        async for update in agent.go(thread, stream=True):
+        async for update in agent.stream(thread):
             if update.type == EventType.LLM_STREAM_CHUNK:
                 await websocket.send_json({
                     "type": "content",
@@ -537,7 +537,7 @@ async def stream_with_progress():
     tool_count = 0
     content_buffer = []
     
-    async for update in agent.go(thread, stream=True):
+    async for update in agent.stream(thread):
         if update.type == EventType.TOOL_SELECTED:
             tool_count += 1
             print(f"\r⏳ Processing... ({tool_count} tools used)", end="", flush=True)
@@ -561,7 +561,7 @@ class BufferedStreamer:
         self.buffer_size = buffer_size
     
     async def stream(self, agent, thread):
-        async for update in agent.go(thread, stream=True):
+        async for update in agent.stream(thread):
             if update.type == EventType.LLM_STREAM_CHUNK:
                 self.buffer.append(update.data.get("content_chunk", ""))
                 
@@ -597,7 +597,7 @@ class CancellableStream:
     
     async def stream_with_cancel(self, agent, thread):
         try:
-            async for update in agent.go(thread, stream=True):
+            async for update in agent.stream(thread):
                 if self.cancelled:
                     print("\n\n⚠️  Generation cancelled by user")
                     break
@@ -643,7 +643,7 @@ async def rich_streaming():
     content = ""
     
     with Live(Panel("", title="🤖 Assistant"), refresh_per_second=10) as live:
-        async for update in agent.go(thread, stream=True):
+        async for update in agent.stream(thread):
             if update.type == EventType.LLM_STREAM_CHUNK:
                 content += update.data.get("content_chunk", "")
                 live.update(Panel(Markdown(content), title="🤖 Assistant"))
@@ -668,7 +668,7 @@ class TokenCounter:
         self.chunks = []
     
     async def count_stream(self, agent, thread):
-        async for update in agent.go(thread, stream=True):
+        async for update in agent.stream(thread):
             if update.type == EventType.LLM_STREAM_CHUNK:
                 self.chunks.append(update.data.get("content_chunk", ""))
                 # Rough estimate: 1 token ≈ 4 characters
@@ -712,7 +712,7 @@ async def process_multiple_streams():
 
 async def collect_stream(agent, thread):
     content = []
-    async for update in agent.go(thread, stream=True):
+    async for update in agent.stream(thread):
         if update.type == EventType.LLM_STREAM_CHUNK:
             content.append(update.data.get("content_chunk", ""))
     return "".join(content)
@@ -725,7 +725,7 @@ from datetime import datetime
 
 async def safe_stream(agent, thread):
     try:
-        async for update in agent.go(thread, stream=True):
+        async for update in agent.stream(thread):
             yield update
     except asyncio.TimeoutError:
         yield ExecutionEvent(
@@ -781,7 +781,7 @@ class LiveResearchAssistant:
         content_buffer = []
         tool_uses = []
         
-        async for update in self.agent.go(thread, stream=True):
+        async for update in self.agent.stream(thread):
             if update.type == EventType.LLM_STREAM_CHUNK:
                 chunk = update.data.get("content_chunk", "")
                 content_buffer.append(chunk)

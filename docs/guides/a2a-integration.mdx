@@ -283,7 +283,7 @@ async def stream_coordinated_task():
     print("🎯 Starting coordinated task execution...")
     print("=" * 50)
     
-    async for update in coordinator.go(thread, stream=True):
+    async for update in coordinator.stream(thread):
         if update.type == EventType.LLM_STREAM_CHUNK:
             print(update.data.get("content_chunk", ""), end="", flush=True)
         elif update.type == EventType.TOOL_SELECTED:

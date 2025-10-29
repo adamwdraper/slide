@@ -266,7 +266,7 @@ thread.add_message(Message(
     content="Delegate to research_agent with streaming: Analyze AI market trends"
 ))
 
-async for update in agent.go(thread, stream=True):
+async for update in agent.stream(thread):
     if update.type == EventType.LLM_STREAM_CHUNK:
         print(update.data.get("content_chunk", ""), end="", flush=True)
     elif update.type == EventType.TOOL_SELECTED:

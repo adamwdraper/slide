@@ -200,7 +200,7 @@ thread = Thread()
 message = Message(role="user", content="Write a detailed analysis of...")
 thread.add_message(message)
 
-async for event in agent.go(thread, stream=True):
+async for event in agent.stream(thread):
     if event.type == EventType.LLM_STREAM_CHUNK:
         print(event.data.get("content_chunk", ""), end="", flush=True)
     elif event.type == EventType.TOOL_SELECTED:

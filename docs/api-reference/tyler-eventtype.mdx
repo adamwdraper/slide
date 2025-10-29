@@ -126,7 +126,7 @@ The `EventType` enum defines all possible events that can be emitted during agen
 from tyler import Agent, Thread, EventType
 
 async def handle_events(agent: Agent, thread: Thread):
-    async for event in agent.go(thread, stream=True):
+    async for event in agent.stream(thread):
         match event.type:
             case EventType.LLM_STREAM_CHUNK:
                 print(event.data["content_chunk"], end="")
@@ -146,7 +146,7 @@ from collections import Counter
 async def count_events(agent: Agent, thread: Thread) -> Counter:
     event_counts = Counter()
     
-    async for event in agent.go(thread, stream=True):
+    async for event in agent.stream(thread):
         event_counts[event.type] += 1
     
     return event_counts
@@ -168,7 +168,7 @@ async def monitor_performance(agent: Agent, thread: Thread):
         "total_latency_ms": 0
     }
     
-    async for event in agent.go(thread, stream=True):
+    async for event in agent.stream(thread):
         if event.type == EventType.LLM_REQUEST:
             metrics["llm_requests"] += 1
         
@@ -215,7 +215,7 @@ class EventHandler:
 
 # Usage
 handler = EventHandler()
-async for event in agent.go(thread, stream=True):
+async for event in agent.stream(thread):
     await handler.handle(event)
 ```
 
