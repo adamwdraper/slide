@@ -510,6 +510,7 @@ def _main_inner(config: Optional[str], title: Optional[str]):
     """Inner main function with suppressed output"""
     # Use a single event loop for the entire session to maintain MCP connections
     async def async_main():
+        chat_manager = None  # Initialize before try block
         try:
             # Load configuration
             config_data = load_config(config)
@@ -551,7 +552,7 @@ def _main_inner(config: Optional[str], title: Optional[str]):
             raise
         finally:
             # Cleanup MCP connections on exit
-            if chat_manager.agent and chat_manager.agent.mcp:
+            if chat_manager and chat_manager.agent and chat_manager.agent.mcp:
                 try:
                     await chat_manager.agent.cleanup()
                 except Exception as e:
