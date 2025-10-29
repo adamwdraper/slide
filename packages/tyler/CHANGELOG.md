@@ -1,3 +1,13 @@
+## [tyler-v5.0.0] - 2025-10-29
+
+### 🚀 Features
+
+- [**breaking**] Split Agent.go() into .go() and .stream() methods
+- Update all examples and CLI for .go()/.stream() API
+
+### 🧪 Testing
+
+- Update tests for .go()/.stream() API split
 ## [tyler-v4.2.0] - 2025-10-25
 
 ### 🚀 Features

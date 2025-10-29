@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "slide-narrator"
-version = "4.2.0"
+version = "5.0.0"
 description = "Thread and file storage components for conversational AI - the companion to Tyler AI framework"
 readme = "README.md"
 requires-python = ">=3.11"
