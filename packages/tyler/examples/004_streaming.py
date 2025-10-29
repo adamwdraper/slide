@@ -50,7 +50,7 @@ async def main():
     content_buffer = []
     total_tokens = 0
     
-    async for event in agent.go(thread, stream=True):
+    async for event in agent.stream(thread):
         if event.type == EventType.LLM_STREAM_CHUNK:
             # Real-time content streaming
             chunk = event.data.get("content_chunk", "")

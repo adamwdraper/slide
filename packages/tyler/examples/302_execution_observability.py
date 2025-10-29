@@ -115,7 +115,7 @@ async def demo_streaming():
     # In the current implementation, streaming may return different types of events
     # or may not be fully supported as before
     try:
-        async for event in agent.go(thread, stream=True):
+        async for event in agent.stream(thread):
             event_count += 1
             
             if isinstance(event, ExecutionEvent):

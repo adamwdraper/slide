@@ -50,7 +50,7 @@ async def demo_thinking_with_anthropic():
     content_buffer = []
     
     # Stream with event mode to see thinking separately
-    async for event in agent.go(thread, stream=True):
+    async for event in agent.stream(thread):
         if event.type == EventType.LLM_THINKING_CHUNK:
             # Thinking/reasoning tokens
             thinking = event.data['thinking_chunk']
@@ -108,7 +108,7 @@ async def demo_thinking_with_openai_o1():
     logger.info("\n🧠 o1 Reasoning:")
     logger.info("-" * 70)
     
-    async for event in agent.go(thread, stream=True):
+    async for event in agent.stream(thread):
         if event.type == EventType.LLM_THINKING_CHUNK:
             reasoning = event.data['thinking_chunk']
             logger.info(f"[REASONING] {reasoning}")
@@ -145,7 +145,7 @@ async def demo_without_thinking_tokens():
     
     thinking_count = 0
     
-    async for event in agent.go(thread, stream=True):
+    async for event in agent.stream(thread):
         if event.type == EventType.LLM_THINKING_CHUNK:
             thinking_count += 1
         
@@ -175,7 +175,7 @@ async def demo_raw_streaming_with_thinking():
     logger.info("\nRaw chunks (showing structure):\n")
     
     chunk_count = 0
-    async for chunk in agent.go(thread, stream="raw"):
+    async for chunk in agent.stream(thread, mode="raw"):
         chunk_count += 1
         
         if hasattr(chunk, 'choices') and chunk.choices:
@@ -218,7 +218,7 @@ async def demo_thinking_with_ui_separation():
     thinking_section = []
     response_section = []
     
-    async for event in agent.go(thread, stream=True):
+    async for event in agent.stream(thread):
         if event.type == EventType.LLM_THINKING_CHUNK:
             thinking_section.append(event.data['thinking_chunk'])
         

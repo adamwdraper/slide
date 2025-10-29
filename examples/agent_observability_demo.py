@@ -78,7 +78,7 @@ async def main():
     
     # Execute in streaming mode
     print("Events as they happen:")
-    async for event in agent.go(thread2, stream=True):
+    async for event in agent.stream(thread2):
         if event.type == EventType.LLM_REQUEST:
             print(f"🤖 Sending request to {event.data['model']}...")
         elif event.type == EventType.LLM_RESPONSE:

@@ -223,7 +223,7 @@ async def run_interactive_session(coordinator: Agent, adapter: A2AAdapter):
             print('='*60)
             
             # Process with streaming
-            async for event in coordinator.go(thread, stream=True):
+            async for event in coordinator.stream(thread):
                 if event.type == EventType.LLM_STREAM_CHUNK:
                     print(event.data.get("content_chunk", ""), end="", flush=True)
                 elif event.type == EventType.MESSAGE_CREATED and event.data.get("message", {}).get("role") == "tool":

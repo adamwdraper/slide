@@ -66,7 +66,7 @@ async def streaming_ui_example():
     thread.add_message(Message(role="user", content="Write a haiku about coding"))
     
     print("\n=== Streaming Response ===")
-    async for event in agent.go(thread, stream=True):
+    async for event in agent.stream(thread):
         if event.type == EventType.LLM_STREAM_CHUNK:
             # Show content as it arrives
             print(event.data["content_chunk"], end="", flush=True)
@@ -121,7 +121,7 @@ async def custom_processing_example():
         "messages_created": 0
     }
     
-    async for event in agent.go(thread, stream=True):
+    async for event in agent.stream(thread):
         # Update metrics based on event type
         if event.type == EventType.LLM_STREAM_CHUNK:
             metrics["chunks_received"] += 1
