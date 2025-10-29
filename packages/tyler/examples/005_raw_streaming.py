@@ -111,7 +111,7 @@ async def demo_raw_streaming():
     usage_info = None
     
     # Stream raw chunks
-    async for chunk in agent.go(thread, stream="raw"):
+    async for chunk in agent.stream(thread, mode="raw"):
         chunk_count += 1
         
         # Serialize to SSE format (what you'd send to a client)
@@ -155,7 +155,7 @@ async def demo_comparison():
     # Test raw mode
     logger.info("\n[Raw Mode]")
     raw_content = []
-    async for chunk in agent.go(thread, stream="raw"):
+    async for chunk in agent.stream(thread, mode="raw"):
         if hasattr(chunk, 'choices') and chunk.choices:
             delta = chunk.choices[0].delta
             if hasattr(delta, 'content') and delta.content:
@@ -173,7 +173,7 @@ async def demo_comparison():
     logger.info("\n[Events Mode]")
     from tyler import EventType
     events_content = []
-    async for event in agent.go(thread2, stream="events"):
+    async for event in agent.stream(thread2):
         if event.type == EventType.LLM_STREAM_CHUNK:
             events_content.append(event.data.get("content_chunk", ""))
     events_text = ''.join(events_content)

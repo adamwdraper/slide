@@ -24,7 +24,7 @@ async def test_streaming_chunks():
     
     try:
         # Use streaming mode
-        async for event in agent.go(thread, stream=True):
+        async for event in agent.stream(thread):
             event_types_seen.append(event.type)
             
             if event.type == EventType.LLM_STREAM_CHUNK:

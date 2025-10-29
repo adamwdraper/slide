@@ -46,7 +46,7 @@ async def main():
     # Process the thread with streaming
     content_buffer = []
     
-    async for event in agent.go(thread, stream=True):
+    async for event in agent.stream(thread):
         if event.type == EventType.LLM_STREAM_CHUNK:
             chunk = event.data.get("content_chunk", "")
             content_buffer.append(chunk)

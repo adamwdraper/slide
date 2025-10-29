@@ -90,7 +90,7 @@ async def test_streaming():
     print("\nStreaming events:")
     content_buffer = []
     
-    async for event in agent.go(thread, stream=True):
+    async for event in agent.stream(thread):
         # Show different event types
         if event.type == EventType.LLM_REQUEST:
             print(f"\n🤖 Starting LLM request (model: {event.data['model']})")

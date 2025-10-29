@@ -107,7 +107,7 @@ async def main():
         thread.add_message(message)
 
         # Process the thread with streaming using the new API
-        async for event in agent.go(thread, stream=True):
+        async for event in agent.stream(thread):
             if event.type == EventType.LLM_STREAM_CHUNK:
                 # Real-time content streaming
                 print(event.data.get("content_chunk", ""), end="", flush=True)

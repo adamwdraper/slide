@@ -49,7 +49,7 @@ async def main():
     print("\nTesting streaming mode structure...")
     
     # Test streaming mode returns an async generator
-    stream = agent.go(thread, stream=True)
+    stream = agent.stream(thread)
     print(f"✅ Streaming mode returns: {type(stream).__name__}")
     
     # We can't actually iterate without API calls, but we verified the structure
@@ -57,7 +57,7 @@ async def main():
     print("\nThe new agent execution observability API is working correctly.")
     print("You can now:")
     print("- Use agent.go(thread) for non-streaming with full execution details")
-    print("- Use agent.go(thread, stream=True) for real-time event streaming")
+    print("- Use agent.stream(thread) for real-time event streaming")
     print("- Access detailed metrics, tool usage, and execution events")
 
 if __name__ == "__main__":

@@ -540,7 +540,7 @@ class StreamBuffer:
     async def process_stream(self, agent: Agent, thread: Thread):
         """Process stream with intelligent buffering"""
         
-        async for update in agent.go(thread, stream=True):
+        async for update in agent.stream(thread):
             if update.type == EventType.LLM_STREAM_CHUNK:
                 self.buffer.append(update.data.get("content_chunk", ""))
                 

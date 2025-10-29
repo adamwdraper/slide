@@ -224,7 +224,7 @@ thread = Thread()
 thread.add_message(Message(role="user", content="Hello!"))
 
 # Process the thread
-result = await agent.go(thread)  # or stream=False
+result = await agent.go(thread)
 
 # Access the response
 print(result.content)  # The agent's final response
@@ -240,8 +240,8 @@ Stream responses as high-level ExecutionEvent objects with full observability:
 from tyler import EventType
 
 # Stream responses in real-time (both syntaxes work identically)
-async for event in agent.go(thread, stream=True):
-    # or: agent.go(thread, stream="events")
+async for event in agent.stream(thread):
+    # or: agent.stream(thread)
     
     if event.type == EventType.LLM_STREAM_CHUNK:
         # Content being generated
@@ -267,7 +267,7 @@ Stream raw LiteLLM chunks in OpenAI-compatible format for direct integration:
 
 ```python
 # Get raw chunks for OpenAI compatibility
-async for chunk in agent.go(thread, stream="raw"):
+async for chunk in agent.stream(thread, mode="raw"):
     # chunk is a raw LiteLLM object with OpenAI structure
     if hasattr(chunk, 'choices') and chunk.choices:
         delta = chunk.choices[0].delta
@@ -503,7 +503,7 @@ async def main():
     # Process with streaming
     print("Assistant: ", end="", flush=True)
     
-    async for event in agent.go(thread, stream=True):
+    async for event in agent.stream(thread):
         if event.type == EventType.LLM_STREAM_CHUNK:
             print(event.data["content_chunk"], end="", flush=True)
         elif event.type == EventType.TOOL_SELECTED:

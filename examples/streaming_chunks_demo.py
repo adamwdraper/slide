@@ -30,7 +30,7 @@ async def main():
     print("-" * 50)
     
     try:
-        async for event in agent.go(thread, stream=True):
+        async for event in agent.stream(thread):
             if event.type == EventType.LLM_STREAM_CHUNK:
                 # This is a new content chunk!
                 chunk = event.data.get("content_chunk", "")

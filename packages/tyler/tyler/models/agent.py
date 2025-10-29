@@ -583,111 +583,96 @@ class Agent(Model):
             await self.thread_store.save(thread)
         return thread, [m for m in new_messages if m.role != "user"]
 
-    @overload
-    def go(
-        self, 
-        thread_or_id: Union[Thread, str],
-        stream: Literal[False] = False
-    ) -> AgentResult:
-        ...
-    
-    @overload
-    def go(
-        self, 
-        thread_or_id: Union[Thread, str],
-        stream: Union[Literal[True], Literal["events"]]
-    ) -> AsyncGenerator[ExecutionEvent, None]:
-        ...
-    
-    @overload
-    def go(
-        self, 
-        thread_or_id: Union[Thread, str],
-        stream: Literal["raw"]
-    ) -> AsyncGenerator[Any, None]:
-        ...
-    
     @weave.op()
-    def go(
+    async def go(
         self, 
-        thread_or_id: Union[Thread, str],
-        stream: Union[bool, Literal["events", "raw"]] = False
-    ) -> Union[AgentResult, AsyncGenerator[ExecutionEvent, None], AsyncGenerator[Any, None]]:
+        thread_or_id: Union[Thread, str]
+    ) -> AgentResult:
         """
-        Process the thread with the agent.
+        Execute the agent and return the complete result.
         
-        This method executes the agent on the given thread, handling tool calls,
-        managing conversation flow, and providing detailed execution telemetry.
+        This method runs the agent to completion, handling tool calls,
+        managing conversation flow, and returning the final result with
+        all messages and execution details.
         
         Args:
             thread_or_id: Thread object or thread ID to process. The thread will be
                          modified in-place with new messages.
-            stream: Controls the output format:
-                   - False (default): Returns AgentResult after completion
-                   - True or "events": Returns async generator of ExecutionEvents
-                   - "raw": Returns async generator of raw LiteLLM chunks
             
         Returns:
-            If stream=False:
-                AgentResult containing the updated thread, new messages,
-                final output, and complete execution details.
-            
-            If stream=True or stream="events":
-                Async generator yielding ExecutionEvent objects in real-time.
-                Events include message creation, tool execution, and all
-                intermediate steps.
-            
-            If stream="raw":
-                Async generator yielding raw LiteLLM chunk objects in 
-                OpenAI-compatible format. Chunks are passed through unmodified
-                for direct integration with OpenAI-compatible clients.
+            AgentResult containing the updated thread, new messages,
+            final output, and complete execution details.
         
         Raises:
-            ValueError: If thread_id is provided but thread is not found, or
-                       if an invalid stream value is provided
+            ValueError: If thread_id is provided but thread is not found
             Exception: Re-raises any unhandled exceptions during execution,
                       but execution details are still available in the result
                       
         Example:
-            # Non-streaming usage
             result = await agent.go(thread)
             print(f"Response: {result.content}")
+            print(f"New messages: {len(result.new_messages)}")
+        """
+        logger.debug("Agent.go() called (non-streaming mode)")
+        return await self._go_complete(thread_or_id)
+    
+    @weave.op()
+    async def stream(
+        self,
+        thread_or_id: Union[Thread, str],
+        mode: Literal["events", "raw"] = "events"
+    ) -> AsyncGenerator[Union[ExecutionEvent, Any], None]:
+        """
+        Stream agent execution events or raw chunks in real-time.
+        
+        This method yields events as the agent executes, providing
+        real-time visibility into the agent's reasoning, tool usage,
+        and message generation.
+        
+        Args:
+            thread_or_id: Thread object or thread ID to process. The thread will be
+                         modified in-place with new messages.
+            mode: Streaming mode:
+                  - "events" (default): Yields ExecutionEvent objects with detailed telemetry
+                  - "raw": Yields raw LiteLLM chunks in OpenAI-compatible format
             
-            # ExecutionEvent streaming (observability)
-            async for event in agent.go(thread, stream=True):
+        Yields:
+            If mode="events":
+                ExecutionEvent objects including LLM_REQUEST, LLM_RESPONSE, 
+                TOOL_SELECTED, TOOL_RESULT, MESSAGE_CREATED, and EXECUTION_COMPLETE events.
+            
+            If mode="raw":
+                Raw LiteLLM chunk objects passed through unmodified for direct
+                integration with OpenAI-compatible clients.
+        
+        Raises:
+            ValueError: If thread_id is provided but thread is not found, or
+                       if an invalid mode is provided
+            Exception: Re-raises any unhandled exceptions during execution
+                      
+        Example:
+            # Event streaming (observability)
+            async for event in agent.stream(thread):
                 if event.type == EventType.MESSAGE_CREATED:
                     print(f"New message: {event.data['message'].content}")
             
             # Raw chunk streaming (OpenAI compatibility)
-            async for chunk in agent.go(thread, stream="raw"):
+            async for chunk in agent.stream(thread, mode="raw"):
                 if hasattr(chunk.choices[0].delta, 'content'):
                     print(chunk.choices[0].delta.content, end="")
         """
-        # Normalize and validate stream parameter
-        if stream is True:
-            stream_mode = "events"
-        elif stream is False:
-            stream_mode = None
-        elif stream in ("events", "raw"):
-            stream_mode = stream
+        if mode == "events":
+            logger.debug("Agent.stream() called with mode='events'")
+            async for event in self._go_stream(thread_or_id):
+                yield event
+        elif mode == "raw":
+            logger.debug("Agent.stream() called with mode='raw'")
+            async for chunk in self._go_stream_raw(thread_or_id):
+                yield chunk
         else:
             raise ValueError(
-                f"Invalid stream value: {stream}. "
-                f"Must be False, True, 'events', or 'raw'"
+                f"Invalid mode: {mode}. Must be 'events' or 'raw'"
             )
-        
-        logger.debug(f"Agent.go() called with stream mode: {stream_mode}")
-        
-        # Route to appropriate implementation
-        if stream_mode is None:
-            return self._go_complete(thread_or_id)
-        elif stream_mode == "events":
-            return self._go_stream(thread_or_id)
-        elif stream_mode == "raw":
-            return self._go_stream_raw(thread_or_id)
-        else:
-            # Should never reach here due to validation above
-            raise ValueError(f"Unexpected stream mode: {stream_mode}")
     
     @weave.op()
     async def _go_complete(self, thread_or_id: Union[Thread, str]) -> AgentResult:

@@ -89,7 +89,7 @@ async def example_multiple_servers():
     print("\n💬 User: Search the Slide docs for information about MCP")
     print("🤖 Tyler: ", end="", flush=True)
     
-    async for event in agent.go(thread, stream=True):
+    async for event in agent.stream(thread):
         if event.type.name == "LLM_STREAM_CHUNK":
             print(event.data.get("content_chunk", ""), end="", flush=True)
         elif event.type.name == "EXECUTION_COMPLETE":

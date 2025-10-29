@@ -541,7 +541,7 @@ def _main_inner(config: Optional[str], title: Optional[str]):
                 chat_manager.current_thread.add_message(Message(role="user", content=user_input))
                 
                 # Process with agent
-                async for event in chat_manager.agent.go(chat_manager.current_thread, stream=True):
+                async for event in chat_manager.agent.stream(chat_manager.current_thread):
                     await handle_stream_update(event, chat_manager)
                 
         except KeyboardInterrupt:

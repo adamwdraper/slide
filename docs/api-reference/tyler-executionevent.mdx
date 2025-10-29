@@ -139,7 +139,7 @@ Each event type includes specific data fields:
 from tyler import Agent, Thread, EventType
 
 async def stream_response(agent: Agent, thread: Thread):
-    async for event in agent.go(thread, stream=True):
+    async for event in agent.stream(thread):
         if event.type == EventType.LLM_STREAM_CHUNK:
             # Print content as it arrives
             print(event.data["content_chunk"], end="", flush=True)
@@ -157,7 +157,7 @@ async def stream_response(agent: Agent, thread: Thread):
 import logging
 
 async def log_execution(agent: Agent, thread: Thread):
-    async for event in agent.go(thread, stream=True):
+    async for event in agent.stream(thread):
         # Log different event types
         if event.type == EventType.LLM_REQUEST:
             logging.info(f"Sending request to {event.data['model']}")
@@ -182,7 +182,7 @@ async def collect_events(agent: Agent, thread: Thread) -> List[ExecutionEvent]:
     """Collect all events from an execution"""
     events = []
     
-    async for event in agent.go(thread, stream=True):
+    async for event in agent.stream(thread):
         events.append(event)
         
         # Process specific events
@@ -198,7 +198,7 @@ async def collect_events(agent: Agent, thread: Thread) -> List[ExecutionEvent]:
 ```python
 class AgentUI:
     async def process_with_ui_updates(self, agent: Agent, thread: Thread):
-        async for event in agent.go(thread, stream=True):
+        async for event in agent.stream(thread):
             await self.handle_event(event)
     
     async def handle_event(self, event: ExecutionEvent):
@@ -230,7 +230,7 @@ async def filter_events(
     event_types: List[EventType]
 ) -> AsyncGenerator[ExecutionEvent, None]:
     """Filter events by type"""
-    async for event in agent.go(thread, stream=True):
+    async for event in agent.stream(thread):
         if event.type in event_types:
             yield event
 

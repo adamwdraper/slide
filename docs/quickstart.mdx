@@ -81,7 +81,7 @@ In this quickstart, you'll build an AI agent that can search the web and analyze
     # load_dotenv()
 
     import asyncio
-    from tyler import Agent, Thread, Message
+    from tyler import Agent, Thread, Message, EventType
     from lye import WEB_TOOLS, IMAGE_TOOLS, FILES_TOOLS
 
     # Optional: Uncomment these lines if you want observiabiltiy with W&B Weave
@@ -102,20 +102,20 @@ In this quickstart, you'll build an AI agent that can search the web and analyze
 
         # Create a conversation thread
         thread = Thread()
-        
-        # Add your request
-        message = Message(
+        thread.add_message(Message(
             role="user",
             content="Search for information about the Mars Perseverance rover and create a summary"
-        )
-        thread.add_message(message)
+        ))
         
-        # Let the agent work
-        print("🤖 Agent is working...")
-        result = await agent.go(thread)
-        
-        # Print the results
-        print(f"\n💬 Assistant: {result.content}")
+        # Watch your agent work in real-time
+        print("🤖 Agent is working...\n")
+        async for event in agent.stream(thread):
+            # Print content as it's generated
+            if event.type == EventType.LLM_STREAM_CHUNK:
+                print(event.data['content_chunk'], end="", flush=True)
+            # Show tool usage
+            elif event.type == EventType.TOOL_SELECTED:
+                print(f"\n\n🔧 Using {event.data['tool_name']}...", flush=True)
 
     if __name__ == "__main__":
         asyncio.run(main())

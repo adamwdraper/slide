@@ -61,7 +61,7 @@ async def demo_thinking_tokens_basic():
     thinking_buffer = []
     content_buffer = []
     
-    async for event in agent.go(thread, stream=True):
+    async for event in agent.stream(thread):
         if event.type == EventType.LLM_THINKING_CHUNK:
             # Capture reasoning/thinking tokens
             chunk = event.data.get("thinking_chunk", "")
@@ -107,7 +107,7 @@ async def demo_reasoning_levels():
         thinking_tokens = 0
         content_tokens = 0
         
-        async for event in agent.go(thread, stream=True):
+        async for event in agent.stream(thread):
             if event.type == EventType.LLM_THINKING_CHUNK:
                 thinking_tokens += len(event.data.get("thinking_chunk", ""))
             elif event.type == EventType.LLM_STREAM_CHUNK:
@@ -137,7 +137,7 @@ async def demo_comparison():
     thread1 = Thread()
     thread1.add_message(Message(role="user", content=problem))
     
-    async for event in agent_no_thinking.go(thread1, stream=True):
+    async for event in agent_no_thinking.stream(thread1):
         if event.type == EventType.LLM_STREAM_CHUNK:
             print(event.data.get("content_chunk", ""), end="", flush=True)
         elif event.type == EventType.EXECUTION_COMPLETE:
@@ -156,7 +156,7 @@ async def demo_comparison():
     thread2.add_message(Message(role="user", content=problem))
     
     has_thinking = False
-    async for event in agent_with_thinking.go(thread2, stream=True):
+    async for event in agent_with_thinking.stream(thread2):
         if event.type == EventType.LLM_THINKING_CHUNK:
             if not has_thinking:
                 logger.info("💭 Thinking process:")
@@ -215,7 +215,7 @@ async def demo_wandb_inference():
     thinking_chars = 0
     content_chars = 0
     
-    async for event in agent.go(thread, stream=True):
+    async for event in agent.stream(thread):
         if event.type == EventType.LLM_THINKING_CHUNK:
             thinking_chars += len(event.data.get("thinking_chunk", ""))
             # Show abbreviated thinking (first 50 chars of each chunk)
@@ -261,7 +261,7 @@ async def demo_all_events():
     logger.info("Streaming all events...")
     logger.info("-" * 70)
     
-    async for event in agent.go(thread, stream=True):
+    async for event in agent.stream(thread):
         if event.type == EventType.LLM_REQUEST:
             logger.info(f"🔵 LLM_REQUEST: model={event.data.get('model')}")
             

@@ -40,7 +40,7 @@ async def main():
     
     # Use streaming mode to show progress
     tool_count = 0
-    async for event in agent.go(thread, stream=True):
+    async for event in agent.stream(thread):
         if event.type == EventType.TOOL_SELECTED:
             tool_count += 1
             print(f"🔧 Using tool: {event.data.get('tool_name')}")
