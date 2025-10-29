@@ -94,13 +94,21 @@ We'll create an agent that can:
         asyncio.run(main())
     ```
     
-    <Tip>
-    **For batch/automation**: Use `await agent.go(thread)` to get just the final result:
-    ```python
-    result = await agent.go(thread)
-    print(result.content)
-    ```
-    </Tip>
+    <Note>
+    **Choosing between `.stream()` and `.go()`**:
+    
+    - **Use `agent.stream(thread)`** for:
+      - Chat interfaces and real-time UIs
+      - Watching the agent work (great for debugging)
+      - Progressive UI updates as content generates
+      
+    - **Use `await agent.go(thread)`** for:
+      - Batch processing and automation
+      - Testing (when you just need the final result)
+      - Simple scripts where streaming isn't needed
+    
+    Most interactive applications will want `.stream()` - it's what makes agents feel alive!
+    </Note>
   </Step>
 
   <Step title="Run Your Agent">
