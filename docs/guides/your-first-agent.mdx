@@ -56,7 +56,7 @@ We'll create an agent that can:
 
     ```python
     import asyncio
-    from tyler import Agent, Thread, Message
+    from tyler import Agent, Thread, Message, EventType
     from lye import WEB_TOOLS, FILES_TOOLS
 
     async def main():
@@ -70,30 +70,37 @@ We'll create an agent that can:
                 *FILES_TOOLS    # Can read and write files
             ]
         )
+        
         # Create a conversation thread
         thread = Thread()
-        
-        # Add a user message
-        message = Message(
+        thread.add_message(Message(
             role="user",
-            content="Research the latest developments in renewable energy and create a summary report"
-        )
-        thread.add_message(message)
+            content="Research the latest developments in renewable energy and create a summary"
+        ))
         
-        # Let the agent work
-        print("🔍 Researching renewable energy...")
-        result = await agent.go(thread)
-        
-        # Print the results
-        for msg in result.new_messages:
-            if msg.role == "assistant":
-                print(f"\n💬 Assistant: {msg.content}")
-            elif msg.role == "tool":
-                print(f"\n🔧 Used {msg.name}")
+        # Watch the agent work in real-time
+        print("🔍 Researching renewable energy...\n")
+        async for event in agent.stream(thread):
+            # Show content as it's generated
+            if event.type == EventType.LLM_STREAM_CHUNK:
+                print(event.data['content_chunk'], end="", flush=True)
+            # Show when tools are used
+            elif event.type == EventType.TOOL_SELECTED:
+                print(f"\n\n🔧 Using {event.data['tool_name']}...", flush=True)
+            elif event.type == EventType.TOOL_RESULT:
+                print(f"✓ Done\n", flush=True)
 
     if __name__ == "__main__":
         asyncio.run(main())
     ```
+    
+    <Tip>
+    **For batch/automation**: Use `await agent.go(thread)` to get just the final result:
+    ```python
+    result = await agent.go(thread)
+    print(result.content)
+    ```
+    </Tip>
   </Step>
 
   <Step title="Run Your Agent">
@@ -121,31 +128,39 @@ We'll create an agent that can:
 
 ## Understanding What Happened
 
-Let's add some visibility into the agent's process:
+When you stream, you get **real-time events** showing everything your agent does:
 
 ```python
-# Enhanced version with detailed output
 async def main():
     thread = Thread()
-    message = Message(
+    thread.add_message(Message(
         role="user",
         content="What are the top 3 renewable energy breakthroughs in 2024?"
-    )
-    thread.add_message(message)
+    ))
     
-    print("🤖 Agent is thinking...")
-    result = await agent.go(thread)
-    
-    # Show the complete conversation
-    print("\n=== Complete Conversation ===")
-    for msg in result.thread.messages:
-        if msg.role == "user":
-            print(f"\n👤 User: {msg.content}")
-        elif msg.role == "assistant":
-            print(f"\n🤖 Assistant: {msg.content}")
-        elif msg.role == "tool":
-            print(f"\n🔧 Tool [{msg.name}]: {msg.content[:100]}...")
+    # Stream events to see everything in real-time
+    async for event in agent.stream(thread):
+        if event.type == EventType.LLM_REQUEST:
+            print("🤔 Agent is thinking...")
+        elif event.type == EventType.TOOL_SELECTED:
+            print(f"🔧 Calling {event.data['tool_name']}...")
+        elif event.type == EventType.TOOL_RESULT:
+            print(f"✓ Got results")
+        elif event.type == EventType.LLM_STREAM_CHUNK:
+            # Print response as it's generated
+            print(event.data['content_chunk'], end="", flush=True)
+        elif event.type == EventType.EXECUTION_COMPLETE:
+            print("\n\n✅ Done!")
 ```
+
+<Tip>
+**Non-streaming alternative**: If you just want the final result without watching the process:
+```python
+result = await agent.go(thread)
+print(result.content)
+```
+This is useful for batch processing or automation where you don't need real-time updates.
+</Tip>
 
 ## Add Persistence to Your Agent
 

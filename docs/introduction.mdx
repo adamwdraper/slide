@@ -12,7 +12,7 @@ description: 'A development kit for manifesting AI agents with a complete lack o
 
 ```python
 import asyncio
-from tyler import Agent, Thread, Message
+from tyler import Agent, Thread, Message, EventType
 from lye import WEB_TOOLS
 
 # Create an AI agent that can browse the web
@@ -25,20 +25,34 @@ agent = Agent(
 
 # Ask your agent to visit and summarize a webpage
 thread = Thread()
-message = Message(
+thread.add_message(Message(
     role="user", 
     content="Why should I use https://slide.mintlify.app/?"
-)
-thread.add_message(message)
+))
 
-# The agent will visit the page and provide a summary
-result = asyncio.run(agent.go(thread))
+# Watch your agent work in real-time
+async def main():
+    async for event in agent.stream(thread):
+        # Print content as it's generated
+        if event.type == EventType.LLM_STREAM_CHUNK:
+            print(event.data['content_chunk'], end="", flush=True)
+        # Show when tools are being used
+        elif event.type == EventType.TOOL_SELECTED:
+            print(f"\n🔧 Using {event.data['tool_name']}...")
 
-# Print the agent's response
-print(f"ASSISTANT: {result.content}")
+asyncio.run(main())
 ```
 
-That's it! Your agent can now search the web, analyze images, and complete complex tasks autonomously.
+That's it! Your agent can now search the web, analyze images, and complete complex tasks autonomously—and you can watch it happen in real-time.
+
+<Tip>
+**For batch processing**: Use `await agent.go(thread)` to get the final result without streaming:
+```python
+async def main():
+    result = await agent.go(thread)
+    print(result.content)
+```
+</Tip>
 
 ## Why use Slide?
 
