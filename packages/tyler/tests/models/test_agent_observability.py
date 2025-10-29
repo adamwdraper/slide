@@ -90,7 +90,7 @@ async def test_go_streaming_yields_execution_events(mock_completion):
     
     # Collect all events
     events = []
-    async for event in agent.go(thread, stream=True):
+    async for event in agent.stream(thread):
         assert isinstance(event, ExecutionEvent)
         events.append(event)
     
@@ -331,7 +331,7 @@ async def test_tool_duration_tracking_streaming(mock_completion):
     
     # Collect events
     tool_result_events = []
-    async for event in agent.go(thread, stream=True):
+    async for event in agent.stream(thread):
         if event.type == EventType.TOOL_RESULT:
             tool_result_events.append(event)
     
@@ -406,12 +406,12 @@ async def test_type_hints_with_overloads():
     
     # Non-streaming returns AgentResult
     async def test_non_streaming():
-        result: AgentResult = await agent.go(thread, stream=False)
+        result: AgentResult = await agent.go(thread)
         return result
     
     # Streaming returns AsyncGenerator[ExecutionEvent, None]
     async def test_streaming():
-        events: AsyncGenerator[ExecutionEvent, None] = agent.go(thread, stream=True)
+        events: AsyncGenerator[ExecutionEvent, None] = agent.stream(thread)
         return events
     
     # Just verify the functions can be defined without type errors
@@ -434,7 +434,7 @@ async def test_streaming_with_error(mock_completion):
     thread.add_message(Message(role="user", content="Hello"))
     
     events = []
-    async for event in agent.go(thread, stream=True):
+    async for event in agent.stream(thread):
         events.append(event)
     
     # Should have error event

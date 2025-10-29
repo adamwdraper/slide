@@ -77,7 +77,7 @@ async def test_thinking_chunks_emitted_for_anthropic():
         mock_step.return_value = (mock_streaming_response(), {})
         
         events = []
-        async for event in agent.go(thread, stream=True):
+        async for event in agent.stream(thread):
             events.append(event)
     
     # Assert: Verify thinking and content events are separated
@@ -140,7 +140,7 @@ async def test_reasoning_stored_in_message_top_level():
         mock_step.return_value = (mock_streaming_response(), {})
         
         events = []
-        async for event in agent.go(thread, stream=True):
+        async for event in agent.stream(thread):
             events.append(event)
     
     # Assert: Check message has reasoning as top-level field
@@ -192,7 +192,7 @@ async def test_non_reasoning_model_no_thinking_events():
         mock_step.return_value = (mock_streaming_response(), {})
         
         events = []
-        async for event in agent.go(thread, stream=True):
+        async for event in agent.stream(thread):
             events.append(event)
     
     # Assert: No thinking events, but content events present
@@ -234,7 +234,7 @@ async def test_malformed_reasoning_graceful_degradation():
         mock_step.return_value = (mock_streaming_response(), {})
         
         events = []
-        async for event in agent.go(thread, stream=True):
+        async for event in agent.stream(thread):
             events.append(event)
     
     # Assert: Content streaming worked despite malformed thinking

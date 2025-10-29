@@ -112,7 +112,7 @@ async def test_go_stream_basic_response():
         mock_get_completion.call.return_value = (async_generator(chunks), mock_weave_call)
         
         updates = []
-        async for event in agent.go(thread, stream=True):
+        async for event in agent.stream(thread):
             updates.append(event)
         
         # Verify the updates
@@ -155,7 +155,7 @@ async def test_go_stream_with_tool_calls():
         })
         
         updates = []
-        async for event in agent.go(thread, stream=True):
+        async for event in agent.stream(thread):
             updates.append(event)
         
         # Verify the updates
@@ -182,7 +182,7 @@ async def test_go_stream_error_handling():
         mock_get_completion.call.side_effect = error
 
         updates = []
-        async for event in agent.go(thread, stream=True):
+        async for event in agent.stream(thread):
             updates.append(event)
 
         # Verify error handling - just check for error type without verifying exact message
@@ -226,7 +226,7 @@ async def test_go_stream_max_iterations():
         })
         
         updates = []
-        async for event in agent.go(thread, stream=True):
+        async for event in agent.stream(thread):
             updates.append(event)
         
         # Verify max iterations message or limit event
@@ -272,7 +272,7 @@ async def test_go_stream_invalid_json_handling():
             mock_tool_exec.return_value = "Tool executed successfully"
             
             updates = []
-            async for event in agent.go(thread, stream=True):
+            async for event in agent.stream(thread):
                 updates.append(event)
             
             # Verify that tool was selected with empty args due to JSON parse error
@@ -312,7 +312,7 @@ async def test_go_stream_metrics_tracking():
         mock_get_completion.call.return_value = (async_generator(chunks), mock_weave_call)
         
         updates = []
-        async for event in agent.go(thread, stream=True):
+        async for event in agent.stream(thread):
             updates.append(event)
         
         # Find the assistant message update
@@ -372,7 +372,7 @@ async def test_go_stream_tool_metrics():
         })
         
         updates = []
-        async for event in agent.go(thread, stream=True):
+        async for event in agent.stream(thread):
             updates.append(event)
         
         # Find the tool message update (not assistant message)
@@ -434,7 +434,7 @@ async def test_go_stream_multiple_messages_metrics():
         })
         
         updates = []
-        async for event in agent.go(thread, stream=True):
+        async for event in agent.stream(thread):
             updates.append(event)
         
         # Get all assistant and tool messages
@@ -500,7 +500,7 @@ async def test_go_stream_object_format_tool_calls():
         })
 
         updates = []
-        async for event in agent.go(thread, stream=True):
+        async for event in agent.stream(thread):
             updates.append(event)
 
         # Verify tool call was processed correctly - just check for tool message type
@@ -546,7 +546,7 @@ async def test_go_stream_object_format_tool_call_updates():
         })
         
         updates = []
-        async for event in agent.go(thread, stream=True):
+        async for event in agent.stream(thread):
             updates.append(event)
         
         # Find the assistant message with tool calls
@@ -587,7 +587,7 @@ async def test_go_stream_dict_arguments_in_delta():
         mock_tool_runner.execute_tool_call = AsyncMock(return_value={"ok": True})
 
         updates = []
-        async for event in agent.go(thread, stream=True):
+        async for event in agent.stream(thread):
             updates.append(event)
 
         # TOOL_SELECTED should carry dict arguments
@@ -634,7 +634,7 @@ async def test_go_stream_dict_format_tool_call_updates():
         mock_tool_runner.execute_tool_call = AsyncMock(return_value={"ok": True})
 
         updates = []
-        async for event in agent.go(thread, stream=True):
+        async for event in agent.stream(thread):
             updates.append(event)
 
         # Assistant message should include reconstructed tool_calls
@@ -672,7 +672,7 @@ async def test_go_stream_missing_tool_call_id():
         mock_get_completion.call.return_value = (async_generator([chunk]), mock_weave_call)
         
         updates = []
-        async for event in agent.go(thread, stream=True):
+        async for event in agent.stream(thread):
             updates.append(event)
         
         # Verify no tool calls were processed (since ID was missing)
@@ -714,7 +714,7 @@ async def test_go_stream_empty_arguments():
         })
         
         updates = []
-        async for event in agent.go(thread, stream=True):
+        async for event in agent.stream(thread):
             updates.append(event)
         
         # Find the tool message
@@ -806,7 +806,7 @@ async def test_go_stream_thread_store_save():
         })
         
         updates = []
-        async for event in agent.go(thread, stream=True):
+        async for event in agent.stream(thread):
             updates.append(event)
         
         # Verify thread was saved with messages
@@ -835,7 +835,7 @@ async def test_go_stream_reset_iteration_count():
         mock_get_completion.call.return_value = (async_generator([chunk]), mock_weave_call)
         
         # Process all updates
-        async for _ in agent.go(thread, stream=True):
+        async for _ in agent.stream(thread):
             pass
         
         # Verify iteration count was reset
@@ -853,7 +853,7 @@ async def test_go_stream_invalid_response():
         mock_step.return_value = (None, {})
         
         updates = []
-        async for event in agent.go(thread, stream=True):
+        async for event in agent.stream(thread):
             updates.append(event)
         
         # Verify error was yielded
@@ -898,7 +898,7 @@ async def test_go_stream_tool_call_with_files():
         ))
         
         updates = []
-        async for event in agent.go(thread, stream=True):
+        async for event in agent.stream(thread):
             updates.append(event)
         
         # Find the tool message
@@ -950,7 +950,7 @@ async def test_go_stream_tool_call_with_attributes():
         })
         
         updates = []
-        async for event in agent.go(thread, stream=True):
+        async for event in agent.stream(thread):
             updates.append(event)
         
         # Find the tool message
@@ -998,7 +998,7 @@ async def test_go_stream_interrupt_tool():
         })
         
         updates = []
-        async for event in agent.go(thread, stream=True):
+        async for event in agent.stream(thread):
             updates.append(event)
         
         # Find the tool message
@@ -1028,7 +1028,7 @@ async def test_go_stream_general_exception_handling():
         
         updates = []
         try:
-            async for event in agent.go(thread, stream=True):
+            async for event in agent.stream(thread):
                 updates.append(event)
         except Exception:
             pass  # go_stream may not raise, depending on implementation
@@ -1065,7 +1065,7 @@ async def test_go_stream_tool_calls():
             mock_execute.return_value = "Tool result"
             
             updates = []
-            async for event in agent.go(thread, stream=True):
+            async for event in agent.stream(thread):
                 updates.append(event)
             
             # Should have tool-related updates
@@ -1101,7 +1101,7 @@ async def test_go_stream_multiple_tool_calls():
         
         with patch.object(tool_runner, 'execute_tool_call', side_effect=mock_execute):
             updates = []
-            async for event in agent.go(thread, stream=True):
+            async for event in agent.stream(thread):
                 updates.append(event)
             
             # Should have tool messages for both calls
@@ -1138,7 +1138,7 @@ async def test_go_stream_cache_clearing():
         
         # Collect updates
         updates = []
-        async for event in agent.go(thread, stream=True):
+        async for event in agent.stream(thread):
             updates.append(event)
         
         # Cache should have been cleared
@@ -1156,7 +1156,7 @@ async def test_go_stream_step_returns_none():
         mock_step.return_value = (None, {"model": "gpt-4"})
         
         updates = []
-        async for event in agent.go(thread, stream=True):
+        async for event in agent.stream(thread):
             updates.append(event)
         
         # Should have error update
@@ -1189,7 +1189,7 @@ async def test_go_stream_chunk_without_choices():
         mock_step.return_value = (mock_stream(), {"model": "gpt-4"})
         
         updates = []
-        async for event in agent.go(thread, stream=True):
+        async for event in agent.stream(thread):
             updates.append(event)
         
         # Should only have content from valid chunks
@@ -1224,7 +1224,7 @@ async def test_go_stream_usage_metrics_from_final_chunk():
         mock_step.return_value = (mock_stream(), {"model": "gpt-4"})
         
         updates = []
-        async for event in agent.go(thread, stream=True):
+        async for event in agent.stream(thread):
             updates.append(event)
         
                 # Get the assistant message
@@ -1248,9 +1248,9 @@ async def test_invalid_stream_value_raises_error():
     thread = Thread()
     thread.add_message(Message(role="user", content="Test"))
     
-    # Test with invalid string value
-    with pytest.raises(ValueError, match="Invalid stream value"):
-        async for _ in agent.go(thread, stream="invalid"):
+    # Test with invalid mode value
+    with pytest.raises(ValueError, match="Invalid mode"):
+        async for _ in agent.stream(thread, mode="invalid"):
             pass
 
 
@@ -1277,7 +1277,7 @@ async def test_stream_events_explicit():
         mock_step.return_value = (mock_stream(), {"model": "gpt-4"})
         
         updates = []
-        async for event in agent.go(thread, stream="events"):
+        async for event in agent.stream(thread):
             updates.append(event)
         
         # Should yield ExecutionEvent objects
@@ -1331,7 +1331,7 @@ async def test_raw_mode_yields_chunks_with_openai_fields():
         mock_step.return_value = (mock_stream(), {"model": "gpt-4"})
         
         raw_chunks = []
-        async for chunk in agent.go(thread, stream="raw"):
+        async for chunk in agent.stream(thread, mode="raw"):
             raw_chunks.append(chunk)
         
         # Should NOT be ExecutionEvent objects
@@ -1383,7 +1383,7 @@ async def test_raw_mode_includes_usage_in_final_chunk():
         mock_step.return_value = (mock_stream(), {"model": "gpt-4"})
         
         raw_chunks = []
-        async for chunk in agent.go(thread, stream="raw"):
+        async for chunk in agent.stream(thread, mode="raw"):
             raw_chunks.append(chunk)
         
         # Final chunk should have usage
@@ -1459,7 +1459,7 @@ async def test_raw_mode_tool_call_deltas():
         mock_step.return_value = (mock_stream(), {"model": "gpt-4"})
         
         raw_chunks = []
-        async for chunk in agent.go(thread, stream="raw"):
+        async for chunk in agent.stream(thread, mode="raw"):
             raw_chunks.append(chunk)
         
         # Should have tool call deltas in raw format
@@ -1498,7 +1498,7 @@ async def test_stream_true_backward_compatibility():
         mock_step.return_value = (mock_stream(), {"model": "gpt-4"})
         
         updates = []
-        async for event in agent.go(thread, stream=True):
+        async for event in agent.stream(thread):
             updates.append(event)
         
         # Should still yield ExecutionEvent objects
