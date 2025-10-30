@@ -7,7 +7,12 @@
   - Add `run()` method (copy of current `go()` implementation)
   - Convert existing `go()` to alias: `go = run`
   - Update docstrings to reference `.run()` as primary
-  - Lines affected: ~50-100 (method definition, docstrings)
+  - Rename internal methods for consistency:
+    - `_go_complete()` → `_run_complete()` (called by `run()`)
+    - `_go_stream()` → `_stream_events()` (called by `stream()`)
+    - `_go_stream_raw()` → `_stream_raw()` (called by `stream(mode='raw')`)
+  - Update internal method calls to use new names
+  - Lines affected: ~150-200 (method definitions, docstrings, internal calls)
 
 ### Documentation (all `.mdx` files)
 - **`docs/quickstart.mdx`** - Update code examples from `.go()` to `.run()`

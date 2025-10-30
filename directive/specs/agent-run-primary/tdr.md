@@ -604,13 +604,18 @@ async def test_run_performance_equivalent_to_go():
 **DoD**:
 - [ ] Rename `go()` → `run()` in `agent.py`
 - [ ] Add alias: `go = run`
-- [ ] Update docstring to reference `.run()` as primary
-- [ ] Update debug log message
+- [ ] Rename internal methods for consistency:
+  - [ ] `_go_complete()` → `_run_complete()`
+  - [ ] `_go_stream()` → `_stream_events()`
+  - [ ] `_go_stream_raw()` → `_stream_raw()`
+- [ ] Update internal method calls to use new names
+- [ ] Update docstrings to reference `.run()` as primary
+- [ ] Update debug log messages
 - [ ] Tests pass (`.run()` works)
 - [ ] Tests pass (`.go()` alias works)
 - [ ] Linting passes
 
-**Estimate**: 30 minutes  
+**Estimate**: 45 minutes  
 **Owner**: Engineer  
 **Dependencies**: None
 
@@ -678,7 +683,7 @@ async def test_run_performance_equivalent_to_go():
 **Dependencies**: Tasks 1-5
 
 ### Total Estimate
-**4.5 hours** (half a day of focused work)
+**5 hours** (just over half a day of focused work)
 
 ### Dependencies
 - No external dependencies

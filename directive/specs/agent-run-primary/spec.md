@@ -52,6 +52,10 @@ As a Python developer building agents with Tyler, I want to use `agent.run(threa
 - Update CLI chat to use `.run()` internally
 - Both `.run()` and `.go()` must have identical functionality
 - Both `.run()` and `.go()` must work with `.stream()` counterpart
+- Rename internal methods for consistency:
+  - `_go_complete()` → `_run_complete()`
+  - `_go_stream()` → `_stream_events()`
+  - `_go_stream_raw()` → `_stream_raw()`
 
 **Must not:**
 - Break existing code using `.go()`

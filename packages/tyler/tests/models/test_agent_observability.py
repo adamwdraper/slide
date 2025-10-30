@@ -64,7 +64,7 @@ async def test_go_non_streaming_returns_agent_result(mock_completion):
 
 
 @pytest.mark.asyncio
-async def test_go_streaming_yields_execution_events(mock_completion):
+async def test_streaming_yields_execution_events(mock_completion):
     """Test that go() with streaming yields ExecutionEvent objects."""
     # Mock streaming response
     async def mock_stream(*args, **kwargs):
