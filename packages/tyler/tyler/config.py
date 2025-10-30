@@ -24,6 +24,53 @@ from typing import Dict, List, Any, Optional
 
 logger = logging.getLogger(__name__)
 
+# Default config template
+DEFAULT_CONFIG_TEMPLATE = """# Tyler Chat Configuration
+# Save this file as tyler-chat-config.yaml in:
+#   - Current directory
+#   - ~/.tyler/chat-config.yaml
+#   - /etc/tyler/chat-config.yaml
+# Or specify location with: tyler chat --config path/to/config.yaml
+
+# Agent Identity
+name: "Tyler"
+purpose: "To be a helpful AI assistant with access to various tools and capabilities."
+notes: |
+  - Prefer clear, concise communication
+  - Use tools when appropriate to enhance responses
+  - Maintain context across conversations
+
+# Model Configuration
+model_name: "gpt-4.1"
+temperature: 0.7
+max_tool_iterations: 10
+
+# Tool Configuration
+# List of tools to load. Can be:
+#   - Built-in tool module names (e.g., "web", "files")
+#   - Paths to Python files containing custom tools:
+#     - "./my_tools.py"          # Relative to config file
+#     - "~/tools/translate.py"    # User's home directory
+#     - "/opt/tools/search.py"    # Absolute path
+tools:
+  - "web"           # Web search and browsing capabilities
+  # - "slack"         # Slack integration tools
+  # - "notion"        # Notion integration tools
+  # - "command_line"  # System command execution tools
+  # - "./my_tools.py"  # Example custom tools (uncomment to use)
+
+# MCP (Model Context Protocol) Server Configuration
+# Connect to external documentation, APIs, databases via MCP servers
+# Uncomment to enable:
+# mcp:
+#   servers:
+#     # Example: stdio-based server
+#     - name: my-server
+#       transport: stdio
+#       command: npx
+#       args: ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/allowed/files"]
+"""
+
 # Standard locations for config file auto-discovery (in search order)
 # Note: This is a template - actual paths computed at runtime in _get_search_paths()
 CONFIG_SEARCH_PATHS: List[str] = [
@@ -169,6 +216,38 @@ def load_custom_tool(file_path: str, config_dir: Path) -> List[Dict]:
     return tools
 
 
+def _prompt_create_config() -> Optional[Path]:
+    """Prompt user to create a default config file.
+    
+    Returns:
+        Path to created config file, or None if user declined
+    """
+    config_path = Path.cwd() / "tyler-chat-config.yaml"
+    
+    # Check if we're in an interactive terminal
+    if not sys.stdin.isatty():
+        logger.debug("Non-interactive terminal, skipping config creation prompt")
+        return None
+    
+    try:
+        print(f"\nNo config file found.")
+        response = input(f"Create {config_path}? (Y/n): ").strip().lower()
+        
+        if response in ('', 'y', 'yes'):
+            # Create the config file
+            config_path.write_text(DEFAULT_CONFIG_TEMPLATE)
+            print(f"✓ Created {config_path}")
+            print("💡 Remember to set your API key (OPENAI_API_KEY, ANTHROPIC_API_KEY, etc.) in your environment")
+            print()
+            return config_path
+        else:
+            print("Config creation cancelled.")
+            return None
+    except (KeyboardInterrupt, EOFError):
+        print("\nConfig creation cancelled.")
+        return None
+
+
 def _resolve_config_path(config_path: Optional[str]) -> Path:
     """Resolve config file path.
     
@@ -203,7 +282,12 @@ def _resolve_config_path(config_path: Optional[str]) -> Path:
         else:
             logger.debug(f"Config not found at {location}")
     
-    # No config found in any standard location
+    # No config found - prompt to create one
+    created_path = _prompt_create_config()
+    if created_path:
+        return created_path
+    
+    # User declined or non-interactive - show error
     searched = ", ".join(str(p) for p in search_paths)
     raise ValueError(
         f"No config file found in standard locations: {searched}"

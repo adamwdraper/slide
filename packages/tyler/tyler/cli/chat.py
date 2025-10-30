@@ -571,7 +571,6 @@ def _main_inner(config: Optional[str], title: Optional[str]):
             console.print("\nGoodbye!")
         except Exception as e:
             console.print(f"[red]Error: {str(e)}[/]")
-            raise
         finally:
             # Cleanup MCP connections on exit
             if chat_manager and chat_manager.agent and chat_manager.agent.mcp:
