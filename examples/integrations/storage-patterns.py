@@ -94,7 +94,7 @@ async def example_tool_generated_attachment(thread_store, agent, file_store):
     thread.add_message(message)
 
     # Process the thread - this will trigger image generation
-    processed_thread, new_messages = await agent.go(thread)
+    processed_thread, new_messages = await agent.run(thread)
     
     # The thread is automatically saved by the agent, which processes any attachments
     

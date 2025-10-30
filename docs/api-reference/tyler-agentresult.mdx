@@ -45,7 +45,7 @@ thread = Thread()
 thread.add_message(Message(role="user", content="Hello!"))
 
 # Execute and get result
-result = await agent.go(thread)
+result = await agent.run(thread)
 
 # Access the response
 print(f"Response: {result.content}")
@@ -94,7 +94,7 @@ for message in result.new_messages:
 
 ```python
 try:
-    result = await agent.go(thread)
+    result = await agent.run(thread)
     print(f"Response: {result.content}")
 except Exception as e:
     print(f"Error: {e}")
@@ -109,7 +109,7 @@ except Exception as e:
 ```python
 # The thread is updated in-place
 original_message_count = len(thread.messages)
-result = await agent.go(thread)
+result = await agent.run(thread)
 new_message_count = len(result.thread.messages)
 
 print(f"Added {new_message_count - original_message_count} messages")
@@ -130,7 +130,7 @@ async def chat_loop(agent: Agent, thread: Thread):
             break
             
         thread.add_message(Message(role="user", content=user_input))
-        result = await agent.go(thread)
+        result = await agent.run(thread)
         
         print(f"Assistant: {result.content}")
         
@@ -180,7 +180,7 @@ from narrator import ThreadStore
 store = ThreadStore()
 
 # Execute agent
-result = await agent.go(thread)
+result = await agent.run(thread)
 
 # Save the updated thread
 await store.save(result.thread)

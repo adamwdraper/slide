@@ -35,7 +35,7 @@ async def main():
     
     # Let the agent work
     print("🤖 Agent is working...")
-    processed_thread, new_messages = await agent.go(thread)
+    processed_thread, new_messages = await agent.run(thread)
     
     # Print the results
     for msg in new_messages:

@@ -584,7 +584,7 @@ class Agent(Model):
         return thread, [m for m in new_messages if m.role != "user"]
 
     @weave.op()
-    async def go(
+    async def run(
         self, 
         thread_or_id: Union[Thread, str]
     ) -> AgentResult:
@@ -609,12 +609,15 @@ class Agent(Model):
                       but execution details are still available in the result
                       
         Example:
-            result = await agent.go(thread)
+            result = await agent.run(thread)
             print(f"Response: {result.content}")
             print(f"New messages: {len(result.new_messages)}")
         """
-        logger.debug("Agent.go() called (non-streaming mode)")
-        return await self._go_complete(thread_or_id)
+        logger.debug("Agent.run() called (non-streaming mode)")
+        return await self._run_complete(thread_or_id)
+    
+    # Backwards compatibility alias
+    go = run
     
     @weave.op()
     async def stream(
@@ -663,11 +666,11 @@ class Agent(Model):
         """
         if mode == "events":
             logger.debug("Agent.stream() called with mode='events'")
-            async for event in self._go_stream(thread_or_id):
+            async for event in self._stream_events(thread_or_id):
                 yield event
         elif mode == "raw":
             logger.debug("Agent.stream() called with mode='raw'")
-            async for chunk in self._go_stream_raw(thread_or_id):
+            async for chunk in self._stream_raw(thread_or_id):
                 yield chunk
         else:
             raise ValueError(
@@ -675,7 +678,7 @@ class Agent(Model):
             )
     
     @weave.op()
-    async def _go_complete(self, thread_or_id: Union[Thread, str]) -> AgentResult:
+    async def _run_complete(self, thread_or_id: Union[Thread, str]) -> AgentResult:
         """Non-streaming implementation that collects all events and returns AgentResult."""
         # Initialize execution tracking
         events = []
@@ -959,7 +962,7 @@ class Agent(Model):
             )
 
     @weave.op()
-    async def _go_stream(self, thread_or_id: Union[Thread, str]) -> AsyncGenerator[ExecutionEvent, None]:
+    async def _stream_events(self, thread_or_id: Union[Thread, str]) -> AsyncGenerator[ExecutionEvent, None]:
         """Streaming implementation that yields ExecutionEvent objects in real-time."""
         try:
             # Get thread
@@ -1495,7 +1498,7 @@ class Agent(Model):
         return tool_message, should_break
     
     @weave.op()
-    async def _go_stream_raw(self, thread_or_id: Union[Thread, str]) -> AsyncGenerator[Any, None]:
+    async def _stream_raw(self, thread_or_id: Union[Thread, str]) -> AsyncGenerator[Any, None]:
         """
         Raw streaming implementation that yields unmodified LiteLLM chunks while executing tools.
         
@@ -1538,7 +1541,7 @@ class Agent(Model):
                 if tool_call_id not in buffers:
                     buffers[tool_call_id] = initial_value or ""
             
-            # Main iteration loop (like _go_stream but yielding raw chunks)
+            # Main iteration loop (like _stream_events but yielding raw chunks)
             while self._iteration_count < self.max_tool_iterations:
                 try:
                     # Get streaming response
@@ -1582,7 +1585,7 @@ class Agent(Model):
                         if hasattr(delta, 'content') and delta.content is not None:
                             current_content.append(delta.content)
                         
-                        # Track tool calls for execution (same logic as _go_stream)
+                        # Track tool calls for execution (same logic as _stream_events)
                         if hasattr(delta, 'tool_calls') and delta.tool_calls:
                             for tool_call in delta.tool_calls:
                                 # Handle both dict and object formats

@@ -55,7 +55,7 @@ async def main():
     print("=== Non-Streaming Mode ===\n")
     
     # Execute in non-streaming mode
-    result = await agent.go(thread)
+    result = await agent.run(thread)
     
     print(f"Final response: {result.content}")
     print(f"\nExecution details:")

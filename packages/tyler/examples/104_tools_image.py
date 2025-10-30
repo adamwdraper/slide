@@ -69,7 +69,7 @@ async def main():
     generation_thread.add_message(message)
 
     # Process the generation thread with the new API
-    result = await agent.go(generation_thread)
+    result = await agent.run(generation_thread)
 
     # Log response
     logger.info("Assistant: %s", result.content)
@@ -142,7 +142,7 @@ async def main():
         logger.info("User (Thread 2): Analyzing image for bridge presence")
         
         # Process the analysis thread with the new API
-        result = await agent.go(analysis_thread)
+        result = await agent.run(analysis_thread)
         
         # Log response
         logger.info("Assistant: %s", result.content)

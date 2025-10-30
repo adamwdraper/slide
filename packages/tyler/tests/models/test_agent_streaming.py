@@ -93,7 +93,7 @@ async def async_generator(chunks):
         yield chunk
 
 @pytest.mark.asyncio
-async def test_go_stream_basic_response():
+async def test_stream_basic_response():
     """Test streaming with basic response (no tool calls)"""
     agent = Agent(stream=True)
     thread = Thread()
@@ -123,7 +123,7 @@ async def test_go_stream_basic_response():
         assert any(event.type == EventType.EXECUTION_COMPLETE for event in updates)
 
 @pytest.mark.asyncio
-async def test_go_stream_with_tool_calls():
+async def test_stream_with_tool_calls():
     """Test streaming with tool calls"""
     agent = Agent(stream=True)
     thread = Thread()
@@ -169,7 +169,7 @@ async def test_go_stream_with_tool_calls():
         assert any(event.type == EventType.EXECUTION_COMPLETE for event in updates)
 
 @pytest.mark.asyncio
-async def test_go_stream_error_handling():
+async def test_stream_error_handling():
     """Test error handling in streaming mode"""
     agent = Agent(stream=True)
     thread = Thread()
@@ -189,7 +189,7 @@ async def test_go_stream_error_handling():
         assert any(event.type == EventType.EXECUTION_ERROR for event in updates)
 
 @pytest.mark.asyncio
-async def test_go_stream_max_iterations():
+async def test_stream_max_iterations():
     """Test max iterations handling in streaming mode"""
     agent = Agent(stream=True, max_tool_iterations=0)  # Set to 0 to trigger immediately
     thread = Thread()
@@ -235,7 +235,7 @@ async def test_go_stream_max_iterations():
                   event.data.get('message') and "Maximum tool iteration count reached" in event.data['message'].content for event in updates)
 
 @pytest.mark.asyncio
-async def test_go_stream_invalid_json_handling():
+async def test_stream_invalid_json_handling():
     """Test handling of invalid JSON in tool arguments - should handle gracefully"""
     agent = Agent(stream=True)
     thread = Thread()
@@ -288,7 +288,7 @@ async def test_go_stream_invalid_json_handling():
             assert not any(event.type == EventType.EXECUTION_ERROR for event in updates)
 
 @pytest.mark.asyncio
-async def test_go_stream_metrics_tracking():
+async def test_stream_metrics_tracking():
     """Test that metrics are properly tracked in streaming mode"""
     agent = Agent(stream=True, model_name="gpt-4.1")
     thread = Thread()
@@ -337,7 +337,7 @@ async def test_go_stream_metrics_tracking():
         assert assistant_message.metrics["weave_call"]["ui_url"] == "https://weave.ui/test"
 
 @pytest.mark.asyncio
-async def test_go_stream_tool_metrics():
+async def test_stream_tool_metrics():
     """Test that tool execution metrics are tracked in streaming mode"""
     agent = Agent(stream=True, model_name="gpt-4.1")
     thread = Thread()
@@ -391,7 +391,7 @@ async def test_go_stream_tool_metrics():
         assert tool_message.content == "{'name': 'test_tool', 'content': 'Tool result'}"
 
 @pytest.mark.asyncio
-async def test_go_stream_multiple_messages_metrics():
+async def test_stream_multiple_messages_metrics():
     """Test metrics tracking across multiple messages in streaming mode"""
     agent = Agent(stream=True, model_name="gpt-4.1")
     thread = Thread()
@@ -470,7 +470,7 @@ async def test_go_stream_multiple_messages_metrics():
                 assert "latency" in message.metrics["timing"]  # Just verify latency exists, don't check value
 
 @pytest.mark.asyncio
-async def test_go_stream_object_format_tool_calls():
+async def test_stream_object_format_tool_calls():
     """Test streaming with tool calls in object format rather than dict format"""
     agent = Agent(stream=True)
     thread = Thread()
@@ -507,7 +507,7 @@ async def test_go_stream_object_format_tool_calls():
         assert any(event.type == EventType.MESSAGE_CREATED for event in updates)
 
 @pytest.mark.asyncio
-async def test_go_stream_object_format_tool_call_updates():
+async def test_stream_object_format_tool_call_updates():
     """Test streaming with tool call updates in object format"""
     agent = Agent(stream=True)
     thread = Thread()
@@ -561,7 +561,7 @@ async def test_go_stream_object_format_tool_call_updates():
         assert assistant_message.tool_calls[0]["function"]["arguments"] == '{"param": "value"}'
 
 @pytest.mark.asyncio
-async def test_go_stream_dict_arguments_in_delta():
+async def test_stream_dict_arguments_in_delta():
     """Streaming delta provides arguments as a dict; ensure selection uses dict but execution uses JSON string."""
     agent = Agent(stream=True)
     thread = Thread()
@@ -600,7 +600,7 @@ async def test_go_stream_dict_arguments_in_delta():
         assert json.loads(called_arg.function.arguments) == arg_dict
 
 @pytest.mark.asyncio
-async def test_go_stream_dict_format_tool_call_updates():
+async def test_stream_dict_format_tool_call_updates():
     """Split JSON arguments across multiple dict-format deltas should concatenate and parse."""
     agent = Agent(stream=True)
     thread = Thread()
@@ -649,7 +649,7 @@ async def test_go_stream_dict_format_tool_call_updates():
         assert tool_selected.data['arguments'] == {"x": 1, "y": "z"}
 
 @pytest.mark.asyncio
-async def test_go_stream_missing_tool_call_id():
+async def test_stream_missing_tool_call_id():
     """Test handling of tool calls with missing ID"""
     agent = Agent(stream=True)
     thread = Thread()
@@ -685,7 +685,7 @@ async def test_go_stream_missing_tool_call_id():
         assert all(not getattr(msg, 'tool_calls', None) for msg in assistant_messages)
 
 @pytest.mark.asyncio
-async def test_go_stream_empty_arguments():
+async def test_stream_empty_arguments():
     """Test handling of empty arguments in tool calls"""
     agent = Agent(stream=True)
     thread = Thread()
@@ -727,7 +727,7 @@ async def test_go_stream_empty_arguments():
         assert tool_message.content == "{'name': 'test_tool', 'content': 'Tool result'}"
 
 @pytest.mark.asyncio
-async def test_go_stream_thread_store_save():
+async def test_stream_thread_store_save():
     """Test that thread is saved during streaming"""
     # Create mock thread store
     mock_thread_store = MagicMock(spec=ThreadStore)
@@ -817,7 +817,7 @@ async def test_go_stream_thread_store_save():
         assert len(saved_thread.messages) >= 2, f"Expected >= 2 messages, found {len(saved_thread.messages)}"
 
 @pytest.mark.asyncio
-async def test_go_stream_reset_iteration_count():
+async def test_stream_reset_iteration_count():
     """Test that iteration count is reset after streaming"""
     agent = Agent(stream=True)
     thread = Thread()
@@ -842,7 +842,7 @@ async def test_go_stream_reset_iteration_count():
         assert agent._iteration_count == 0
 
 @pytest.mark.asyncio
-async def test_go_stream_invalid_response():
+async def test_stream_invalid_response():
     """Test handling of invalid response from completion call"""
     agent = Agent(stream=True)
     thread = Thread()
@@ -861,7 +861,7 @@ async def test_go_stream_invalid_response():
                   "No response received" in str(event.data.get('message', '')) for event in updates)
 
 @pytest.mark.asyncio
-async def test_go_stream_tool_call_with_files():
+async def test_stream_tool_call_with_files():
     """Test handling of tool calls that return files in streaming mode"""
     agent = Agent(stream=True)
     thread = Thread()
@@ -916,7 +916,7 @@ async def test_go_stream_tool_call_with_files():
         assert tool_message.attachments[0].mime_type == "text/plain"
 
 @pytest.mark.asyncio
-async def test_go_stream_tool_call_with_attributes():
+async def test_stream_tool_call_with_attributes():
     """Test handling of tool calls with attributes"""
     agent = Agent(stream=True)
     thread = Thread()
@@ -965,7 +965,7 @@ async def test_go_stream_tool_call_with_attributes():
         assert mock_tool_runner.get_tool_attributes.called
 
 @pytest.mark.asyncio
-async def test_go_stream_interrupt_tool():
+async def test_stream_interrupt_tool():
     """Test handling of interrupt tools in streaming mode"""
     agent = Agent(stream=True)
     thread = Thread()
@@ -1016,8 +1016,8 @@ async def test_go_stream_interrupt_tool():
 
 
 @pytest.mark.asyncio
-async def test_go_stream_general_exception_handling():
-    """Test general exception handling in go_stream"""
+async def test_stream_general_exception_handling():
+    """Test general exception handling in stream"""
     agent = Agent(name="Tyler")
     thread = Thread()
     thread.add_message(Message(role="user", content="Test"))
@@ -1039,7 +1039,7 @@ async def test_go_stream_general_exception_handling():
 
 
 @pytest.mark.asyncio
-async def test_go_stream_tool_calls():
+async def test_stream_tool_calls():
     """Test tool calls in streaming"""
     agent = Agent(name="Tyler")
     thread = Thread()
@@ -1074,7 +1074,7 @@ async def test_go_stream_tool_calls():
 
 
 @pytest.mark.asyncio
-async def test_go_stream_multiple_tool_calls():
+async def test_stream_multiple_tool_calls():
     """Test handling of multiple tool calls in streaming"""
     agent = Agent(name="Tyler")
     thread = Thread()
@@ -1113,7 +1113,7 @@ async def test_go_stream_multiple_tool_calls():
 
 
 @pytest.mark.asyncio
-async def test_go_stream_cache_clearing():
+async def test_stream_cache_clearing():
     """Test that tool attributes cache is cleared at start of streaming"""
     agent = Agent(name="Tyler")
     
@@ -1146,7 +1146,7 @@ async def test_go_stream_cache_clearing():
 
 
 @pytest.mark.asyncio
-async def test_go_stream_step_returns_none():
+async def test_stream_step_returns_none():
     """Test handling when step returns None for streaming response"""
     agent = Agent(name="Tyler")
     thread = Thread()
@@ -1166,7 +1166,7 @@ async def test_go_stream_step_returns_none():
 
 
 @pytest.mark.asyncio
-async def test_go_stream_chunk_without_choices():
+async def test_stream_chunk_without_choices():
     """Test handling chunks without choices"""
     agent = Agent(name="Tyler")
     thread = Thread()
@@ -1198,7 +1198,7 @@ async def test_go_stream_chunk_without_choices():
 
 
 @pytest.mark.asyncio
-async def test_go_stream_usage_metrics_from_final_chunk():
+async def test_stream_usage_metrics_from_final_chunk():
     """Test that usage metrics are extracted from the final chunk"""
     agent = Agent(name="Tyler")
     thread = Thread()

@@ -77,7 +77,7 @@ Please help me with these tasks.
     logger.info(f"Available delegation tools: {len([t for t in main_agent._processed_tools if 'delegate_to_' in t.get('function', {}).get('name', '')])}")
     
     # Process with the main agent using the new API
-    result = await main_agent.go(thread)
+    result = await main_agent.run(thread)
     
     # Print the results
     print("\n=== FINAL CONVERSATION ===\n")

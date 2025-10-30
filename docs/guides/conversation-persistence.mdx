@@ -165,7 +165,7 @@ for msg in thread.messages:
     print(f"{msg.role}: {msg.content}")
 
 # The agent sees all previous messages when processing
-result = await agent.go(thread)
+result = await agent.run(thread)
 ```
 
 ## Conversation Patterns
@@ -221,7 +221,7 @@ class ConversationSession:
         message = Message(role="user", content=content)
         self.thread.add_message(message)
         
-        result = await self.agent.go(self.thread)
+        result = await self.agent.run(self.thread)
         self.thread = result.thread
         await self.thread_store.save_thread(self.thread)
         
@@ -261,7 +261,7 @@ with open("chart.png", "rb") as f:
 thread.add_message(message)
 
 # Files are automatically saved and managed
-result = await agent.go(thread)
+result = await agent.run(thread)
 ```
 
 ## Advanced Persistence Patterns
@@ -291,7 +291,7 @@ async def summarize_old_conversations(thread: Thread, max_messages: int = 50):
             model_name="gpt-3.5-turbo",
             purpose="To create concise summaries"
         )
-        summary_result = await summary_agent.go(summary_thread)
+        summary_result = await summary_agent.run(summary_thread)
         
         # Replace old messages with summary
         thread.messages = [
@@ -409,7 +409,7 @@ class SupportAgent:
         ))
         
         # Process with agent
-        result = await self.agent.go(thread)
+        result = await self.agent.run(thread)
         thread = result.thread
         
         # Save thread

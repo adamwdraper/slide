@@ -22,7 +22,7 @@ async def test_non_streaming():
     thread.add_message(Message(role="user", content="Hello! What's 2+2?"))
     
     # Run agent and get detailed result
-    result = await agent.go(thread)
+    result = await agent.run(thread)
     
     print(f"\nFinal output: {result.content}")
     print(f"Success: {result.success}")

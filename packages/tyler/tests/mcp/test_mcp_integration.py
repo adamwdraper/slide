@@ -76,7 +76,7 @@ class TestMCPIntegration:
                 
                 mock_step.return_value = (mock_response, {})
                 
-                result = await agent.go(thread)
+                result = await agent.run(thread)
                 
                 assert result.content is not None
             
@@ -210,7 +210,7 @@ class TestMCPIntegration:
         with patch('tyler.mcp.config_loader._load_mcp_config') as mock_load:
             mock_load.side_effect = ValueError("Connection refused")
             
-            # Error should happen here, not in agent.go()
+            # Error should happen here, not in agent.run()
             with pytest.raises(ValueError, match="Connection refused"):
                 await agent.connect_mcp()
     

@@ -108,7 +108,7 @@ async def coordinate_project():
     ))
     
     # The coordinator will automatically delegate to appropriate agents
-    result = await coordinator.go(thread)
+    result = await coordinator.run(thread)
     
     # Print the coordinated response
     for message in result.thread.messages:
@@ -477,7 +477,7 @@ async def automated_research_pipeline():
             content=f"Execute full research pipeline for: {topic}"
         ))
         
-        result = await pipeline.go(thread)
+        result = await pipeline.run(thread)
         print(f"✅ Completed research pipeline for: {topic}")
 ```
 

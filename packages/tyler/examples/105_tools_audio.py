@@ -65,7 +65,7 @@ async def text_to_speech_example():
     thread.add_message(message)
 
     # Process the thread - agent will handle saving
-    result = await agent.go(thread)
+    result = await agent.run(thread)
 
     # Track the generated audio file details
     generated_audio = None
@@ -122,7 +122,7 @@ async def speech_to_text_example(audio_attachment):
     thread.add_message(message)
 
     # Process the thread with the new API
-    result = await agent.go(thread)
+    result = await agent.run(thread)
 
     # Log response
     logger.info("Assistant: %s", result.content)

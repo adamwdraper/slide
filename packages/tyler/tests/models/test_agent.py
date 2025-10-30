@@ -178,7 +178,7 @@ async def test_go_thread_not_found(agent, mock_thread_store):
     mock_thread_store.get.return_value = None
     
     with pytest.raises(ValueError, match="Thread with ID test-conv not found"):
-        await agent.go("test-conv")
+        await agent.run("test-conv")
 
 @pytest.mark.asyncio
 async def test_go_max_recursion(agent, mock_thread_store):
@@ -204,7 +204,7 @@ async def test_go_max_recursion(agent, mock_thread_store):
         
         # No need to patch _get_thread_store since we already set it in the fixture
         with patch.object(agent, '_get_thread', return_value=thread):
-            result = await agent.go("test-conv")
+            result = await agent.run("test-conv")
             
             assert len(result.new_messages) == 1
             assert result.new_messages[0].role == "assistant"
@@ -246,7 +246,7 @@ async def test_go_no_tool_calls(agent, mock_thread_store, mock_prompt, mock_lite
 
     # No need to patch _get_thread_store since we already set it in the fixture
     with patch.object(agent, '_get_thread', return_value=thread):
-        result = await agent.go("test-conv")
+        result = await agent.run("test-conv")
 
         # Since system messages are ephemeral, we only expect the assistant message
         assert len(result.thread.messages) == 1  
@@ -333,7 +333,7 @@ async def test_go_with_tool_calls(agent, mock_thread_store, mock_prompt, mock_li
 
             # No need to patch _get_thread_store since we already set it in the fixture
             with patch.object(agent, '_get_thread', return_value=thread):
-                result = await agent.go("test-conv")
+                result = await agent.run("test-conv")
 
     # Verify the sequence of messages (without system message)
     messages = result.thread.messages
@@ -695,7 +695,7 @@ async def test_go_with_weave_metrics(agent, mock_thread_store, mock_prompt):
     with patch.object(agent, 'step', side_effect=mock_step_metrics):
         # No need to patch _get_thread_store since we already set it in the fixture
         with patch.object(agent, '_get_thread', return_value=thread):
-            result = await agent.go(thread)
+            result = await agent.run(thread)
             
             assert len(result.new_messages) == 1
             message = result.new_messages[0]
@@ -868,7 +868,7 @@ async def test_go_with_multiple_tool_call_iterations(agent, mock_thread_store, m
 
         # No need to patch _get_thread_store since we already set it in the fixture
         with patch.object(agent, '_get_thread', return_value=thread):
-            result = await agent.go("test-conv")
+            result = await agent.run("test-conv")
 
     # Verify the sequence of messages (without system message)
     messages = result.thread.messages
@@ -984,7 +984,7 @@ async def test_go_with_tool_calls_no_content(agent, mock_thread_store, mock_prom
 
         # No need to patch _get_thread_store since we already set it in the fixture
         with patch.object(agent, '_get_thread', return_value=thread):
-            result = await agent.go("test-conv")
+            result = await agent.run("test-conv")
 
     # Verify the sequence of messages (without system message)
     messages = result.thread.messages
@@ -1187,7 +1187,7 @@ async def test_go_with_tool_returning_image(mock_thread_store, mock_file_store):
         # Also mock _get_thread directly to return the thread
         with patch.object(agent, '_get_thread', return_value=Thread(id="test-thread")):
             # Execute go method
-            result = await agent.go("test-thread")
+            result = await agent.run("test-thread")
 
             # Verify messages
             assert len(result.new_messages) == 3
@@ -1273,7 +1273,7 @@ async def test_go_with_completion_error(agent, mock_thread_store):
         mock_step.side_effect = Exception("Completion API error")
         
         # No need to patch _get_thread_store since we already set it in the fixture
-        result = await agent.go(thread)
+        result = await agent.run(thread)
 
         # Verify error was handled and added to thread
         assert len(result.new_messages) == 1
@@ -1294,7 +1294,7 @@ async def test_go_with_invalid_response(agent, mock_thread_store):
         mock_step.return_value = (None, {})
         
         # No need to patch _get_thread_store since we already set it in the fixture
-        result = await agent.go(thread)
+        result = await agent.run(thread)
 
         # Verify error was handled and added to thread
         assert len(result.new_messages) == 1
@@ -1550,7 +1550,7 @@ async def test_go_with_custom_api_params(mock_thread_store):
         
         # No need to patch _get_thread_store since we already set it in the fixture
         with patch.object(agent, '_get_thread', return_value=thread):
-            result = await agent.go("test-conv")
+            result = await agent.run("test-conv")
             
             # Verify basic functionality still works
             assert len(result.new_messages) == 1
@@ -1727,7 +1727,7 @@ async def test_go_general_exception_handling(mock_thread_store):
     with patch.object(agent, 'step') as mock_step:
         mock_step.side_effect = RuntimeError("Unexpected error")
         
-        result = await agent.go(thread)
+        result = await agent.run(thread)
         
         # Should have an error message
         assert len(result.new_messages) == 1
@@ -1761,7 +1761,7 @@ async def test_go_with_thread_id(mock_thread_store):
         )
         
         # Call with thread ID
-        result = await agent.go("test_thread_id")
+        result = await agent.run("test_thread_id")
         
         # Verify thread was fetched
         mock_thread_store.get.assert_called_with("test_thread_id")
@@ -1780,7 +1780,7 @@ async def test_go_missing_thread_store():
     agent.thread_store = None
     
     with pytest.raises(ValueError, match="Thread store is required"):
-        await agent.go("thread_id")
+        await agent.run("thread_id")
 
 
 @pytest.mark.asyncio
@@ -1794,7 +1794,7 @@ async def test_go_thread_not_found_in_store(mock_thread_store):
     )
     
     with pytest.raises(ValueError, match="Thread with ID missing_id not found"):
-        await agent.go("missing_id")
+        await agent.run("missing_id")
 
 
 @pytest.mark.asyncio
@@ -1954,7 +1954,7 @@ async def test_step_error_handling():
         mock_completion.side_effect = Exception("API Error")
         
         # Use go() method to see error handling (step() returns response and metrics)
-        result = await agent.go(thread)
+        result = await agent.run(thread)
         
         # Should have error message
         assert len(result.new_messages) > 0
@@ -2071,4 +2071,13 @@ async def test_get_timestamp():
     dt2 = datetime.fromisoformat(ts2.replace('Z', '+00:00'))
     
     # Should be very close in time (within 1 second)
-    assert (dt2 - dt1).total_seconds() < 1.0 
+    assert (dt2 - dt1).total_seconds() < 1.0
+
+def test_go_alias_backwards_compatibility():
+    """Test that .go() is an alias for .run() for backwards compatibility"""
+    agent = Agent(name="TestAgent")
+    
+    # Verify that .go is an alias for .run
+    assert agent.go == agent.run
+    assert callable(agent.go)
+    assert callable(agent.run) 

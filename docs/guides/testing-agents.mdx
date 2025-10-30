@@ -282,7 +282,7 @@ async def test_research_workflow():
         role="user",
         content="Research the latest in renewable energy"
     ))
-    result = await agent.go(thread)
+    result = await agent.run(thread)
     thread = result.thread
     
     # Verify research was done
@@ -294,7 +294,7 @@ async def test_research_workflow():
         role="user",
         content="Now create a summary report and save it"
     ))
-    result = await agent.go(thread)
+    result = await agent.run(thread)
     thread = result.thread
     
     # Verify file was created

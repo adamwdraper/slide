@@ -32,7 +32,7 @@ await agent.connect_mcp()
 # Use normally - MCP tools are now available
 thread = Thread()
 thread.add_message(Message(role="user", content="How do I create a Tyler agent?"))
-result = await agent.go(thread)
+result = await agent.run(thread)
 
 # Optional: Cleanup MCP connections (not needed for scripts)
 # Useful for long-running apps or when creating many agents
@@ -67,7 +67,7 @@ tyler chat  # MCP servers connect automatically on startup!
 1. **Agent Creation**: `Agent(mcp={...})` validates config schema immediately (fail fast!)
 2. **Connection**: `await agent.connect_mcp()` connects to servers and discovers tools
 3. **Tool Registration**: Discovered tools are namespaced (`servername_toolname`) and merged with built-in tools
-4. **Usage**: Tools are available in `agent.go()` like any other tool
+4. **Usage**: Tools are available in `agent.run()` like any other tool
 5. **Cleanup**: `await agent.cleanup()` disconnects MCP servers
 
 ## Configuration Reference
@@ -240,7 +240,7 @@ Control failure behavior per server:
 async def chat_endpoint(request):
     agent = Agent(mcp={...})
     await agent.connect_mcp()
-    result = await agent.go(thread)
+    result = await agent.run(thread)
     await agent.cleanup()  # ← Important! Free connection
     return result
 ```
@@ -251,7 +251,7 @@ async def chat_endpoint(request):
 for task in tasks:
     agent = Agent(mcp={...})
     await agent.connect_mcp()
-    await agent.go(thread)
+    await agent.run(thread)
     await agent.cleanup()  # ← Prevent connection leak
 ```
 
@@ -262,7 +262,7 @@ async def main():
         mcp={"servers": [{"transport": "stdio", ...}]}  # stdio, sse, websocket
     )
     await agent.connect_mcp()
-    result = await agent.go(thread)
+    result = await agent.run(thread)
     # Done - no cleanup needed!
 
 asyncio.run(main())  # Connections close when process ends
@@ -275,7 +275,7 @@ async def main():
         mcp={"servers": [{"transport": "streamablehttp", ...}]}  # Mintlify
     )
     await agent.connect_mcp()
-    result = await agent.go(thread)
+    result = await agent.run(thread)
     await agent.cleanup()  # ← Required for streamablehttp to avoid asyncio errors
 
 asyncio.run(main())

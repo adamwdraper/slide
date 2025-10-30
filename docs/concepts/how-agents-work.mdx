@@ -21,7 +21,7 @@ graph LR
 
 ### Processing Flow
 
-When you call `agent.go()` (with or without streaming), Tyler follows these steps:
+When you call `agent.run()` (with or without streaming), Tyler follows these steps:
 
 1. **Message Processing**
    - Loads the conversation thread
@@ -128,7 +128,7 @@ message = Message(
 thread.add_message(message)
 
 # Agent automatically chooses the right tools
-result = await agent.go(thread)
+result = await agent.run(thread)
 # Agent will: 1) Use web.search, 2) Use web.fetch for details, 3) Use files.write
 ```
 
@@ -149,7 +149,7 @@ message = Message(
 )
 thread.add_message(message)
 
-result = await agent.go(thread)
+result = await agent.run(thread)
 ```
 
 ### 3. Context Awareness
@@ -174,7 +174,7 @@ thread = Thread(id="research-session")
 # First query
 message1 = Message(role="user", content="What is FastAPI?")
 thread.add_message(message1)
-result = await agent.go(thread)
+result = await agent.run(thread)
 
 # Save the thread
 await thread_store.save_thread(result.thread)
@@ -182,7 +182,7 @@ await thread_store.save_thread(result.thread)
 # Follow-up uses context
 message2 = Message(role="user", content="How does it compare to Flask?")
 result.thread.add_message(message2)
-final_result = await agent.go(result.thread)
+final_result = await agent.run(result.thread)
 # Agent knows we're talking about FastAPI
 ```
 
@@ -383,7 +383,7 @@ eval = AgentEval(
         message = Message(role="user", content=task)
         thread.add_message(message)
         
-        result = await agent.go(thread)
+        result = await agent.run(thread)
     except ToolError as e:
         print(f"Tool failed: {e}")
         # Retry with different approach

@@ -74,7 +74,7 @@ class ResearchAssistant:
         print("\n⏳ Researching... This may take a few minutes.")
         start_time = datetime.now()
         
-        result = await self.agent.go(thread)
+        result = await self.agent.run(thread)
         
         # Save thread
         await self.thread_store.save_thread(result.thread)
@@ -246,7 +246,7 @@ Format as a structured comparison report.
             comparison_thread.add_message(Message(role="system", content=summary))
         
         # Generate comparison
-        result = await self.agent.go(comparison_thread)
+        result = await self.agent.run(comparison_thread)
         
         comparison_results = {
             "topics": topics,
@@ -276,7 +276,7 @@ Be thorough and objective in your analysis.
         
         thread.add_message(Message(role="user", content=fact_check_prompt))
         
-        agent_result = await self.agent.go(thread)
+        agent_result = await self.agent.run(thread)
         
         # Parse results
         result = {
@@ -308,7 +308,7 @@ Be thorough and objective in your analysis.
                    f"Format each as a proper citation."
         ))
         
-        result = await self.agent.go(thread)
+        result = await self.agent.run(thread)
         
         # Extract citations
         bibliography = []

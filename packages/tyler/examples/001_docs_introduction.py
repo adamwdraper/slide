@@ -27,7 +27,7 @@ message = Message(
 thread.add_message(message)
 
 # The agent will visit the page and provide a summary
-result = asyncio.run(agent.go(thread))
+result = asyncio.run(agent.run(thread))
 
 # Print the response
 print(f"ASSISTANT: {result.content}")

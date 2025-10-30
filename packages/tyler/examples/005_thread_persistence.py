@@ -46,7 +46,7 @@ async def main():
 
     # 5. Run the agent. It will use the configured stores internally.
     print("Running agent...")
-    result = await agent.go(thread)
+    result = await agent.run(thread)
     print("Agent finished processing.")
 
     # 6. Print the assistant's response and execution details
@@ -85,7 +85,7 @@ async def main():
     print(f"Thread now has {len(reloaded_thread.messages)} messages (continuing the same conversation)")
 
     print("Running second agent on the existing thread...")
-    second_result = await second_agent.go(reloaded_thread)
+    second_result = await second_agent.run(reloaded_thread)
     print("Second agent finished processing.")
     print(f"Second Assistant Response: {second_result.content}")
 

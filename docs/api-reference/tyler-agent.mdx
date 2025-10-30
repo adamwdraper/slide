@@ -224,7 +224,7 @@ thread = Thread()
 thread.add_message(Message(role="user", content="Hello!"))
 
 # Process the thread
-result = await agent.go(thread)
+result = await agent.run(thread)
 
 # Access the response
 print(result.content)  # The agent's final response
@@ -380,7 +380,7 @@ agent = Agent(
 )
 
 # The agent can now browse the web and work with files
-result = await agent.go(thread)
+result = await agent.run(thread)
 
 # Check which tools were used
 tool_usage = result.thread.get_tool_usage()
@@ -410,7 +410,7 @@ coordinator = Agent(
 )
 
 # The coordinator can now delegate tasks
-result = await coordinator.go(thread)
+result = await coordinator.run(thread)
 ```
 
 ## Custom Configuration

@@ -67,7 +67,7 @@ await agent.connect_mcp()
     )
     thread.add_message(message)
     
-    result = await agent.go(thread)
+    result = await agent.run(thread)
 
 if __name__ == "__main__":
     asyncio.run(main())
@@ -87,7 +87,7 @@ message = Message(
 thread.add_message(message)
 
 # Agent can now use any tools exposed by the MCP server
-result = await agent.go(thread)
+result = await agent.run(thread)
 ```
 
 ## MCP Server Types
@@ -229,7 +229,7 @@ async def main():
     message = Message(role="user", content="Analyze the latest data and create predictions")
     thread.add_message(message)
     
-    result = await agent.go(thread)
+    result = await agent.run(thread)
 
 if __name__ == "__main__":
     asyncio.run(main())
@@ -265,7 +265,7 @@ async def discover_and_use_tools(adapter: MCPAdapter, task: str):
     message = Message(role="user", content=task)
     thread.add_message(message)
     
-    result = await agent.go(thread)
+    result = await agent.run(thread)
     return result.thread
 ```
 
@@ -290,7 +290,7 @@ message = Message(
 )
 thread.add_message(message)
 
-result = await agent.go(thread)
+result = await agent.run(thread)
 ```
 
 ## MCP Security
@@ -436,7 +436,7 @@ async def main():
     )
     thread.add_message(message)
     
-    result = await agent.go(thread)
+    result = await agent.run(thread)
 ```
 
 ### 2. Fallback Pattern
@@ -453,7 +453,7 @@ async def execute_with_fallback(agent: Agent, task: str):
     
     try:
         # Try with native tools first
-        return await agent.go(thread)
+        return await agent.run(thread)
     except ToolError:
         # Fallback to MCP tools
         if agent.mcp_adapter:
@@ -464,7 +464,7 @@ async def execute_with_fallback(agent: Agent, task: str):
             )
             fallback_thread = Thread()
             fallback_thread.add_message(fallback_message)
-            return await agent.go(fallback_thread)
+            return await agent.run(fallback_thread)
         raise
 ```
 
@@ -496,7 +496,7 @@ async def create_federated_agent():
     )
     thread.add_message(message)
     
-    result = await agent.go(thread)
+    result = await agent.run(thread)
     return result.thread
 ```
 

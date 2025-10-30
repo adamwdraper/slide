@@ -131,7 +131,7 @@ async def brave_search_example():
         content="What's the latest news about AI?"
     ))
     
-    result = await agent.go(thread)
+    result = await agent.run(thread)
     print(f"\nBrave Search Response:\n{result.content}")
     
     await agent.cleanup()

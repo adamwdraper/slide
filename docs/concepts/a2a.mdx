@@ -64,7 +64,7 @@ async def main():
     thread.add_message(message)
     
     # Agent will automatically delegate to appropriate remote agents
-    result = await agent.go(thread)
+    result = await agent.run(thread)
 
 if __name__ == "__main__":
     asyncio.run(main())
@@ -244,7 +244,7 @@ print(f"Active tasks: {status['active_tasks']}")
 ```python
 try:
     # Attempt delegation
-    result = await coordinator_agent.go(thread)
+    result = await coordinator_agent.run(thread)
 except Exception as e:
     if "connection failed" in str(e):
         # Handle connection issues
@@ -492,7 +492,7 @@ async def research_workflow(topic: str):
         """
     ))
     
-    return await coordinator.go(thread)
+    return await coordinator.run(thread)
 ```
 
 ## Best practices

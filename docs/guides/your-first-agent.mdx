@@ -95,14 +95,14 @@ We'll create an agent that can:
     ```
     
     <Note>
-    **Choosing between `.stream()` and `.go()`**:
+    **Choosing between `.stream()` and `.run()`**:
     
     - **Use `agent.stream(thread)`** for:
       - Chat interfaces and real-time UIs
       - Watching the agent work (great for debugging)
       - Progressive UI updates as content generates
       
-    - **Use `await agent.go(thread)`** for:
+    - **Use `await agent.run(thread)`** for:
       - Batch processing and automation
       - Testing (when you just need the final result)
       - Simple scripts where streaming isn't needed
@@ -164,7 +164,7 @@ async def main():
 <Tip>
 **Non-streaming alternative**: If you just want the final result without watching the process:
 ```python
-result = await agent.go(thread)
+result = await agent.run(thread)
 print(result.content)
 ```
 This is useful for batch processing or automation where you don't need real-time updates.
@@ -217,7 +217,7 @@ async def main():
     thread.add_message(message)
     
     # Process
-    result = await agent.go(thread)
+    result = await agent.run(thread)
     
     # Save the conversation
     await thread_store.save_thread(result.thread)
@@ -263,7 +263,7 @@ async def interactive_session():
         
         # Process with agent
         print("\n🤖 Thinking...", end="", flush=True)
-        result = await agent.go(thread)
+        result = await agent.run(thread)
         
         # Clear thinking message
         print("\r" + " " * 20 + "\r", end="")
@@ -421,7 +421,7 @@ You've built your first agent! Here's what to explore next:
     Always handle potential errors:
     ```python
     try:
-        result = await agent.go(thread)
+        result = await agent.run(thread)
     except Exception as e:
         print(f"❌ Error: {e}")
         # Handle gracefully

@@ -74,7 +74,7 @@ async def demo_non_streaming():
     ))
     
     # Execute in non-streaming mode
-    result = await agent.go(thread)
+    result = await agent.run(thread)
     
     # Display the response
     logger.info("\n📝 Response: %s", result.content)
