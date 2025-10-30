@@ -407,6 +407,24 @@ shown in the /threads list. For example:
 """
         console.print(Panel(help_text, title="Help", border_style="blue"))
 
+def create_agent_panel(content: str) -> Panel:
+    """Create a standardized panel for agent content"""
+    return Panel(
+        Markdown(content),
+        title="[blue]Agent[/]",
+        border_style="blue",
+        box=box.ROUNDED
+    )
+
+def create_thinking_panel(content: str, thinking_type: str = "reasoning") -> Panel:
+    """Create a standardized panel for thinking/reasoning content"""
+    return Panel(
+        Markdown(content),
+        title=f"[dim]💭 Thinking ({thinking_type})[/]",
+        border_style="dim",
+        box=box.ROUNDED
+    )
+
 async def handle_stream_update(event: ExecutionEvent, chat_manager: ChatManager):
     """Handle streaming updates from the agent"""
     if event.type == EventType.LLM_THINKING_CHUNK:
@@ -426,12 +444,12 @@ async def handle_stream_update(event: ExecutionEvent, chat_manager: ChatManager)
             handle_stream_update.thinking_live.start()
         
         handle_stream_update.thinking.append(event.data.get("thinking_chunk", ""))
-        handle_stream_update.thinking_live.update(Panel(
-            Markdown(''.join(handle_stream_update.thinking)),
-            title=f"[dim]💭 Thinking ({event.data.get('thinking_type', 'reasoning')})[/]",
-            border_style="dim",
-            box=box.ROUNDED
-        ))
+        handle_stream_update.thinking_live.update(
+            create_thinking_panel(
+                ''.join(handle_stream_update.thinking),
+                event.data.get('thinking_type', 'reasoning')
+            )
+        )
     
     elif event.type == EventType.LLM_STREAM_CHUNK:
         # Create/update the panel with the streaming content
@@ -450,30 +468,34 @@ async def handle_stream_update(event: ExecutionEvent, chat_manager: ChatManager)
             handle_stream_update.live.start()
         
         handle_stream_update.content.append(event.data.get("content_chunk", ""))
-        handle_stream_update.live.update(Panel(
-            Markdown(''.join(handle_stream_update.content)),
-            title="[blue]Agent[/]",
-            border_style="blue",
-            box=box.ROUNDED
-        ))
+        handle_stream_update.live.update(
+            create_agent_panel(''.join(handle_stream_update.content))
+        )
     
     elif event.type == EventType.MESSAGE_CREATED and event.data.get("message", {}).role == "assistant":
-        # Stop the thinking display if it exists
+        # Stop the thinking display if it exists and print final content
         if hasattr(handle_stream_update, 'thinking_live'):
             handle_stream_update.thinking_live.stop()
+            # Print the full thinking content to preserve it (Live may have truncated)
+            thinking_content = ''.join(handle_stream_update.thinking)
+            if thinking_content.strip():
+                console.print(create_thinking_panel(thinking_content))
             delattr(handle_stream_update, 'thinking_live')
             delattr(handle_stream_update, 'thinking')
         
-        # Stop the live display if it exists
+        # Stop the live display if it exists and print final content
         if hasattr(handle_stream_update, 'live'):
             handle_stream_update.live.stop()
+            # Print the full content to preserve it (Live may have truncated)
+            full_content = ''.join(handle_stream_update.content)
+            if full_content.strip():
+                console.print(create_agent_panel(full_content))
             delattr(handle_stream_update, 'live')
             delattr(handle_stream_update, 'content')
             
         message = event.data.get("message")
-        # Only print tool calls if present
+        # Print tool calls if present
         if message and message.tool_calls:
-            console.print()  # New line after content chunks
             panels = chat_manager.format_message(message)
             if isinstance(panels, list):
                 for panel in panels:
@@ -510,6 +532,7 @@ def _main_inner(config: Optional[str], title: Optional[str]):
     """Inner main function with suppressed output"""
     # Use a single event loop for the entire session to maintain MCP connections
     async def async_main():
+        chat_manager = None  # Initialize before try block
         try:
             # Load configuration
             config_data = load_config(config)
@@ -548,10 +571,9 @@ def _main_inner(config: Optional[str], title: Optional[str]):
             console.print("\nGoodbye!")
         except Exception as e:
             console.print(f"[red]Error: {str(e)}[/]")
-            raise
         finally:
             # Cleanup MCP connections on exit
-            if chat_manager.agent and chat_manager.agent.mcp:
+            if chat_manager and chat_manager.agent and chat_manager.agent.mcp:
                 try:
                     await chat_manager.agent.cleanup()
                 except Exception as e:
