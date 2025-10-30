@@ -1,3 +1,20 @@
+## [tyler-v5.1.0] - 2025-10-30
+
+### 🚀 Features
+
+- Make agent.run() the primary API with .go() as backwards-compatible alias
+
+### 🐛 Bug Fixes
+
+- Address Copilot review comments
+- Handle UnboundLocalError in CLI chat cleanup
+- Preserve full thinking and response content after Live streaming
+- Improve chat CLI error handling and add interactive config creation
+
+### 🚜 Refactor
+
+- Rename internal methods for consistency with .run() API
+- Extract duplicate Panel creation logic into helper functions
 ## [tyler-v5.0.0] - 2025-10-29
 
 ### 🚀 Features
