@@ -407,6 +407,24 @@ shown in the /threads list. For example:
 """
         console.print(Panel(help_text, title="Help", border_style="blue"))
 
+def create_agent_panel(content: str) -> Panel:
+    """Create a standardized panel for agent content"""
+    return Panel(
+        Markdown(content),
+        title="[blue]Agent[/]",
+        border_style="blue",
+        box=box.ROUNDED
+    )
+
+def create_thinking_panel(content: str, thinking_type: str = "reasoning") -> Panel:
+    """Create a standardized panel for thinking/reasoning content"""
+    return Panel(
+        Markdown(content),
+        title=f"[dim]💭 Thinking ({thinking_type})[/]",
+        border_style="dim",
+        box=box.ROUNDED
+    )
+
 async def handle_stream_update(event: ExecutionEvent, chat_manager: ChatManager):
     """Handle streaming updates from the agent"""
     if event.type == EventType.LLM_THINKING_CHUNK:
@@ -426,12 +444,12 @@ async def handle_stream_update(event: ExecutionEvent, chat_manager: ChatManager)
             handle_stream_update.thinking_live.start()
         
         handle_stream_update.thinking.append(event.data.get("thinking_chunk", ""))
-        handle_stream_update.thinking_live.update(Panel(
-            Markdown(''.join(handle_stream_update.thinking)),
-            title=f"[dim]💭 Thinking ({event.data.get('thinking_type', 'reasoning')})[/]",
-            border_style="dim",
-            box=box.ROUNDED
-        ))
+        handle_stream_update.thinking_live.update(
+            create_thinking_panel(
+                ''.join(handle_stream_update.thinking),
+                event.data.get('thinking_type', 'reasoning')
+            )
+        )
     
     elif event.type == EventType.LLM_STREAM_CHUNK:
         # Create/update the panel with the streaming content
@@ -450,12 +468,9 @@ async def handle_stream_update(event: ExecutionEvent, chat_manager: ChatManager)
             handle_stream_update.live.start()
         
         handle_stream_update.content.append(event.data.get("content_chunk", ""))
-        handle_stream_update.live.update(Panel(
-            Markdown(''.join(handle_stream_update.content)),
-            title="[blue]Agent[/]",
-            border_style="blue",
-            box=box.ROUNDED
-        ))
+        handle_stream_update.live.update(
+            create_agent_panel(''.join(handle_stream_update.content))
+        )
     
     elif event.type == EventType.MESSAGE_CREATED and event.data.get("message", {}).role == "assistant":
         # Stop the thinking display if it exists and print final content
@@ -464,12 +479,7 @@ async def handle_stream_update(event: ExecutionEvent, chat_manager: ChatManager)
             # Print the full thinking content to preserve it (Live may have truncated)
             thinking_content = ''.join(handle_stream_update.thinking)
             if thinking_content.strip():
-                console.print(Panel(
-                    Markdown(thinking_content),
-                    title="[dim]💭 Thinking[/]",
-                    border_style="dim",
-                    box=box.ROUNDED
-                ))
+                console.print(create_thinking_panel(thinking_content))
             delattr(handle_stream_update, 'thinking_live')
             delattr(handle_stream_update, 'thinking')
         
@@ -479,12 +489,7 @@ async def handle_stream_update(event: ExecutionEvent, chat_manager: ChatManager)
             # Print the full content to preserve it (Live may have truncated)
             full_content = ''.join(handle_stream_update.content)
             if full_content.strip():
-                console.print(Panel(
-                    Markdown(full_content),
-                    title="[blue]Agent[/]",
-                    border_style="blue",
-                    box=box.ROUNDED
-                ))
+                console.print(create_agent_panel(full_content))
             delattr(handle_stream_update, 'live')
             delattr(handle_stream_update, 'content')
             
