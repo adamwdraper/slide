@@ -5843,7 +5843,7 @@ wheels = [
 
 [[package]]
 name = "slide-lye"
-version = "5.0.0"
+version = "5.1.0"
 source = { editable = "packages/lye" }
 dependencies = [
     { name = "beautifulsoup4" },
@@ -5899,7 +5899,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "slide-narrator"
-version = "5.0.0"
+version = "5.1.0"
 source = { editable = "packages/narrator" }
 dependencies = [
     { name = "aiosqlite" },
@@ -5943,7 +5943,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "slide-space-monkey"
-version = "5.0.0"
+version = "5.1.0"
 source = { editable = "packages/space-monkey" }
 dependencies = [
     { name = "fastapi" },
@@ -5989,7 +5989,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "slide-tyler"
-version = "5.0.0"
+version = "5.1.0"
 source = { editable = "packages/tyler" }
 dependencies = [
     { name = "aiohappyeyeballs" },
