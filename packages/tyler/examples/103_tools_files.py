@@ -75,9 +75,6 @@ async def main():
         content="Can you help me create a file with some sample text?"
     )
     thread.add_message(message)
-    
-    # Process the thread with the new API
-    result = await agent.run(thread)
 
     # Log available tools for debugging
     if hasattr(agent, '_processed_tools'):

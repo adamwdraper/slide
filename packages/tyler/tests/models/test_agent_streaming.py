@@ -1017,7 +1017,7 @@ async def test_stream_interrupt_tool():
 
 @pytest.mark.asyncio
 async def test_stream_general_exception_handling():
-    """Test general exception handling in go_stream"""
+    """Test general exception handling in stream"""
     agent = Agent(name="Tyler")
     thread = Thread()
     thread.add_message(Message(role="user", content="Test"))

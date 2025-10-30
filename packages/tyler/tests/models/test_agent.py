@@ -2,7 +2,7 @@ import os
 # Removed dummy environment variables to avoid interfering with examples tests
 import pytest
 from unittest.mock import patch, MagicMock, create_autospec, Mock, AsyncMock
-from tyler import Agent, Thread, Message, ThreadStore, AgentResult
+from tyler import Agent, Thread, Message, ThreadStore
 
 from tyler.utils.tool_runner import tool_runner, ToolRunner
 from narrator.database.storage_backend import MemoryBackend
@@ -2074,7 +2074,7 @@ async def test_get_timestamp():
     assert (dt2 - dt1).total_seconds() < 1.0
 
 def test_go_alias_backwards_compatibility():
-    """Test that .run() is an alias for .run() for backwards compatibility"""
+    """Test that .go() is an alias for .run() for backwards compatibility"""
     agent = Agent(name="TestAgent")
     
     # Verify that .go is an alias for .run
