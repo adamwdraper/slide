@@ -301,17 +301,9 @@ class ChatManager:
                 box=box.ROUNDED
             )
         elif message.role == "assistant" and message.tool_calls:
-            # Create a list to hold all panels
+            # Create a list to hold tool call panels
+            # Note: Don't include content panel - it's already visible from Live streaming
             panels = []
-            
-            # Add main content panel if there is content
-            if message.content and message.content.strip():
-                panels.append(Panel(
-                    Markdown(message.content),
-                    title=f"[blue]Agent[/]",
-                    border_style="blue",
-                    box=box.ROUNDED
-                ))
             
             # Add separate panels for each tool call
             for tool_call in message.tool_calls:
@@ -473,23 +465,17 @@ async def handle_stream_update(event: ExecutionEvent, chat_manager: ChatManager)
         )
     
     elif event.type == EventType.MESSAGE_CREATED and event.data.get("message", {}).role == "assistant":
-        # Stop the thinking display if it exists and print final content
+        # Stop the thinking display if it exists
+        # Live.stop() leaves the content visible, no need to reprint
         if hasattr(handle_stream_update, 'thinking_live'):
             handle_stream_update.thinking_live.stop()
-            # Print the full thinking content to preserve it (Live may have truncated)
-            thinking_content = ''.join(handle_stream_update.thinking)
-            if thinking_content.strip():
-                console.print(create_thinking_panel(thinking_content))
             delattr(handle_stream_update, 'thinking_live')
             delattr(handle_stream_update, 'thinking')
         
-        # Stop the live display if it exists and print final content
+        # Stop the live display if it exists
+        # Live.stop() leaves the content visible, no need to reprint
         if hasattr(handle_stream_update, 'live'):
             handle_stream_update.live.stop()
-            # Print the full content to preserve it (Live may have truncated)
-            full_content = ''.join(handle_stream_update.content)
-            if full_content.strip():
-                console.print(create_agent_panel(full_content))
             delattr(handle_stream_update, 'live')
             delattr(handle_stream_update, 'content')
             
