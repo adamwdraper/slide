@@ -1,3 +1,12 @@
+## [tyler-v5.1.1] - 2025-10-31
+
+### 🚀 Features
+
+- *(chat-cli)* Disable ellipsis truncation during streaming
+
+### 🐛 Bug Fixes
+
+- *(chat-cli)* Remove duplicate output in streaming responses
 ## [tyler-v5.1.0] - 2025-10-30
 
 ### 🚀 Features
