@@ -431,7 +431,8 @@ async def handle_stream_update(event: ExecutionEvent, chat_manager: ChatManager)
                     box=box.ROUNDED
                 ),
                 console=console,
-                refresh_per_second=4
+                refresh_per_second=4,
+                vertical_overflow="visible"  # Show full content without ellipsis truncation
             )
             handle_stream_update.thinking_live.start()
         
@@ -455,7 +456,8 @@ async def handle_stream_update(event: ExecutionEvent, chat_manager: ChatManager)
                     box=box.ROUNDED
                 ),
                 console=console,
-                refresh_per_second=4
+                refresh_per_second=4,
+                vertical_overflow="visible"  # Show full content without ellipsis truncation
             )
             handle_stream_update.live.start()
         
