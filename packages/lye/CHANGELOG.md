@@ -1,3 +1,13 @@
+## [lye-v5.2.0] - 2025-11-04
+
+### 🚀 Features
+
+- Replace python-magic with filetype for pure-Python MIME detection
+
+### 🐛 Bug Fixes
+
+- Remove unnecessary magic fallback from test file
+- Remove unused Tuple import from test file
 ## [tyler-v4.0.0] - 2025-10-23
 
 ### ⚙️ Miscellaneous Tasks

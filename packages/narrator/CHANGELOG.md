@@ -1,3 +1,8 @@
+## [narrator-v5.2.0] - 2025-11-04
+
+### 🚀 Features
+
+- Replace python-magic with filetype for pure-Python MIME detection
 ## [tyler-v3.0.0] - 2025-10-15
 
 ### 🚀 Features
