@@ -145,12 +145,12 @@ Storage is handled by the Narrator package, providing:
 # Install uv if you haven't already
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Install required libraries for PDF and image processing
+# Install required libraries for PDF image processing
 # macOS:
-brew install libmagic poppler
+brew install poppler
 
 # Ubuntu/Debian:
-sudo apt-get install libmagic1 poppler-utils
+sudo apt-get install poppler-utils
 
 # Using uv (recommended)
 uv add slide-tyler

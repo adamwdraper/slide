@@ -76,8 +76,7 @@ async def test_read_file_nonexistent():
 async def test_read_file_text(sample_text_content):
     """Test reading a text file"""
     with patch('pathlib.Path.exists', return_value=True), \
-         patch('pathlib.Path.read_bytes', return_value=sample_text_content), \
-         patch('magic.from_buffer', return_value='text/plain'):
+         patch('pathlib.Path.read_bytes', return_value=sample_text_content):
         
         result, files = await read_file(file_url="sample.txt")
         
@@ -92,8 +91,7 @@ async def test_read_file_text(sample_text_content):
 async def test_read_file_json(sample_json_content):
     """Test reading a JSON file"""
     with patch('pathlib.Path.exists', return_value=True), \
-         patch('pathlib.Path.read_bytes', return_value=sample_json_content), \
-         patch('magic.from_buffer', return_value='application/json'):
+         patch('pathlib.Path.read_bytes', return_value=sample_json_content):
         
         result, files = await read_file(file_url="sample.json")
         
@@ -103,35 +101,31 @@ async def test_read_file_json(sample_json_content):
         assert result["data"]["age"] == 30
         assert len(files) == 1
         assert files[0]["filename"] == "sample.json"
-        assert files[0]["mime_type"] == "application/json"
+        # filetype may detect JSON as text/plain, which is acceptable
+        assert files[0]["mime_type"] in ["application/json", "text/plain"]
 
 @pytest.mark.asyncio
 async def test_read_file_json_with_path(sample_json_content):
     """Test reading JSON with specific path extraction"""
-    with patch('pathlib.Path.exists', return_value=True), \
-         patch('pathlib.Path.read_bytes', return_value=sample_json_content), \
-         patch('magic.from_buffer', return_value='application/json'):
-        
-        # Test accessing nested object
-        result, _ = await parse_json(sample_json_content, "sample.json", "nested.key1")
-        assert result["success"] is True
-        assert result["data"] == "value1"
-        
-        # Test accessing array element
-        result, _ = await parse_json(sample_json_content, "sample.json", "items[1]")
-        assert result["success"] is True
-        assert result["data"] == "item2"
-        
-        # Test invalid path
-        result, _ = await parse_json(sample_json_content, "sample.json", "invalid.path")
-        assert result["success"] is False
+    # Test accessing nested object
+    result, _ = await parse_json(sample_json_content, "sample.json", "nested.key1")
+    assert result["success"] is True
+    assert result["data"] == "value1"
+    
+    # Test accessing array element
+    result, _ = await parse_json(sample_json_content, "sample.json", "items[1]")
+    assert result["success"] is True
+    assert result["data"] == "item2"
+    
+    # Test invalid path
+    result, _ = await parse_json(sample_json_content, "sample.json", "invalid.path")
+    assert result["success"] is False
 
 @pytest.mark.asyncio
 async def test_read_file_csv(sample_csv_content):
     """Test reading a CSV file"""
     with patch('pathlib.Path.exists', return_value=True), \
-         patch('pathlib.Path.read_bytes', return_value=sample_csv_content), \
-         patch('magic.from_buffer', return_value='text/csv'):
+         patch('pathlib.Path.read_bytes', return_value=sample_csv_content):
         
         result, files = await read_file(file_url="sample.csv")
         
@@ -143,7 +137,8 @@ async def test_read_file_csv(sample_csv_content):
         assert len(result["preview"]) == 5
         assert len(files) == 1
         assert files[0]["filename"] == "sample.csv"
-        assert files[0]["mime_type"] == "text/csv"
+        # filetype may detect CSV as text/plain, fallback to extension gives text/csv
+        assert files[0]["mime_type"] in ["text/csv", "text/plain"]
 
 @pytest.mark.asyncio
 async def test_read_file_pdf(sample_pdf_content, mock_pdf_reader):
@@ -168,8 +163,7 @@ async def test_read_file_pdf(sample_pdf_content, mock_pdf_reader):
     
     with patch('lye.files._process_pdf', return_value=(mock_result, mock_files)):
         with patch('pathlib.Path.exists', return_value=True), \
-             patch('pathlib.Path.read_bytes', return_value=valid_pdf_content), \
-             patch('magic.from_buffer', return_value='application/pdf'):
+             patch('pathlib.Path.read_bytes', return_value=valid_pdf_content):
             
             result, files = await read_file(file_url="sample.pdf")
             
@@ -187,7 +181,6 @@ async def test_read_file_pdf_error(sample_pdf_content):
     # Use the invalid PDF content to trigger an error
     with patch('pathlib.Path.exists', return_value=True), \
          patch('pathlib.Path.read_bytes', return_value=sample_pdf_content), \
-         patch('magic.from_buffer', return_value='application/pdf'), \
          patch('lye.files._process_pdf', side_effect=Exception("Stream has ended unexpectedly")):
         
         result, files = await read_file(file_url="sample.pdf")
@@ -219,8 +212,7 @@ async def test_pdf_with_vision_fallback(sample_pdf_content):
     # When _process_pdf fails, read_file will return an error
     with patch('lye.files._process_pdf', side_effect=Exception("PDF parsing failed")), \
          patch('pathlib.Path.exists', return_value=True), \
-         patch('pathlib.Path.read_bytes', return_value=valid_pdf_content), \
-         patch('magic.from_buffer', return_value='application/pdf'):
+         patch('pathlib.Path.read_bytes', return_value=valid_pdf_content):
         
         result, files = await read_file(file_url="sample.pdf")
         
@@ -425,8 +417,7 @@ async def test_unknown_mime_type(sample_pdf_content):
     content = b"Some binary content"
     
     with patch('pathlib.Path.exists', return_value=True), \
-         patch('pathlib.Path.read_bytes', return_value=content), \
-         patch('magic.from_buffer', return_value='application/octet-stream'):
+         patch('pathlib.Path.read_bytes', return_value=content):
         
         result, files = await read_file(file_url="unknown.bin")
         

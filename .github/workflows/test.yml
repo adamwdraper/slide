@@ -118,7 +118,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libmagic1 poppler-utils
+          sudo apt-get install -y poppler-utils
       
       - name: Install workspace dependencies
         run: |
@@ -152,7 +152,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libmagic1 poppler-utils
+          sudo apt-get install -y poppler-utils
       
       - name: Install workspace dependencies
         run: |
@@ -223,7 +223,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libmagic1 poppler-utils
+          sudo apt-get install -y poppler-utils
       
       - name: Install workspace dependencies
         run: |

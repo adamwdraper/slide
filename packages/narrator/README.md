@@ -501,7 +501,6 @@ The test suite requires:
 - Python 3.13+
 - pytest with async support
 - Test coverage reporting
-- System dependencies (libmagic for file type detection)
 
 ## Contributing
 

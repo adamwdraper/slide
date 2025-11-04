@@ -32,20 +32,12 @@ example_files = get_example_files()
 # Skip these examples in automated tests (require user interaction, external services, etc.)
 SKIP_EXAMPLES = [
     "slack-bot/basic.py",  # Requires Slack tokens and socket mode  
-    "integrations/storage-patterns.py",  # Requires libmagic system dependency
-    "use-cases/slack-bot/basic.py",  # Requires libmagic system dependency
 ]
 
 # Examples that have import issues in CI/certain environments
 SKIP_IMPORT_TESTS = [
-    "integrations/storage-patterns.py",  # Has libmagic dependency issues
-    "integrations/104_streaming.py",  # Has libmagic dependency issues  
-    "integrations/cross-package.py",  # Has libmagic dependency issues
-    "use-cases/research-assistant/basic.py",  # Has libmagic dependency issues
-    "use-cases/slack-bot/basic.py",  # Has libmagic dependency issues
-    "getting-started/tool-groups.py",  # Has libmagic dependency issues
-    "getting-started/quickstart.py",  # Has libmagic dependency issues
-    "getting-started/basic-persistence.py",  # Has libmagic dependency issues
+    # libmagic dependency removed - all examples now work without system dependencies
+    "integrations/cross-package.py",  # Pre-existing issue: imports 'search' from lye.web which doesn't exist
 ]
 
 # Examples that need special environment setup
