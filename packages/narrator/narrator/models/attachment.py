@@ -2,7 +2,8 @@ from typing import Dict, Optional, Any, Union, Literal
 from pydantic import BaseModel, computed_field
 import base64
 import io
-import magic
+import filetype
+import mimetypes
 from ..utils.logging import get_logger
 from pathlib import Path
 from ..storage.file_store import FileStore
@@ -61,7 +62,15 @@ class Attachment(BaseModel):
         content = file_path.read_bytes()
         
         # Detect MIME type
-        mime_type = magic.from_buffer(content, mime=True)
+        mime_type = filetype.guess_mime(content)
+        
+        if not mime_type:
+            # Fallback: extension-based detection
+            mime_type, _ = mimetypes.guess_type(str(file_path))
+        
+        if not mime_type:
+            # Default: binary
+            mime_type = 'application/octet-stream'
         
         return cls(
             filename=file_path.name,
@@ -88,7 +97,15 @@ class Attachment(BaseModel):
             return
         
         # Detect MIME type
-        detected_mime_type = magic.from_buffer(content_bytes, mime=True)
+        detected_mime_type = filetype.guess_mime(content_bytes)
+        
+        if not detected_mime_type:
+            # Fallback: extension-based detection
+            detected_mime_type, _ = mimetypes.guess_type(self.filename)
+        
+        if not detected_mime_type:
+            # Default: binary
+            detected_mime_type = 'application/octet-stream'
         
         if not self.mime_type:
             self.mime_type = detected_mime_type
@@ -209,7 +226,16 @@ class Attachment(BaseModel):
 
             # Detect/verify MIME type
             logger.debug("Detecting MIME type")
-            detected_mime_type = magic.from_buffer(content_bytes, mime=True)
+            detected_mime_type = filetype.guess_mime(content_bytes)
+            
+            if not detected_mime_type:
+                # Fallback: extension-based detection
+                detected_mime_type, _ = mimetypes.guess_type(self.filename)
+            
+            if not detected_mime_type:
+                # Default: binary
+                detected_mime_type = 'application/octet-stream'
+            
             logger.debug(f"Detected MIME type: {detected_mime_type}")
             
             if not self.mime_type:

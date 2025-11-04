@@ -98,22 +98,20 @@ For advanced file processing capabilities, you can install these system librarie
 <Tabs>
   <Tab title="macOS">
     ```bash
-    # Enhanced file type detection and PDF OCR
-    brew install libmagic poppler
+    # PDF OCR support for scanned documents
+    brew install poppler
     ```
   </Tab>
   <Tab title="Ubuntu/Debian">
     ```bash
-    # Enhanced file type detection and PDF OCR
-    sudo apt-get install libmagic1 poppler-utils
+    # PDF OCR support for scanned documents
+    sudo apt-get install poppler-utils
     ```
   </Tab>
 </Tabs>
 
 <Note>
-These are optional and only needed for:
-- More accurate file type detection for unusual formats
-- Processing scanned PDFs or PDFs without embedded text
+Poppler is only needed for processing scanned PDFs or PDFs without embedded text (OCR).
 </Note>
 
 

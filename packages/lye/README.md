@@ -84,13 +84,13 @@ agent = Agent(tools=WEB_TOOLS + SLACK_TOOLS)
 ## Requirements
 
 - Python 3.13+
-- System dependencies for PDF and image processing:
+- System dependencies for PDF image processing:
   ```bash
   # macOS
-  brew install libmagic poppler
+  brew install poppler
   
   # Ubuntu/Debian
-  sudo apt-get install libmagic1 poppler-utils
+  sudo apt-get install poppler-utils
   ```
 
 ## Development

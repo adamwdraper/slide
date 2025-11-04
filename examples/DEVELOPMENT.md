@@ -189,21 +189,15 @@ uv sync --dev
 export OPENAI_API_KEY="sk-..."
 ```
 
-**"libmagic" errors**
+**PDF processing errors**
 ```bash
-# This is a system dependency required by the narrator package
-# for file type detection in attachments
+# If you encounter PDF processing errors, install poppler for PDF image conversion
 
 # On Ubuntu/Debian:
-sudo apt-get install libmagic1
+sudo apt-get install poppler-utils
 
 # On macOS:
-brew install libmagic
-
-# On other systems, see: https://github.com/ahupp/python-magic#installation
-
-# Affected examples are automatically skipped in automated tests
-uv run python tests/run_examples.py --smoke  # Works around this
+brew install poppler
 ```
 
 **Examples seem to use old code**

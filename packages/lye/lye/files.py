@@ -7,7 +7,7 @@ from pathlib import Path
 import mimetypes
 import base64
 import io
-import magic
+import filetype
 import pandas as pd
 import json
 from pypdf import PdfReader
@@ -45,7 +45,16 @@ async def read_file(*, file_url: str, mime_type: Optional[str] = None) -> Tuple[
 
         # Detect MIME type if not provided
         if not mime_type:
-            mime_type = magic.from_buffer(content, mime=True)
+            # Primary: content-based detection
+            mime_type = filetype.guess_mime(content)
+            
+            if not mime_type:
+                # Fallback: extension-based detection
+                mime_type, _ = mimetypes.guess_type(file_url)
+            
+            if not mime_type:
+                # Default: binary
+                mime_type = 'application/octet-stream'
 
         # Route to appropriate handler based on MIME type
         if mime_type == 'application/pdf':

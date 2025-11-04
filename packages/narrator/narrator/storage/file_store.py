@@ -11,7 +11,7 @@ import mimetypes
 from datetime import datetime, UTC
 from sqlalchemy import select
 from ..utils.logging import get_logger
-import magic
+import filetype
 import base64
 
 # Get configured logger
@@ -282,11 +282,18 @@ class FileStore:
 
         # Detect or validate MIME type
         if not mime_type:
-            mime_type = mimetypes.guess_type(filename)[0]
+            # Primary: content-based detection
+            mime_type = filetype.guess_mime(content)
+            
             if not mime_type:
-                # Try to detect from content
-                mime_type = magic.from_buffer(content, mime=True)
-                logger.debug(f"Detected MIME type for {filename}: {mime_type}")
+                # Fallback: extension-based detection
+                mime_type, _ = mimetypes.guess_type(filename)
+            
+            if not mime_type:
+                # Default: binary
+                mime_type = 'application/octet-stream'
+            
+            logger.debug(f"Detected MIME type for {filename}: {mime_type}")
 
         if mime_type not in self.allowed_mime_types:
             raise UnsupportedFileTypeError(f"Unsupported file type: {mime_type}")
