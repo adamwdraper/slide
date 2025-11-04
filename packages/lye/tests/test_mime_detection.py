@@ -11,7 +11,6 @@ Tests cover:
 
 import pytest
 import mimetypes
-from typing import Tuple
 
 
 def detect_mime_type(content: bytes, filename: str) -> str:
