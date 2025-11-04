@@ -1,8 +1,12 @@
-## [tyler-v5.2.0] - 2025-11-04
+## [tyler-v5.2.1] - 2025-11-04
 
 ### 🚀 Features
 
 - Replace python-magic with filetype for pure-Python MIME detection
+
+### 🐛 Bug Fixes
+
+- *(tyler)* Allow Weave logging in chat CLI when WANDB_PROJECT is set
 ## [tyler-v5.1.1] - 2025-10-31
 
 ### 🚀 Features
