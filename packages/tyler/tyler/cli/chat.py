@@ -13,7 +13,9 @@ warnings.filterwarnings('ignore')
 
 # Set environment variables to suppress various library outputs
 os.environ['WANDB_SILENT'] = 'true'
-os.environ['WANDB_MODE'] = 'disabled'
+# Only disable WANDB if WANDB_PROJECT is not set (to allow Weave tracking when desired)
+if not os.getenv('WANDB_PROJECT'):
+    os.environ['WANDB_MODE'] = 'disabled'
 os.environ['WEAVE_SILENCE_WARNINGS'] = 'true'
 os.environ['LITELLM_LOG'] = 'ERROR'
 os.environ['HTTPX_LOG_LEVEL'] = 'ERROR'
