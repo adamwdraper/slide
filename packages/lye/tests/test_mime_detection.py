@@ -18,7 +18,7 @@ def detect_mime_type(content: bytes, filename: str) -> str:
     """
     Detect MIME type from file content with fallback strategy.
     
-    This function will be the new implementation replacing magic.from_buffer().
+    This function implements the new filetype-based detection logic.
     
     Args:
         content: File content as bytes
@@ -27,12 +27,7 @@ def detect_mime_type(content: bytes, filename: str) -> str:
     Returns:
         Detected MIME type string
     """
-    try:
-        import filetype
-    except ImportError:
-        # If filetype not installed yet, use old magic for now
-        import magic
-        return magic.from_buffer(content, mime=True)
+    import filetype
     
     # Primary: content-based detection
     mime_type = filetype.guess_mime(content)
