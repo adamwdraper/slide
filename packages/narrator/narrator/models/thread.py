@@ -1,20 +1,18 @@
 from typing import List, Dict, Optional, Literal, Any
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 from pydantic import BaseModel, Field, field_validator
 from narrator.models.message import Message
 from narrator.storage.file_store import FileStore
 import uuid
-from narrator.utils.logging import get_logger
-
-logger = get_logger(__name__)
+import logging
 
 class Thread(BaseModel):
     """Represents a thread containing multiple messages"""
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     title: Optional[str] = Field(default="Untitled Thread")
     messages: List[Message] = Field(default_factory=list)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     attributes: Dict = Field(default_factory=dict)
     platforms: Dict[str, Dict[str, str]] = Field(
         default_factory=dict,
@@ -46,7 +44,7 @@ class Thread(BaseModel):
     def ensure_timezone(cls, value: datetime) -> datetime:
         """Ensure all datetime fields are timezone-aware UTC"""
         if value.tzinfo is None:
-            return value.replace(tzinfo=UTC)
+            return value.replace(tzinfo=timezone.utc)
         return value
 
     def model_dump(self, mode: str = "json") -> Dict[str, Any]:
@@ -102,7 +100,7 @@ class Thread(BaseModel):
                 max_turn = max((m.turn for m in self.messages if m.turn is not None and m.role != "system"), default=0)
                 message.turn = max_turn + 1
         
-        self.updated_at = datetime.now(UTC)
+        self.updated_at = datetime.now(timezone.utc)
 
     def add_messages_batch(self, messages: List[Message]) -> None:
         """Add multiple messages as a batch (all get the same turn number)
@@ -131,7 +129,7 @@ class Thread(BaseModel):
                 message.turn = batch_turn
                 self.messages.append(message)
         
-        self.updated_at = datetime.now(UTC)
+        self.updated_at = datetime.now(timezone.utc)
 
     async def get_messages_for_chat_completion(self, file_store: Optional[FileStore] = None) -> List[Dict[str, Any]]:
         """Return messages in the format expected by chat completion APIs
@@ -147,7 +145,7 @@ class Thread(BaseModel):
     def clear_messages(self) -> None:
         """Clear all messages from the thread"""
         self.messages = []
-        self.updated_at = datetime.now(UTC)
+        self.updated_at = datetime.now(timezone.utc)
 
     def get_last_message_by_role(self, role: Literal["user", "assistant", "system", "tool"]) -> Optional[Message]:
         """Return the last message with the specified role, or None if no messages exist with that role"""
@@ -169,7 +167,7 @@ class Thread(BaseModel):
                 if len(first_content) > 50:
                     title += "..."
                 self.title = title
-                self.updated_at = datetime.now(UTC)
+                self.updated_at = datetime.now(timezone.utc)
                 return title
         
         return "Untitled Thread"
@@ -422,13 +420,13 @@ class Thread(BaseModel):
         """
         message = self.get_message_by_id(message_id)
         if not message:
-            logger.warning(f"Thread.add_reaction (thread_id={self.id}): Message with ID '{message_id}' not found.")
+            logging.getLogger(__name__).warning(f"Thread.add_reaction (thread_id={self.id}): Message with ID '{message_id}' not found.")
             return False
         
         result = message.add_reaction(emoji, user_id)
         if result:
-            self.updated_at = datetime.now(UTC) # Ensure thread update time is changed
-            logger.info(f"Thread.add_reaction (thread_id={self.id}): Message '{message_id}' reactions updated. Thread updated_at: {self.updated_at}")
+            self.updated_at = datetime.now(timezone.utc) # Ensure thread update time is changed
+            logging.getLogger(__name__).info(f"Thread.add_reaction (thread_id={self.id}): Message '{message_id}' reactions updated. Thread updated_at: {self.updated_at}")
         return result
     
     def remove_reaction(self, message_id: str, emoji: str, user_id: str) -> bool:
@@ -444,13 +442,13 @@ class Thread(BaseModel):
         """
         message = self.get_message_by_id(message_id)
         if not message:
-            logger.warning(f"Thread.remove_reaction (thread_id={self.id}): Message with ID '{message_id}' not found.")
+            logging.getLogger(__name__).warning(f"Thread.remove_reaction (thread_id={self.id}): Message with ID '{message_id}' not found.")
             return False
             
         result = message.remove_reaction(emoji, user_id)
         if result:
-            self.updated_at = datetime.now(UTC) # Ensure thread update time is changed
-            logger.info(f"Thread.remove_reaction (thread_id={self.id}): Message '{message_id}' reactions updated. Thread updated_at: {self.updated_at}")
+            self.updated_at = datetime.now(timezone.utc) # Ensure thread update time is changed
+            logging.getLogger(__name__).info(f"Thread.remove_reaction (thread_id={self.id}): Message '{message_id}' reactions updated. Thread updated_at: {self.updated_at}")
         return result
     
     def get_reactions(self, message_id: str) -> Dict[str, List[str]]:

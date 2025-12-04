@@ -4,13 +4,10 @@ import base64
 import io
 import filetype
 import mimetypes
-from ..utils.logging import get_logger
+import logging
 from pathlib import Path
 from ..storage.file_store import FileStore
 import hashlib
-
-# Get configured logger
-logger = get_logger(__name__)
 
 class Attachment(BaseModel):
     """Represents a file attached to a message"""
@@ -81,7 +78,7 @@ class Attachment(BaseModel):
     def detect_mime_type(self) -> None:
         """Detect and set MIME type from content"""
         if self.content is None:
-            logger.warning(f"Cannot detect MIME type for {self.filename}: no content")
+            logging.getLogger(__name__).warning(f"Cannot detect MIME type for {self.filename}: no content")
             return
         
         # Get content as bytes
@@ -93,7 +90,7 @@ class Attachment(BaseModel):
             except:
                 content_bytes = self.content.encode('utf-8')
         else:
-            logger.warning(f"Cannot detect MIME type for {self.filename}: invalid content type")
+            logging.getLogger(__name__).warning(f"Cannot detect MIME type for {self.filename}: invalid content type")
             return
         
         # Detect MIME type
@@ -109,9 +106,9 @@ class Attachment(BaseModel):
         
         if not self.mime_type:
             self.mime_type = detected_mime_type
-            logger.debug(f"Detected MIME type for {self.filename}: {self.mime_type}")
+            logging.getLogger(__name__).debug(f"Detected MIME type for {self.filename}: {self.mime_type}")
         else:
-            logger.debug(f"MIME type already set for {self.filename}: {self.mime_type}")
+            logging.getLogger(__name__).debug(f"MIME type already set for {self.filename}: {self.mime_type}")
 
     def model_dump(self, mode: str = "json") -> Dict[str, Any]:
         """Convert attachment to a dictionary suitable for JSON serialization
@@ -143,10 +140,10 @@ class Attachment(BaseModel):
             file_store: FileStore instance to use for retrieving file content.
                        Required when file_id is present.
         """
-        logger.debug(f"Getting content bytes for {self.filename}")
+        logging.getLogger(__name__).debug(f"Getting content bytes for {self.filename}")
         
         if self.file_id:
-            logger.debug(f"Retrieving content from file store for file_id: {self.file_id}")
+            logging.getLogger(__name__).debug(f"Retrieving content from file store for file_id: {self.file_id}")
             if file_store is None:
                 raise ValueError("FileStore instance required to retrieve content for file_id")
             if self.storage_path is None:
@@ -154,31 +151,31 @@ class Attachment(BaseModel):
             return await file_store.get(self.file_id, self.storage_path)
             
         if isinstance(self.content, bytes):
-            logger.debug(f"Content is already in bytes format for {self.filename}")
+            logging.getLogger(__name__).debug(f"Content is already in bytes format for {self.filename}")
             return self.content
         elif isinstance(self.content, str):
-            logger.debug(f"Converting string content for {self.filename}")
+            logging.getLogger(__name__).debug(f"Converting string content for {self.filename}")
             if self.content.startswith('data:'):
                 # Handle data URLs
-                logger.debug("Detected data URL format")
+                logging.getLogger(__name__).debug("Detected data URL format")
                 header, encoded = self.content.split(",", 1)
-                logger.debug(f"Data URL header: {header}")
+                logging.getLogger(__name__).debug(f"Data URL header: {header}")
                 try:
                     decoded = base64.b64decode(encoded)
-                    logger.debug(f"Successfully decoded data URL content, size: {len(decoded)} bytes")
+                    logging.getLogger(__name__).debug(f"Successfully decoded data URL content, size: {len(decoded)} bytes")
                     return decoded
                 except Exception as e:
-                    logger.error(f"Failed to decode data URL content: {e}")
+                    logging.getLogger(__name__).error(f"Failed to decode data URL content: {e}")
                     raise
             else:
                 try:
                     # Try base64 decode
-                    logger.debug("Attempting base64 decode")
+                    logging.getLogger(__name__).debug("Attempting base64 decode")
                     decoded = base64.b64decode(self.content)
-                    logger.debug(f"Successfully decoded base64 content, size: {len(decoded)} bytes")
+                    logging.getLogger(__name__).debug(f"Successfully decoded base64 content, size: {len(decoded)} bytes")
                     return decoded
                 except:
-                    logger.debug("Not base64, treating as UTF-8 text")
+                    logging.getLogger(__name__).debug("Not base64, treating as UTF-8 text")
                     # If not base64, encode as UTF-8
                     return self.content.encode('utf-8')
                 
@@ -193,10 +190,10 @@ class Attachment(BaseModel):
             try:
                 # Get the file URL from FileStore
                 self.attributes["url"] = FileStore.get_file_url(self.storage_path)
-                logger.debug(f"Updated attributes with URL: {self.attributes['url']}")
+                logging.getLogger(__name__).debug(f"Updated attributes with URL: {self.attributes['url']}")
             except Exception as e:
                 # Log the error but don't fail - the URL will be missing but that's better than crashing
-                logger.error(f"Failed to construct URL for attachment: {e}")
+                logging.getLogger(__name__).error(f"Failed to construct URL for attachment: {e}")
                 self.attributes["error"] = f"Failed to construct URL: {str(e)}"
 
     async def process_and_store(self, file_store: FileStore, force: bool = False) -> None:
@@ -206,26 +203,26 @@ class Attachment(BaseModel):
             file_store: FileStore instance to use for storing files
             force: Whether to force processing even if already stored
         """
-        logger.debug(f"Starting process_and_store for {self.filename} (force={force})")
-        logger.debug(f"Initial state - mime_type: {self.mime_type}, status: {self.status}, content type: {type(self.content)}")
+        logging.getLogger(__name__).debug(f"Starting process_and_store for {self.filename} (force={force})")
+        logging.getLogger(__name__).debug(f"Initial state - mime_type: {self.mime_type}, status: {self.status}, content type: {type(self.content)}")
         
         if not force and self.status == "stored":
-            logger.info(f"Skipping process_and_store for {self.filename} - already stored")
+            logging.getLogger(__name__).info(f"Skipping process_and_store for {self.filename} - already stored")
             return
 
         if self.content is None:
-            logger.error(f"Cannot process attachment {self.filename}: no content provided")
+            logging.getLogger(__name__).error(f"Cannot process attachment {self.filename}: no content provided")
             self.status = "failed"
             raise RuntimeError(f"Cannot process attachment {self.filename}: no content provided")
 
         try:
             # Get content as bytes first
-            logger.debug("Converting content to bytes")
+            logging.getLogger(__name__).debug("Converting content to bytes")
             content_bytes = await self.get_content_bytes(file_store=file_store)
-            logger.debug(f"Successfully converted content to bytes, size: {len(content_bytes)} bytes")
+            logging.getLogger(__name__).debug(f"Successfully converted content to bytes, size: {len(content_bytes)} bytes")
 
             # Detect/verify MIME type
-            logger.debug("Detecting MIME type")
+            logging.getLogger(__name__).debug("Detecting MIME type")
             detected_mime_type = filetype.guess_mime(content_bytes)
             
             if not detected_mime_type:
@@ -236,23 +233,23 @@ class Attachment(BaseModel):
                 # Default: binary
                 detected_mime_type = 'application/octet-stream'
             
-            logger.debug(f"Detected MIME type: {detected_mime_type}")
+            logging.getLogger(__name__).debug(f"Detected MIME type: {detected_mime_type}")
             
             if not self.mime_type:
                 self.mime_type = detected_mime_type
-                logger.debug(f"Set MIME type to detected type: {self.mime_type}")
+                logging.getLogger(__name__).debug(f"Set MIME type to detected type: {self.mime_type}")
             elif self.mime_type != detected_mime_type:
-                logger.warning(f"Provided MIME type {self.mime_type} doesn't match detected type {detected_mime_type}")
+                logging.getLogger(__name__).warning(f"Provided MIME type {self.mime_type} doesn't match detected type {detected_mime_type}")
 
             # Initialize attributes
             if not self.attributes:
                 self.attributes = {}
 
             # Process content based on MIME type
-            logger.debug(f"Processing content based on MIME type: {self.mime_type}")
+            logging.getLogger(__name__).debug(f"Processing content based on MIME type: {self.mime_type}")
             
             if self.mime_type.startswith('image/'):
-                logger.debug("Processing as image")
+                logging.getLogger(__name__).debug("Processing as image")
                 self.attributes.update({
                     "type": "image",
                     "description": f"Image file {self.filename}",
@@ -260,7 +257,7 @@ class Attachment(BaseModel):
                 })
 
             elif self.mime_type.startswith('audio/'):
-                logger.debug("Processing as audio")
+                logging.getLogger(__name__).debug("Processing as audio")
                 self.attributes.update({
                     "type": "audio",
                     "description": f"Audio file {self.filename}",
@@ -268,7 +265,7 @@ class Attachment(BaseModel):
                 })
 
             elif self.mime_type == 'application/pdf':
-                logger.debug("Processing as PDF")
+                logging.getLogger(__name__).debug("Processing as PDF")
                 try:
                     from pypdf import PdfReader
                     reader = PdfReader(io.BytesIO(content_bytes))
@@ -279,7 +276,7 @@ class Attachment(BaseModel):
                             if extracted:
                                 text += extracted + "\n"
                         except Exception as e:
-                            logger.warning(f"Error extracting text from PDF page: {e}")
+                            logging.getLogger(__name__).warning(f"Error extracting text from PDF page: {e}")
                             continue
                     self.attributes.update({
                         "type": "document",
@@ -288,7 +285,7 @@ class Attachment(BaseModel):
                         "mime_type": self.mime_type
                     })
                 except ImportError:
-                    logger.warning("pypdf not available, skipping PDF text extraction")
+                    logging.getLogger(__name__).warning("pypdf not available, skipping PDF text extraction")
                     self.attributes.update({
                         "type": "document",
                         "description": f"PDF document {self.filename}",
@@ -296,7 +293,7 @@ class Attachment(BaseModel):
                     })
 
             elif self.mime_type.startswith('text/'):
-                logger.debug("Processing as text")
+                logging.getLogger(__name__).debug("Processing as text")
                 try:
                     text = content_bytes.decode('utf-8')
                     self.attributes.update({
@@ -305,7 +302,7 @@ class Attachment(BaseModel):
                         "mime_type": self.mime_type
                     })
                 except UnicodeDecodeError:
-                    logger.warning("UTF-8 decode failed, trying alternative encodings")
+                    logging.getLogger(__name__).warning("UTF-8 decode failed, trying alternative encodings")
                     # Try alternative encodings
                     for encoding in ['latin-1', 'cp1252', 'iso-8859-1']:
                         try:
@@ -316,13 +313,13 @@ class Attachment(BaseModel):
                                 "encoding": encoding,
                                 "mime_type": self.mime_type
                             })
-                            logger.debug(f"Successfully decoded text using {encoding}")
+                            logging.getLogger(__name__).debug(f"Successfully decoded text using {encoding}")
                             break
                         except UnicodeDecodeError:
                             continue
 
             elif self.mime_type == 'application/json':
-                logger.debug("Processing as JSON")
+                logging.getLogger(__name__).debug("Processing as JSON")
                 import json
                 try:
                     json_text = content_bytes.decode('utf-8')
@@ -334,7 +331,7 @@ class Attachment(BaseModel):
                         "mime_type": self.mime_type
                     })
                 except Exception as e:
-                    logger.warning(f"Error parsing JSON content: {e}")
+                    logging.getLogger(__name__).warning(f"Error parsing JSON content: {e}")
                     self.attributes.update({
                         "type": "json",
                         "error": f"Failed to parse JSON: {str(e)}",
@@ -342,7 +339,7 @@ class Attachment(BaseModel):
                     })
 
             else:
-                logger.debug(f"Processing as binary file with MIME type: {self.mime_type}")
+                logging.getLogger(__name__).debug(f"Processing as binary file with MIME type: {self.mime_type}")
                 self.attributes.update({
                     "type": "binary",
                     "description": f"Binary file {self.filename}",
@@ -350,12 +347,12 @@ class Attachment(BaseModel):
                 })
 
             # Store the file
-            logger.debug("Storing file in FileStore")
+            logging.getLogger(__name__).debug("Storing file in FileStore")
             
             try:
-                logger.debug(f"Saving file to storage, content size: {len(content_bytes)} bytes")
+                logging.getLogger(__name__).debug(f"Saving file to storage, content size: {len(content_bytes)} bytes")
                 result = await file_store.save(content_bytes, self.filename, self.mime_type)
-                logger.debug(f"Successfully saved file. Result: {result}")
+                logging.getLogger(__name__).debug(f"Successfully saved file. Result: {result}")
                 
                 self.file_id = result['id']
                 self.storage_backend = result['storage_backend']
@@ -365,7 +362,7 @@ class Attachment(BaseModel):
                 # Update filename to match the one created by the file store
                 # Extract the actual filename from the storage path
                 new_filename = Path(self.storage_path).name
-                logger.debug(f"Updating attachment filename from {self.filename} to {new_filename}")
+                logging.getLogger(__name__).debug(f"Updating attachment filename from {self.filename} to {new_filename}")
                 self.filename = new_filename
                 
                 # Add storage info to attributes
@@ -374,16 +371,16 @@ class Attachment(BaseModel):
                 
                 # Clear content after successful storage
                 self.content = None
-                logger.debug(f"Cleared content after successful storage for {self.filename}")
+                logging.getLogger(__name__).debug(f"Cleared content after successful storage for {self.filename}")
                 
-                logger.debug(f"Successfully processed and stored attachment {self.filename}")
+                logging.getLogger(__name__).debug(f"Successfully processed and stored attachment {self.filename}")
                 
             except Exception as e:
-                logger.error(f"Error processing attachment {self.filename}: {e}")
+                logging.getLogger(__name__).error(f"Error processing attachment {self.filename}: {e}")
                 self.status = "failed"
                 raise
 
         except Exception as e:
-            logger.error(f"Failed to process attachment {self.filename}: {str(e)}")
+            logging.getLogger(__name__).error(f"Failed to process attachment {self.filename}: {str(e)}")
             self.status = "failed"
             raise RuntimeError(f"Failed to process attachment {self.filename}: {str(e)}") from e 

@@ -1,17 +1,14 @@
 from typing import Dict, Optional, Literal, Any, Union, List
 from typing_extensions import TypedDict
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 from pydantic import BaseModel, Field, field_validator, model_validator
 import hashlib
 import json
-from narrator.utils.logging import get_logger
+import logging
 import base64
 # Direct imports
 from narrator.models.attachment import Attachment
 from narrator.storage.file_store import FileStore
-
-# Get configured logger
-logger = get_logger(__name__)
 
 class ImageUrl(TypedDict):
     url: str
@@ -51,7 +48,7 @@ class Message(BaseModel):
     tool_call_id: Optional[str] = None  # Required for tool messages
     tool_calls: Optional[list] = None  # For assistant messages
     attributes: Dict = Field(default_factory=dict)
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     source: Optional[EntitySource] = None  # Creator information (who created this message)
     platforms: Dict[str, Dict[str, str]] = Field(
         default_factory=dict,
@@ -88,7 +85,7 @@ class Message(BaseModel):
     def ensure_timezone(cls, value: datetime) -> datetime:
         """Ensure timestamp is timezone-aware UTC"""
         if value.tzinfo is None:
-            return value.replace(tzinfo=UTC)
+            return value.replace(tzinfo=timezone.utc)
         return value
 
     @field_validator("role")
@@ -164,7 +161,7 @@ class Message(BaseModel):
             # Create deterministic JSON string for hashing
             hash_str = json.dumps(hash_content, sort_keys=True)
             self.id = hashlib.sha256(hash_str.encode()).hexdigest()
-            logger.debug(f"Generated message ID {self.id} from hash content: {hash_str}")
+            logging.getLogger(__name__).debug(f"Generated message ID {self.id} from hash content: {hash_str}")
 
     def _serialize_tool_calls(self, tool_calls):
         """Helper method to serialize tool calls into a JSON-friendly format"""
@@ -202,16 +199,16 @@ class Message(BaseModel):
                         }
                     }
                 else:
-                    logger.warning(f"Unsupported tool call format: {type(call)}")
+                    logging.getLogger(__name__).warning(f"Unsupported tool call format: {type(call)}")
                     continue
 
                 # Validate the required fields are present
                 if all(key in call_dict for key in ["id", "type", "function"]):
                     serialized_calls.append(call_dict)
                 else:
-                    logger.warning(f"Missing required fields in tool call: {call_dict}")
+                    logging.getLogger(__name__).warning(f"Missing required fields in tool call: {call_dict}")
             except Exception as e:
-                logger.error(f"Error serializing tool call: {str(e)}")
+                logging.getLogger(__name__).error(f"Error serializing tool call: {str(e)}")
                 continue
                 
         return serialized_calls
@@ -370,16 +367,16 @@ class Message(BaseModel):
         Returns:
             True if reaction was added, False if it already existed
         """
-        logger.info(f"Message.add_reaction (msg_id={self.id}): Current reactions: {self.reactions}. Adding '{emoji}' for user '{user_id}'.")
+        logging.getLogger(__name__).info(f"Message.add_reaction (msg_id={self.id}): Current reactions: {self.reactions}. Adding '{emoji}' for user '{user_id}'.")
         if emoji not in self.reactions:
             self.reactions[emoji] = []
         
         if user_id in self.reactions[emoji]:
-            logger.warning(f"Message.add_reaction (msg_id={self.id}): User '{user_id}' already reacted with '{emoji}'.")
+            logging.getLogger(__name__).warning(f"Message.add_reaction (msg_id={self.id}): User '{user_id}' already reacted with '{emoji}'.")
             return False # Indicate that reaction was not newly added because it already existed
         
         self.reactions[emoji].append(user_id)
-        logger.info(f"Message.add_reaction (msg_id={self.id}): Successfully added. Reactions now: {self.reactions}")
+        logging.getLogger(__name__).info(f"Message.add_reaction (msg_id={self.id}): Successfully added. Reactions now: {self.reactions}")
         return True
 
     def remove_reaction(self, emoji: str, user_id: str) -> bool:
@@ -392,9 +389,9 @@ class Message(BaseModel):
         Returns:
             True if reaction was removed, False if it didn't exist
         """
-        logger.info(f"Message.remove_reaction (msg_id={self.id}): Current reactions: {self.reactions}. Removing '{emoji}' for user '{user_id}'.")
+        logging.getLogger(__name__).info(f"Message.remove_reaction (msg_id={self.id}): Current reactions: {self.reactions}. Removing '{emoji}' for user '{user_id}'.")
         if emoji not in self.reactions or user_id not in self.reactions[emoji]:
-            logger.warning(f"Message.remove_reaction (msg_id={self.id}): Emoji '{emoji}' or user '{user_id}' not found in reactions {self.reactions}.")
+            logging.getLogger(__name__).warning(f"Message.remove_reaction (msg_id={self.id}): Emoji '{emoji}' or user '{user_id}' not found in reactions {self.reactions}.")
             return False
         
         self.reactions[emoji].remove(user_id)
@@ -403,7 +400,7 @@ class Message(BaseModel):
         if not self.reactions[emoji]:
             del self.reactions[emoji]
             
-        logger.info(f"Message.remove_reaction (msg_id={self.id}): Successfully removed. Reactions now: {self.reactions}")
+        logging.getLogger(__name__).info(f"Message.remove_reaction (msg_id={self.id}): Successfully removed. Reactions now: {self.reactions}")
         return True
 
     def get_reactions(self) -> Dict[str, List[str]]:
