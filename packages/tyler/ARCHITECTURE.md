@@ -14,7 +14,8 @@ The main `Agent` class orchestrates the execution of AI agents:
 - Implements the public `go()` API
 - Manages iteration loops
 - Handles thread and file stores
-- Inherits from `weave.Model` for observability
+- Inherits from `pydantic.BaseModel` for serialization
+- Uses `@weave.op()` decorators for observability/tracing
 
 **Key Methods**:
 - `go(thread, stream=False)` - Main entry point for agent execution
@@ -296,7 +297,7 @@ Each component handles one aspect:
 ### 2. Composition Over Inheritance
 Agent composes specialized components rather than inheriting everything:
 ```python
-class Agent(Model):
+class Agent(BaseModel):
     def __init__(self, ...):
         self.message_factory = MessageFactory(...)
         self.completion_handler = CompletionHandler(...)

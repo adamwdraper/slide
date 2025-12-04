@@ -1,13 +1,13 @@
 """Agent model implementation"""
 import os
 import weave
-from weave import Model, Prompt
+from weave import Prompt
+from pydantic import BaseModel, Field, PrivateAttr
 import json
 import types
 import logging
 from typing import List, Dict, Any, Optional, Union, AsyncGenerator, Tuple, Callable, Awaitable, overload, Literal
 from datetime import datetime, timezone
-from pydantic import Field, PrivateAttr
 from litellm import acompletion
 
 # Direct imports to avoid circular dependency
@@ -142,7 +142,7 @@ This ensures the user can access the file correctly.
             notes=formatted_notes
         )
 
-class Agent(Model):
+class Agent(BaseModel):
     """Tyler Agent model for AI-powered assistants.
     
     The Agent class provides a flexible interface for creating AI agents with tool use,
@@ -274,9 +274,6 @@ class Agent(Model):
         Args:
             __context: Pydantic context (unused)
         """
-        # Call parent class initialization (weave.Model) first
-        super().model_post_init(__context)
-        
         # Always initialize - the method preserves user-provided helpers
         self._initialize_helpers()
     

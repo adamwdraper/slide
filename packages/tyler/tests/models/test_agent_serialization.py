@@ -1,7 +1,7 @@
 """Tests for Agent serialization and deserialization.
 
 This module tests that Agent instances can be properly serialized and deserialized
-with Weave, ensuring that helper objects like message_factory and completion_handler
+using Pydantic, ensuring that helper objects like message_factory and completion_handler
 are correctly excluded from serialization and recreated on deserialization.
 """
 import pytest
@@ -297,28 +297,26 @@ class TestAgentHelperReinitializationEdgeCases:
         assert deserialized._mcp_connected == False
 
 
-class TestWeaveCompatibility:
-    """Test compatibility with Weave-specific serialization patterns."""
+class TestPydanticSerialization:
+    """Test Pydantic serialization patterns."""
     
-    def test_simulated_weave_roundtrip(self):
-        """Simulate a Weave-style serialization roundtrip."""
+    def test_serialization_roundtrip(self):
+        """Test a Pydantic serialization roundtrip."""
         # Create an agent
         agent = Agent(
-            name="WeaveAgent",
+            name="TestAgent",
             model_name="gpt-4.1",
             temperature=0.9
         )
         
-        # Simulate Weave serialization: model_dump() followed by reconstruction
-        # Weave typically uses model_dump() or similar to get a dict representation
+        # Serialize using Pydantic's model_dump()
         serialized = agent.model_dump()
         
-        # Simulate deserialization (what Weave would do)
-        # Helper objects will be None/missing from serialized dict
+        # Verify helper objects are excluded from serialization
         assert "message_factory" not in serialized
         assert "completion_handler" not in serialized
         
-        # Reconstruct from dict (simulating Weave deserialization)
+        # Reconstruct from dict
         reconstructed = Agent(**serialized)
         
         # Helper objects should be properly initialized
@@ -328,7 +326,7 @@ class TestWeaveCompatibility:
         assert isinstance(reconstructed.completion_handler, CompletionHandler)
         
         # Verify they're functional
-        assert reconstructed.message_factory.agent_name == "WeaveAgent"
+        assert reconstructed.message_factory.agent_name == "TestAgent"
         assert reconstructed.completion_handler.model_name == "gpt-4.1"
         assert reconstructed.completion_handler.temperature == 0.9
     

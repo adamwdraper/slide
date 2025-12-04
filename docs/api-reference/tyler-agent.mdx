@@ -477,14 +477,16 @@ agent = Agent(
 )
 ```
 
-### Weave Serialization
+### Weave Tracing and Serialization
 
-Agents are fully serializable and compatible with W&B Weave for experiment tracking and versioning:
+Tyler Agent uses `@weave.op()` decorators for comprehensive tracing. When you initialize Weave, 
+all agent method calls are automatically traced and logged to your Weave dashboard.
 
 ```python
 import weave
+from tyler import Agent
 
-# Initialize Weave
+# Initialize Weave - enables automatic tracing
 weave.init("my-project")
 
 # Create an agent
@@ -494,12 +496,44 @@ agent = Agent(
     temperature=0.7
 )
 
-# Agent can be serialized and tracked by Weave
-# Helper objects (message_factory, completion_handler) are automatically
-# excluded from serialization and recreated on deserialization
+# All calls are automatically traced to Weave!
+result = await agent.run(thread)
+# View traces at: https://wandb.ai/<entity>/my-project/weave
+```
 
-# Serialize
+<Warning>
+**Don't use `weave.publish(agent)`** - Published Agent objects cannot be retrieved and used 
+(Weave returns an unusable `ObjectRecord`). For reproducibility, publish your configuration instead:
+
+```python
+# ✅ DO: Publish config dict for reproducibility
+config = {
+    "name": "MyAgent",
+    "model_name": "gpt-4o",
+    "temperature": 0.7,
+    "tools": ["web", "files"]
+}
+weave.publish(config, name="my-agent-config")
+
+# Later, retrieve and recreate
+config_ref = weave.ref("my-agent-config:v1").get()
+agent = Agent(**config_ref)
+
+# ❌ DON'T: Publish agent object directly
+# weave.publish(agent)  # The result cannot be used!
+```
+</Warning>
+
+#### Pydantic Serialization
+
+Agents inherit from `pydantic.BaseModel` and support standard Pydantic serialization:
+
+```python
+# Serialize to dict
 agent_dict = agent.model_dump()
+
+# Serialize to JSON
+agent_json = agent.model_dump_json()
 
 # Deserialize (helper objects are automatically recreated)
 restored_agent = Agent(**agent_dict)
