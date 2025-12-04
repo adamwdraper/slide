@@ -352,8 +352,14 @@ class Agent(Model):
         """Get current ISO timestamp."""
         return datetime.now(timezone.utc).isoformat()
     
+    def _ensure_tool_cache(self) -> None:
+        """Ensure _tool_attributes_cache exists (for Weave deserialization compatibility)."""
+        if not hasattr(self, '_tool_attributes_cache') or self._tool_attributes_cache is None:
+            self._tool_attributes_cache = {}
+    
     def _get_tool_attributes(self, tool_name: str) -> Optional[Dict[str, Any]]:
         """Get tool attributes with caching."""
+        self._ensure_tool_cache()
         if tool_name not in self._tool_attributes_cache:
             self._tool_attributes_cache[tool_name] = tool_runner.get_tool_attributes(tool_name)
         return self._tool_attributes_cache[tool_name]
@@ -731,7 +737,8 @@ class Agent(Model):
             
         # Reset iteration count at the beginning of each go call
         self._iteration_count = 0
-        # Clear tool attributes cache for fresh request
+        # Clear tool attributes cache for fresh request (initialize if needed for Weave)
+        self._ensure_tool_cache()
         self._tool_attributes_cache.clear()
             
         thread = None
@@ -1005,6 +1012,7 @@ class Agent(Model):
             
             # Initialize tracking
             self._iteration_count = 0
+            self._ensure_tool_cache()
             self._tool_attributes_cache.clear()
             current_content = []
             current_tool_calls = []
@@ -1566,6 +1574,7 @@ class Agent(Model):
             
             # Initialize tracking
             self._iteration_count = 0
+            self._ensure_tool_cache()
             self._tool_attributes_cache.clear()
             new_messages = []
             
@@ -1812,6 +1821,10 @@ class Agent(Model):
         from tyler.models.tool_manager import ToolManager
         tool_manager = ToolManager(tools=self.tools, agents=self.agents)
         self._processed_tools = tool_manager.register_all_tools()
+        
+        # Ensure _prompt exists (for Weave deserialization compatibility)
+        if not hasattr(self, '_prompt') or self._prompt is None:
+            self._prompt = AgentPrompt()
         
         # Regenerate system prompt with new tools
         self._system_prompt = self._prompt.system_prompt(
