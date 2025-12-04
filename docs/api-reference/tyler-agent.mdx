@@ -115,6 +115,18 @@ agent = Agent(
   This parameter is excluded from serialization.
 </ParamField>
 
+<ParamField path="message_factory" type="MessageFactory | None" default="None">
+  Custom message factory for creating standardized messages. Advanced users can provide a custom implementation 
+  to control message formatting and structure. If not provided, uses the default factory.
+  This parameter is excluded from serialization (recreated on deserialization).
+</ParamField>
+
+<ParamField path="completion_handler" type="CompletionHandler | None" default="None">
+  Custom completion handler for LLM communication. Advanced users can provide a custom implementation 
+  to modify how the agent communicates with LLMs. If not provided, uses the default handler.
+  This parameter is excluded from serialization (recreated on deserialization).
+</ParamField>
+
 ## Creating from Config Files
 
 <ParamField path="Agent.from_config" type="classmethod">
@@ -464,6 +476,47 @@ agent = Agent(
     file_store=FileStore(path="/custom/path")
 )
 ```
+
+### Weave Serialization
+
+Agents are fully serializable and compatible with W&B Weave for experiment tracking and versioning:
+
+```python
+import weave
+
+# Initialize Weave
+weave.init("my-project")
+
+# Create an agent
+agent = Agent(
+    name="MyAgent",
+    model_name="gpt-4o",
+    temperature=0.7
+)
+
+# Agent can be serialized and tracked by Weave
+# Helper objects (message_factory, completion_handler) are automatically
+# excluded from serialization and recreated on deserialization
+
+# Serialize
+agent_dict = agent.model_dump()
+
+# Deserialize (helper objects are automatically recreated)
+restored_agent = Agent(**agent_dict)
+
+# restored_agent works exactly like the original
+result = await restored_agent.run(thread)
+```
+
+<Note>
+The following attributes are excluded from serialization and automatically recreated:
+- `thread_store` - Database connections
+- `file_store` - File system state
+- `message_factory` - Message creation helper
+- `completion_handler` - LLM communication helper
+
+If you provide custom helpers, they will be preserved during initialization but not serialized.
+</Note>
 
 ## Best practices
 
