@@ -4,8 +4,9 @@ import weave
 from weave import Model, Prompt
 import json
 import types
+import logging
 from typing import List, Dict, Any, Optional, Union, AsyncGenerator, Tuple, Callable, Awaitable, overload, Literal
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 from pydantic import Field, PrivateAttr
 from litellm import acompletion
 
@@ -13,7 +14,6 @@ from litellm import acompletion
 from narrator import Thread, Message, Attachment, ThreadStore, FileStore
 
 from tyler.utils.tool_runner import tool_runner
-from tyler.utils.logging import get_logger
 from tyler.models.execution import (
     EventType, ExecutionEvent,
     AgentResult
@@ -23,9 +23,6 @@ from tyler.models.message_factory import MessageFactory
 from tyler.models.completion_handler import CompletionHandler
 import asyncio
 from functools import partial
-
-# Get configured logger
-logger = get_logger(__name__)
 
 
 
@@ -246,11 +243,11 @@ class Agent(Model):
 
         # Create default stores if not provided
         if self.thread_store is None:
-            logger.info(f"Creating default in-memory thread store for agent {self.name}")
+            logging.getLogger(__name__).info(f"Creating default in-memory thread store for agent {self.name}")
             self.thread_store = ThreadStore()  # Uses in-memory backend by default
             
         if self.file_store is None:
-            logger.info(f"Creating default file store for agent {self.name}")
+            logging.getLogger(__name__).info(f"Creating default file store for agent {self.name}")
             self.file_store = FileStore()  # Uses default settings
 
         # Now generate the system prompt including the tools
@@ -340,12 +337,12 @@ class Agent(Model):
         from tyler.config import load_config
         
         # Load config from file
-        logger.info(f"Creating agent from config: {config_path or 'auto-discovered'}")
+        logging.getLogger(__name__).info(f"Creating agent from config: {config_path or 'auto-discovered'}")
         config = load_config(config_path)
         
         # Apply overrides (replacement semantics - dict.update replaces)
         if overrides:
-            logger.debug(f"Config overrides: {list(overrides.keys())}")
+            logging.getLogger(__name__).debug(f"Config overrides: {list(overrides.keys())}")
             config.update(overrides)
         
         # Create agent using standard __init__
@@ -353,7 +350,7 @@ class Agent(Model):
 
     def _get_timestamp(self) -> str:
         """Get current ISO timestamp."""
-        return datetime.now(UTC).isoformat()
+        return datetime.now(timezone.utc).isoformat()
     
     def _get_tool_attributes(self, tool_name: str) -> Optional[Dict[str, Any]]:
         """Get tool attributes with caching."""
@@ -444,7 +441,7 @@ class Agent(Model):
         )
         
         # Track API call time
-        api_start_time = datetime.now(UTC)
+        api_start_time = datetime.now(timezone.utc)
         
         try:
             # Get completion with weave call tracking (kept for backward compatibility)
@@ -528,13 +525,13 @@ class Agent(Model):
         # Get tool name based on tool_call type
         tool_name = tool_call['function']['name'] if isinstance(tool_call, dict) else tool_call.function.name
 
-        logger.debug(f"Processing tool call: {tool_name}")
+        logging.getLogger(__name__).debug(f"Processing tool call: {tool_name}")
         
         # Get tool attributes before execution
         tool_attributes = self._get_tool_attributes(tool_name)
 
         # Execute the tool
-        tool_start_time = datetime.now(UTC)
+        tool_start_time = datetime.now(timezone.utc)
         try:
             result = await self._handle_tool_execution(tool_call)
             
@@ -561,17 +558,17 @@ class Agent(Model):
                 metrics={
                     "timing": {
                         "started_at": tool_start_time.isoformat(),
-                        "ended_at": datetime.now(UTC).isoformat(),
-                        "latency": (datetime.now(UTC) - tool_start_time).total_seconds() * 1000
+                        "ended_at": datetime.now(timezone.utc).isoformat(),
+                        "latency": (datetime.now(timezone.utc) - tool_start_time).total_seconds() * 1000
                     }
                 }
             )
             
             # Add any files as attachments
             if files:
-                logger.debug(f"Processing {len(files)} files from tool result")
+                logging.getLogger(__name__).debug(f"Processing {len(files)} files from tool result")
                 for file_info in files:
-                    logger.debug(f"Creating attachment for {file_info.get('filename')} with mime type {file_info.get('mime_type')}")
+                    logging.getLogger(__name__).debug(f"Creating attachment for {file_info.get('filename')} with mime type {file_info.get('mime_type')}")
                     attachment = Attachment(
                         filename=file_info["filename"],
                         content=file_info["content"],
@@ -600,9 +597,9 @@ class Agent(Model):
                 source=self._create_tool_source(tool_name),
                 metrics={
                     "timing": {
-                        "started_at": datetime.now(UTC).isoformat(),
-                        "ended_at": datetime.now(UTC).isoformat(),
-                        "latency": (datetime.now(UTC) - tool_start_time).total_seconds() * 1000
+                        "started_at": datetime.now(timezone.utc).isoformat(),
+                        "ended_at": datetime.now(timezone.utc).isoformat(),
+                        "latency": (datetime.now(timezone.utc) - tool_start_time).total_seconds() * 1000
                     }
                 }
             )
@@ -651,7 +648,7 @@ class Agent(Model):
             print(f"Response: {result.content}")
             print(f"New messages: {len(result.new_messages)}")
         """
-        logger.debug("Agent.run() called (non-streaming mode)")
+        logging.getLogger(__name__).debug("Agent.run() called (non-streaming mode)")
         return await self._run_complete(thread_or_id)
     
     # Backwards compatibility alias
@@ -703,11 +700,11 @@ class Agent(Model):
                     print(chunk.choices[0].delta.content, end="")
         """
         if mode == "events":
-            logger.debug("Agent.stream() called with mode='events'")
+            logging.getLogger(__name__).debug("Agent.stream() called with mode='events'")
             async for event in self._stream_events(thread_or_id):
                 yield event
         elif mode == "raw":
-            logger.debug("Agent.stream() called with mode='raw'")
+            logging.getLogger(__name__).debug("Agent.stream() called with mode='raw'")
             async for chunk in self._stream_raw(thread_or_id):
                 yield chunk
         else:
@@ -720,14 +717,14 @@ class Agent(Model):
         """Non-streaming implementation that collects all events and returns AgentResult."""
         # Initialize execution tracking
         events = []
-        start_time = datetime.now(UTC)
+        start_time = datetime.now(timezone.utc)
         new_messages = []
         
         # Helper to record events
         def record_event(event_type: EventType, data: Dict[str, Any], attributes=None):
             events.append(ExecutionEvent(
                 type=event_type,
-                timestamp=datetime.now(UTC),
+                timestamp=datetime.now(timezone.utc),
                 data=data,
                 attributes=attributes
             ))
@@ -781,7 +778,7 @@ class Agent(Model):
                         
                         if not response or not hasattr(response, 'choices') or not response.choices:
                             error_msg = "No response received from chat completion"
-                            logger.error(error_msg)
+                            logging.getLogger(__name__).error(error_msg)
                             record_event(EventType.EXECUTION_ERROR, {
                                 "error_type": "NoResponse",
                                 "message": error_msg
@@ -848,7 +845,7 @@ class Agent(Model):
                             
                             for tool_call in tool_calls:
                                 tool_id = tool_call.id if hasattr(tool_call, 'id') else tool_call.get('id')
-                                tool_start_times[tool_id] = datetime.now(UTC)
+                                tool_start_times[tool_id] = datetime.now(timezone.utc)
                                 tool_tasks.append(self._handle_tool_execution(tool_call))
                             
                             tool_results = await asyncio.gather(*tool_tasks, return_exceptions=True)
@@ -861,7 +858,7 @@ class Agent(Model):
                                 tool_id = tool_call.id if hasattr(tool_call, 'id') else tool_call.get('id')
                                 
                                 # Calculate duration
-                                tool_end_time = datetime.now(UTC)
+                                tool_end_time = datetime.now(timezone.utc)
                                 tool_duration_ms = (tool_end_time - tool_start_times[tool_id]).total_seconds() * 1000
                                 
                                 # Record tool result or error
@@ -909,7 +906,7 @@ class Agent(Model):
 
                     except Exception as e:
                         error_msg = f"Error during chat completion: {str(e)}"
-                        logger.error(error_msg)
+                        logging.getLogger(__name__).error(error_msg)
                         record_event(EventType.EXECUTION_ERROR, {
                             "error_type": type(e).__name__,
                             "message": error_msg,
@@ -936,7 +933,7 @@ class Agent(Model):
                 await self.thread_store.save(thread)
                 
             # Record completion
-            end_time = datetime.now(UTC)
+            end_time = datetime.now(timezone.utc)
             total_tokens = sum(
                 event.data.get("tokens", {}).get("total_tokens", 0)
                 for event in events
@@ -966,7 +963,7 @@ class Agent(Model):
             raise
         except Exception as e:
             error_msg = f"Error processing thread: {str(e)}"
-            logger.error(error_msg)
+            logging.getLogger(__name__).error(error_msg)
             message = self._create_error_message(error_msg)
             
             if isinstance(thread_or_id, Thread):
@@ -991,7 +988,7 @@ class Agent(Model):
                 await self.thread_store.save(thread)
             
             # Build result even with error
-            end_time = datetime.now(UTC)
+            end_time = datetime.now(timezone.utc)
             
             return AgentResult(
                 thread=thread,
@@ -1013,7 +1010,7 @@ class Agent(Model):
             current_tool_calls = []
             current_tool_call = None
             current_tool_args: Dict[str, str] = {}
-            start_time = datetime.now(UTC)
+            start_time = datetime.now(timezone.utc)
             new_messages = []
             
             # Helper: initialize per-tool_call argument buffer only once
@@ -1024,7 +1021,7 @@ class Agent(Model):
             # Yield iteration start
             yield ExecutionEvent(
                 type=EventType.ITERATION_START,
-                timestamp=datetime.now(UTC),
+                timestamp=datetime.now(timezone.utc),
                 data={
                     "iteration_number": 0,
                     "max_iterations": self.max_tool_iterations
@@ -1038,12 +1035,12 @@ class Agent(Model):
                 new_messages.append(message)
                 yield ExecutionEvent(
                     type=EventType.MESSAGE_CREATED,
-                    timestamp=datetime.now(UTC),
+                    timestamp=datetime.now(timezone.utc),
                     data={"message": message}
                 )
                 yield ExecutionEvent(
                     type=EventType.ITERATION_LIMIT,
-                    timestamp=datetime.now(UTC),
+                    timestamp=datetime.now(timezone.utc),
                     data={"iterations_used": self._iteration_count}
                 )
                 if self.thread_store:
@@ -1056,7 +1053,7 @@ class Agent(Model):
                     # Yield LLM request event
                     yield ExecutionEvent(
                         type=EventType.LLM_REQUEST,
-                        timestamp=datetime.now(UTC),
+                        timestamp=datetime.now(timezone.utc),
                         data={
                             "message_count": len(thread.messages),
                             "model": self.model_name,
@@ -1069,10 +1066,10 @@ class Agent(Model):
                     
                     if not streaming_response:
                         error_msg = "No response received from chat completion"
-                        logger.error(error_msg)
+                        logging.getLogger(__name__).error(error_msg)
                         yield ExecutionEvent(
                             type=EventType.EXECUTION_ERROR,
-                            timestamp=datetime.now(UTC),
+                            timestamp=datetime.now(timezone.utc),
                             data={
                                 "error_type": "NoResponse",
                                 "message": error_msg
@@ -1083,7 +1080,7 @@ class Agent(Model):
                         new_messages.append(message)
                         yield ExecutionEvent(
                             type=EventType.MESSAGE_CREATED,
-                            timestamp=datetime.now(UTC),
+                            timestamp=datetime.now(timezone.utc),
                             data={"message": message}
                         )
                         if self.thread_store:
@@ -1107,7 +1104,7 @@ class Agent(Model):
                             current_content.append(delta.content)
                             yield ExecutionEvent(
                                 type=EventType.LLM_STREAM_CHUNK,
-                                timestamp=datetime.now(UTC),
+                                timestamp=datetime.now(timezone.utc),
                                 data={"content_chunk": delta.content}
                             )
                         
@@ -1135,7 +1132,7 @@ class Agent(Model):
                             current_thinking.append(thinking_text)
                             yield ExecutionEvent(
                                 type=EventType.LLM_THINKING_CHUNK,
-                                timestamp=datetime.now(UTC),
+                                timestamp=datetime.now(timezone.utc),
                                 data={
                                     "thinking_chunk": thinking_text,
                                     "thinking_type": thinking_type
@@ -1216,7 +1213,7 @@ class Agent(Model):
                     
                     yield ExecutionEvent(
                         type=EventType.LLM_RESPONSE,
-                        timestamp=datetime.now(UTC),
+                        timestamp=datetime.now(timezone.utc),
                         data={
                             "content": content,
                             "tool_calls": current_tool_calls if current_tool_calls else None,
@@ -1238,7 +1235,7 @@ class Agent(Model):
                     new_messages.append(assistant_message)
                     yield ExecutionEvent(
                         type=EventType.MESSAGE_CREATED,
-                        timestamp=datetime.now(UTC),
+                        timestamp=datetime.now(timezone.utc),
                         data={"message": assistant_message}
                     )
                     
@@ -1273,7 +1270,7 @@ class Agent(Model):
                             
                             yield ExecutionEvent(
                                 type=EventType.TOOL_SELECTED,
-                                timestamp=datetime.now(UTC),
+                                timestamp=datetime.now(timezone.utc),
                                 data={
                                     "tool_name": tool_name,
                                     "arguments": parsed_args,
@@ -1287,7 +1284,7 @@ class Agent(Model):
                         
                         for tool_call in current_tool_calls:
                             tool_id = tool_call['id']
-                            tool_start_times[tool_id] = datetime.now(UTC)
+                            tool_start_times[tool_id] = datetime.now(timezone.utc)
                             tool_tasks.append(self._handle_tool_execution(tool_call))
                         
                         tool_results = await asyncio.gather(*tool_tasks, return_exceptions=True)
@@ -1300,14 +1297,14 @@ class Agent(Model):
                             tool_id = tool_call['id']
                             
                             # Calculate duration
-                            tool_end_time = datetime.now(UTC)
+                            tool_end_time = datetime.now(timezone.utc)
                             tool_duration_ms = (tool_end_time - tool_start_times[tool_id]).total_seconds() * 1000
                             
                             # Yield result or error event
                             if isinstance(result, Exception):
                                 yield ExecutionEvent(
                                     type=EventType.TOOL_ERROR,
-                                    timestamp=datetime.now(UTC),
+                                    timestamp=datetime.now(timezone.utc),
                                     data={
                                         "tool_name": tool_name,
                                         "error": str(result),
@@ -1323,7 +1320,7 @@ class Agent(Model):
                                 
                                 yield ExecutionEvent(
                                     type=EventType.TOOL_RESULT,
-                                    timestamp=datetime.now(UTC),
+                                    timestamp=datetime.now(timezone.utc),
                                     data={
                                         "tool_name": tool_name,
                                         "result": result_content,
@@ -1338,7 +1335,7 @@ class Agent(Model):
                             new_messages.append(tool_message)
                             yield ExecutionEvent(
                                 type=EventType.MESSAGE_CREATED,
-                                timestamp=datetime.now(UTC),
+                                timestamp=datetime.now(timezone.utc),
                                 data={"message": tool_message}
                             )
                             
@@ -1356,7 +1353,7 @@ class Agent(Model):
                         error_msg = f"Tool execution failed: {str(e)}"
                         yield ExecutionEvent(
                             type=EventType.EXECUTION_ERROR,
-                            timestamp=datetime.now(UTC),
+                            timestamp=datetime.now(timezone.utc),
                             data={
                                 "error_type": type(e).__name__,
                                 "message": error_msg
@@ -1366,7 +1363,7 @@ class Agent(Model):
                         thread.add_message(message)
                         yield ExecutionEvent(
                             type=EventType.MESSAGE_CREATED,
-                            timestamp=datetime.now(UTC),
+                            timestamp=datetime.now(timezone.utc),
                             data={"message": message}
                         )
                         if self.thread_store:
@@ -1383,7 +1380,7 @@ class Agent(Model):
                     error_msg = f"Completion failed: {str(e)}"
                     yield ExecutionEvent(
                         type=EventType.EXECUTION_ERROR,
-                        timestamp=datetime.now(UTC),
+                        timestamp=datetime.now(timezone.utc),
                         data={
                             "error_type": type(e).__name__,
                             "message": error_msg
@@ -1394,7 +1391,7 @@ class Agent(Model):
                     new_messages.append(message)
                     yield ExecutionEvent(
                         type=EventType.MESSAGE_CREATED,
-                        timestamp=datetime.now(UTC),
+                        timestamp=datetime.now(timezone.utc),
                         data={"message": message}
                     )
                     if self.thread_store:
@@ -1411,9 +1408,9 @@ class Agent(Model):
             # Yield completion event
             yield ExecutionEvent(
                 type=EventType.EXECUTION_COMPLETE,
-                timestamp=datetime.now(UTC),
+                timestamp=datetime.now(timezone.utc),
                 data={
-                    "duration_ms": (datetime.now(UTC) - start_time).total_seconds() * 1000,
+                    "duration_ms": (datetime.now(timezone.utc) - start_time).total_seconds() * 1000,
                     "total_tokens": total_tokens
                 }
             )
@@ -1422,7 +1419,7 @@ class Agent(Model):
             error_msg = f"Stream processing failed: {str(e)}"
             yield ExecutionEvent(
                 type=EventType.EXECUTION_ERROR,
-                timestamp=datetime.now(UTC),
+                timestamp=datetime.now(timezone.utc),
                 data={
                     "error_type": type(e).__name__,
                     "message": error_msg
@@ -1519,9 +1516,9 @@ class Agent(Model):
         
         # Add any files as attachments
         if files:
-            logger.debug(f"Processing {len(files)} files from tool result")
+            logging.getLogger(__name__).debug(f"Processing {len(files)} files from tool result")
             for file_info in files:
-                logger.debug(f"Creating attachment for {file_info.get('filename')} with mime type {file_info.get('mime_type')}")
+                logging.getLogger(__name__).debug(f"Creating attachment for {file_info.get('filename')} with mime type {file_info.get('mime_type')}")
                 attachment = Attachment(
                     filename=file_info["filename"],
                     content=file_info["content"],
@@ -1572,7 +1569,7 @@ class Agent(Model):
             self._tool_attributes_cache.clear()
             new_messages = []
             
-            logger.debug(f"Starting raw streaming for thread {thread.id}")
+            logging.getLogger(__name__).debug(f"Starting raw streaming for thread {thread.id}")
             
             # Helper: initialize per-tool_call argument buffer only once
             def _init_tool_arg_buffer(tool_call_id: str, initial_value: Optional[str], buffers: Dict[str, str]) -> None:
@@ -1590,18 +1587,18 @@ class Agent(Model):
                         error_msg = "Error during LLM request"
                         if isinstance(metrics, list) and metrics:
                             error_msg = metrics[0].content if hasattr(metrics[0], 'content') else str(metrics[0])
-                        logger.error(error_msg)
+                        logging.getLogger(__name__).error(error_msg)
                         raise RuntimeError(error_msg)
                     
                     if not streaming_response:
                         error_msg = "No response received from chat completion"
-                        logger.error(error_msg)
+                        logging.getLogger(__name__).error(error_msg)
                         raise RuntimeError(error_msg)
                     
                     # Verify we got an async generator
                     if not hasattr(streaming_response, '__aiter__'):
                         error_msg = f"Expected async generator from step(), got {type(streaming_response).__name__}"
-                        logger.error(error_msg)
+                        logging.getLogger(__name__).error(error_msg)
                         raise RuntimeError(error_msg)
                     
                     # Yield all raw chunks and accumulate tool calls
@@ -1740,7 +1737,7 @@ class Agent(Model):
                     
                     except Exception as e:
                         error_msg = f"Tool execution failed: {str(e)}"
-                        logger.error(error_msg)
+                        logging.getLogger(__name__).error(error_msg)
                         message = self._create_error_message(error_msg)
                         thread.add_message(message)
                         if self.thread_store:
@@ -1752,25 +1749,25 @@ class Agent(Model):
                 
                 except Exception as e:
                     error_msg = f"Completion failed: {str(e)}"
-                    logger.error(error_msg)
+                    logging.getLogger(__name__).error(error_msg)
                     raise
             
             # Check if we hit max iterations
             if self._iteration_count >= self.max_tool_iterations:
-                logger.warning(f"Hit max iterations ({self.max_tool_iterations})")
+                logging.getLogger(__name__).warning(f"Hit max iterations ({self.max_tool_iterations})")
                 message = self.message_factory.create_max_iterations_message()
                 thread.add_message(message)
                 if self.thread_store:
                     await self.thread_store.save(thread)
             
-            logger.debug(f"Raw streaming complete - {self._iteration_count} iterations")
+            logging.getLogger(__name__).debug(f"Raw streaming complete - {self._iteration_count} iterations")
             
         except ValueError:
             # Re-raise ValueError for thread not found
             raise
         except Exception as e:
             error_msg = f"Error in raw streaming mode: {str(e)}"
-            logger.error(error_msg)
+            logging.getLogger(__name__).error(error_msg)
             raise
     
     async def connect_mcp(self) -> None:
@@ -1789,14 +1786,14 @@ class Agent(Model):
             result = await agent.go(thread)
         """
         if not self.mcp:
-            logger.warning("connect_mcp() called but no mcp config provided")
+            logging.getLogger(__name__).warning("connect_mcp() called but no mcp config provided")
             return
         
         if self._mcp_connected:
-            logger.debug("MCP already connected, skipping")
+            logging.getLogger(__name__).debug("MCP already connected, skipping")
             return
         
-        logger.info("Connecting to MCP servers...")
+        logging.getLogger(__name__).info("Connecting to MCP servers...")
         
         from tyler.mcp.config_loader import _load_mcp_config
         
@@ -1826,7 +1823,7 @@ class Agent(Model):
         )
         
         self._mcp_connected = True
-        logger.info(f"MCP connected with {len(mcp_tools)} tools")
+        logging.getLogger(__name__).info(f"MCP connected with {len(mcp_tools)} tools")
     
     async def cleanup(self) -> None:
         """
