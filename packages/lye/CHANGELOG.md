@@ -1,4 +1,9 @@
-## [lye-v5.2.1] - 2025-11-04
+## [lye-v5.2.2] - 2025-12-04
+
+### 🐛 Bug Fixes
+
+- Update lye browser to use browser-use 0.10+ API
+## [tyler-v5.2.0] - 2025-11-04
 
 ### 🚀 Features
 
