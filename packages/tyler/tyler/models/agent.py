@@ -208,8 +208,9 @@ class Agent(Model):
             from tyler.mcp.config_loader import _validate_mcp_config
             _validate_mcp_config(self.mcp)
         
-        # Initialize all helper objects and internal state
-        self._initialize_helpers()
+        # Note: Helper initialization happens in model_post_init(), which is
+        # automatically called by Pydantic after __init__ completes. This ensures
+        # helpers are initialized both for fresh instances and after deserialization.
     
     def _initialize_helpers(self):
         """Initialize or reinitialize helper objects and internal state.
@@ -261,17 +262,17 @@ class Agent(Model):
     def model_post_init(self, __context: Any) -> None:
         """Pydantic v2 hook called after model initialization.
         
-        This ensures helper objects are always properly initialized after
-        deserialization (e.g., from Weave). Without this, helper objects
-        like message_factory and completion_handler would be None after
-        deserialization, causing AttributeErrors.
+        This method initializes all helper objects and internal state. It's called
+        automatically by Pydantic after __init__() completes, ensuring helpers are
+        properly initialized for both:
+        - Fresh Agent instances (helpers start as None with default values)
+        - Deserialized instances (helpers excluded from serialization, so they're None)
         
         Args:
             __context: Pydantic context (unused)
         """
-        # Only reinitialize if helpers are missing (indicates deserialization)
+        # Helpers are always None at this point (either default or excluded from deserialization)
         if self.message_factory is None or self.completion_handler is None:
-            logger.debug(f"Reinitializing helper objects for agent {self.name} after deserialization")
             self._initialize_helpers()
     
     @classmethod
