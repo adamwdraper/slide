@@ -277,6 +277,9 @@ class Agent(Model):
         Args:
             __context: Pydantic context (unused)
         """
+        # Call parent class initialization (weave.Model) first
+        super().model_post_init(__context)
+        
         # Always initialize - the method preserves user-provided helpers
         self._initialize_helpers()
     
