@@ -178,6 +178,10 @@ class Agent(Model):
     file_store: Optional[FileStore] = Field(default=None, description="File store instance for managing file attachments", exclude=True)
     mcp: Optional[Dict[str, Any]] = Field(default=None, description="MCP server configuration. Same structure as YAML config. Call connect_mcp() after creating agent to connect to servers.")
     
+    # Helper objects excluded from serialization (recreated on deserialization)
+    message_factory: Optional[MessageFactory] = Field(default=None, exclude=True, description="Factory for creating standardized messages (excluded from serialization)")
+    completion_handler: Optional[CompletionHandler] = Field(default=None, exclude=True, description="Handler for LLM completions (excluded from serialization)")
+    
     _prompt: AgentPrompt = PrivateAttr(default_factory=AgentPrompt)
     _iteration_count: int = PrivateAttr(default=0)
     _processed_tools: List[Dict] = PrivateAttr(default_factory=list)
@@ -204,24 +208,37 @@ class Agent(Model):
             from tyler.mcp.config_loader import _validate_mcp_config
             _validate_mcp_config(self.mcp)
         
+        # Note: Helper initialization happens in model_post_init(), which is
+        # automatically called by Pydantic after __init__ completes. This ensures
+        # helpers are initialized both for fresh instances and after deserialization.
+    
+    def _initialize_helpers(self):
+        """Initialize or reinitialize helper objects and internal state.
+        
+        This method is called during __init__ and can be called after deserialization
+        to ensure all helper objects are properly initialized. It preserves any
+        user-provided helper objects (e.g., custom message_factory or completion_handler).
+        """
         # Generate system prompt once at initialization
         self._prompt = AgentPrompt()
         # Initialize the tool attributes cache
         self._tool_attributes_cache = {}
         
-        # Initialize MessageFactory for creating standardized messages
-        self.message_factory = MessageFactory(self.name, self.model_name)
+        # Initialize MessageFactory only if not provided by user
+        if self.message_factory is None:
+            self.message_factory = MessageFactory(self.name, self.model_name)
         
-        # Initialize CompletionHandler for LLM communication
-        self.completion_handler = CompletionHandler(
-            model_name=self.model_name,
-            temperature=self.temperature,
-            api_base=self.api_base,
-            api_key=self.api_key,
-            extra_headers=self.extra_headers,
-            drop_params=self.drop_params,
-            reasoning=self.reasoning
-        )
+        # Initialize CompletionHandler only if not provided by user
+        if self.completion_handler is None:
+            self.completion_handler = CompletionHandler(
+                model_name=self.model_name,
+                temperature=self.temperature,
+                api_base=self.api_base,
+                api_key=self.api_key,
+                extra_headers=self.extra_headers,
+                drop_params=self.drop_params,
+                reasoning=self.reasoning
+            )
         
         # Use ToolManager to register all tools and delegation
         tool_manager = ToolManager(tools=self.tools, agents=self.agents)
@@ -244,6 +261,27 @@ class Agent(Model):
             self._processed_tools, 
             self.notes
         )
+    
+    def model_post_init(self, __context: Any) -> None:
+        """Pydantic v2 hook called after model initialization.
+        
+        This method initializes all helper objects and internal state. It's called
+        automatically by Pydantic after __init__() completes, ensuring helpers are
+        properly initialized for both:
+        - Fresh Agent instances (helpers start as None with default values)
+        - Deserialized instances (helpers excluded from serialization, so they're None)
+        
+        The _initialize_helpers() method preserves any user-provided helpers, so it's
+        safe to call unconditionally.
+        
+        Args:
+            __context: Pydantic context (unused)
+        """
+        # Call parent class initialization (weave.Model) first
+        super().model_post_init(__context)
+        
+        # Always initialize - the method preserves user-provided helpers
+        self._initialize_helpers()
     
     @classmethod
     def from_config(
