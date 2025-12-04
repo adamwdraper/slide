@@ -369,3 +369,132 @@ class TestWeaveCompatibility:
                     pytest.fail("Logger was serialized as string - the bug still exists!")
                 raise
 
+
+class TestAgentFromObj:
+    """Test Agent.from_obj() classmethod for Weave deserialization."""
+    
+    def test_from_obj_creates_real_agent(self):
+        """Test that from_obj creates a proper Agent instance."""
+        from unittest.mock import MagicMock
+        from weave.trace.vals import WeaveObject
+        
+        # Create a mock WeaveObject with agent attributes
+        mock_obj = MagicMock(spec=WeaveObject)
+        mock_obj.name = "TestFromObj"
+        mock_obj.model_name = "gpt-4.1"
+        mock_obj.purpose = "Test purpose"
+        mock_obj.temperature = 0.5
+        mock_obj.tools = []
+        mock_obj.agents = []
+        mock_obj.max_tool_iterations = 10
+        mock_obj.drop_params = True
+        mock_obj.mcp = None
+        mock_obj.step_errors_raise = False
+        mock_obj.api_base = None
+        mock_obj.api_key = None
+        mock_obj.extra_headers = None
+        mock_obj.reasoning = None
+        mock_obj.notes = ""
+        mock_obj.version = "1.0.0"
+        mock_obj.description = None
+        mock_obj.ref = None
+        
+        # Call from_obj
+        agent = Agent.from_obj(mock_obj)
+        
+        # Verify we get a real Agent instance
+        assert isinstance(agent, Agent)
+        assert agent.name == "TestFromObj"
+        assert agent.model_name == "gpt-4.1"
+        assert agent.purpose == "Test purpose"
+        assert agent.temperature == 0.5
+        
+        # Verify helper objects are initialized
+        assert agent.message_factory is not None
+        assert agent.completion_handler is not None
+        assert isinstance(agent.message_factory, MessageFactory)
+        assert isinstance(agent.completion_handler, CompletionHandler)
+        
+        # Verify private attributes are initialized
+        assert hasattr(agent, '_ensure_tool_cache')
+        assert hasattr(agent, '_prompt')
+        assert hasattr(agent, '_system_prompt')
+        assert hasattr(agent, '_processed_tools')
+    
+    def test_from_obj_handles_nested_weave_objects(self):
+        """Test that from_obj handles nested WeaveObjects like StringPrompt."""
+        from unittest.mock import MagicMock
+        from weave.trace.vals import WeaveObject
+        
+        # Create a mock nested WeaveObject for purpose
+        mock_purpose = MagicMock(spec=WeaveObject)
+        mock_purpose.content = "Nested purpose content"
+        
+        # Create main mock object
+        mock_obj = MagicMock(spec=WeaveObject)
+        mock_obj.name = "TestNested"
+        mock_obj.model_name = "gpt-4.1"
+        mock_obj.purpose = mock_purpose  # Nested WeaveObject
+        mock_obj.temperature = 0.7
+        mock_obj.tools = []
+        mock_obj.agents = []
+        mock_obj.max_tool_iterations = 10
+        mock_obj.drop_params = True
+        mock_obj.mcp = None
+        mock_obj.step_errors_raise = False
+        mock_obj.api_base = None
+        mock_obj.api_key = None
+        mock_obj.extra_headers = None
+        mock_obj.reasoning = None
+        mock_obj.notes = ""
+        mock_obj.version = "1.0.0"
+        mock_obj.description = None
+        mock_obj.ref = None
+        
+        # Call from_obj
+        agent = Agent.from_obj(mock_obj)
+        
+        # Verify nested WeaveObject was converted to string
+        assert isinstance(agent, Agent)
+        assert agent.purpose == "Nested purpose content"
+    
+    def test_from_obj_agent_has_all_methods(self):
+        """Test that from_obj creates an agent with all methods available."""
+        from unittest.mock import MagicMock
+        from weave.trace.vals import WeaveObject
+        
+        # Create a minimal mock
+        mock_obj = MagicMock(spec=WeaveObject)
+        mock_obj.name = "MethodTest"
+        mock_obj.model_name = "gpt-4.1"
+        mock_obj.purpose = "Test methods"
+        mock_obj.temperature = 0.7
+        mock_obj.tools = []
+        mock_obj.agents = []
+        mock_obj.max_tool_iterations = 10
+        mock_obj.drop_params = True
+        mock_obj.mcp = None
+        mock_obj.step_errors_raise = False
+        mock_obj.api_base = None
+        mock_obj.api_key = None
+        mock_obj.extra_headers = None
+        mock_obj.reasoning = None
+        mock_obj.notes = ""
+        mock_obj.version = "1.0.0"
+        mock_obj.description = None
+        mock_obj.ref = None
+        
+        agent = Agent.from_obj(mock_obj)
+        
+        # Verify all key methods exist and are callable
+        assert hasattr(agent, 'run') and callable(getattr(agent, 'run'))
+        assert hasattr(agent, 'go') and callable(getattr(agent, 'go'))
+        assert hasattr(agent, 'step') and callable(getattr(agent, 'step'))
+        assert hasattr(agent, 'stream') and callable(getattr(agent, 'stream'))
+        assert hasattr(agent, '_ensure_tool_cache') and callable(getattr(agent, '_ensure_tool_cache'))
+        assert hasattr(agent, '_initialize_helpers') and callable(getattr(agent, '_initialize_helpers'))
+        
+        # Test that _ensure_tool_cache works
+        agent._ensure_tool_cache()
+        assert hasattr(agent, '_tool_attributes_cache')
+        assert agent._tool_attributes_cache == {}

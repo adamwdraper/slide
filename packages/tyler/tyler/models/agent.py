@@ -2,10 +2,13 @@
 import os
 import weave
 from weave import Model, Prompt
+from weave.trace.objectify import register_object
+from weave.trace.vals import WeaveObject
 import json
 import types
 import logging
 from typing import List, Dict, Any, Optional, Union, AsyncGenerator, Tuple, Callable, Awaitable, overload, Literal
+from typing_extensions import Self
 from datetime import datetime, timezone
 from pydantic import Field, PrivateAttr
 from litellm import acompletion
@@ -142,6 +145,7 @@ This ensures the user can access the file correctly.
             notes=formatted_notes
         )
 
+@register_object
 class Agent(Model):
     """Tyler Agent model for AI-powered assistants.
     
@@ -150,6 +154,11 @@ class Agent(Model):
     
     Note: You can use either 'api_base' or 'base_url' to specify a custom API endpoint.
     'base_url' will be automatically mapped to 'api_base' for compatibility with litellm.
+    
+    The Agent supports Weave serialization and can be retrieved from Weave using:
+    ```python
+    agent = Agent.from_uri("weave:///entity/project/object/MyAgent:latest")
+    ```
     """
     model_name: str = Field(default="gpt-4.1")
     api_base: Optional[str] = Field(default=None, description="Custom API base URL for the model provider (e.g., for using alternative inference services). You can also use 'base_url' as an alias.")
@@ -192,6 +201,47 @@ class Agent(Model):
         "arbitrary_types_allowed": True,
         "extra": "allow"
     }
+
+    @classmethod
+    def from_obj(cls, obj: WeaveObject) -> Self:
+        """Reconstruct an Agent instance from a Weave object.
+        
+        This method is called by Weave when retrieving an Agent using from_uri().
+        It creates a proper Agent instance with all methods, instead of returning
+        an ObjectRecord that lacks the class methods.
+        
+        Args:
+            obj: The WeaveObject containing the serialized agent data.
+            
+        Returns:
+            A fully functional Agent instance.
+            
+        Example:
+            ```python
+            # Retrieve a published agent
+            agent = Agent.from_uri("weave:///entity/project/object/MyAgent:latest")
+            
+            # The agent has all methods available
+            result = await agent.run(thread)
+            ```
+        """
+        field_values = {}
+        for field_name in cls.model_fields:
+            if hasattr(obj, field_name):
+                value = getattr(obj, field_name)
+                
+                # Handle nested WeaveObjects (like StringPrompt for purpose/notes)
+                # Convert them to their string representation
+                if isinstance(value, WeaveObject):
+                    # Check if it has a 'content' attribute (StringPrompt)
+                    if hasattr(value, 'content'):
+                        value = str(value.content)
+                    # Or if it's a string-like object with __str__
+                    elif hasattr(value, '__str__'):
+                        value = str(value)
+                
+                field_values[field_name] = value
+        return cls(**field_values)
 
     def __init__(self, **data):
         # Handle base_url as an alias for api_base (since litellm uses api_base)
