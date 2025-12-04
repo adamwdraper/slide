@@ -209,16 +209,69 @@ class Agent(Model):
         # automatically called by Pydantic after __init__ completes. This ensures
         # helpers are initialized both for fresh instances and after deserialization.
     
-    def _initialize_helpers(self):
-        """Initialize or reinitialize helper objects and internal state.
+    def _ensure_initialized(self) -> None:
+        """Ensure all attributes exist and are properly initialized.
         
-        This method is called during __init__ and can be called after deserialization
-        to ensure all helper objects are properly initialized. It preserves any
-        user-provided helper objects (e.g., custom message_factory or completion_handler).
+        When an Agent is retrieved via weave.ref().get(), it's wrapped in a
+        WeaveObject around an ObjectRecord. Private attributes (PrivateAttr) and
+        excluded fields are NOT serialized by Weave, so they don't exist on the
+        ObjectRecord.
+        
+        This method checks for missing attributes and initializes them with
+        appropriate defaults or by running full initialization. It's called at
+        the start of public methods to ensure the Agent works correctly after
+        Weave deserialization.
+        
+        Note: This uses hasattr/setattr which go through WeaveObject's proxy
+        mechanism, setting attributes on the underlying ObjectRecord.
         """
-        # Generate system prompt once at initialization
+        # Track if we need full initialization (any critical attribute missing)
+        needs_full_init = False
+        
+        # Check and initialize private attributes that may be missing
+        if not hasattr(self, '_prompt') or self._prompt is None:
+            self._prompt = AgentPrompt()
+            needs_full_init = True
+        if not hasattr(self, '_iteration_count'):
+            self._iteration_count = 0
+        if not hasattr(self, '_processed_tools') or self._processed_tools is None:
+            self._processed_tools = []
+            needs_full_init = True
+        if not hasattr(self, '_system_prompt') or self._system_prompt is None:
+            self._system_prompt = ""
+            needs_full_init = True
+        if not hasattr(self, '_tool_attributes_cache') or self._tool_attributes_cache is None:
+            self._tool_attributes_cache = {}
+        if not hasattr(self, '_mcp_connected'):
+            self._mcp_connected = False
+        if not hasattr(self, '_mcp_disconnect'):
+            self._mcp_disconnect = None
+        
+        # Ensure excluded fields have defaults
+        if not hasattr(self, 'message_factory'):
+            self.message_factory = None
+            needs_full_init = True
+        if not hasattr(self, 'completion_handler'):
+            self.completion_handler = None
+            needs_full_init = True
+        if not hasattr(self, 'thread_store'):
+            self.thread_store = None
+        if not hasattr(self, 'file_store'):
+            self.file_store = None
+        
+        # If critical attributes were missing, run full initialization
+        # This handles the Weave deserialization case where model_post_init wasn't called
+        if needs_full_init:
+            self._do_full_initialization()
+    
+    def _do_full_initialization(self) -> None:
+        """Perform full helper initialization.
+        
+        This is the core initialization logic, separated from _initialize_helpers
+        to avoid recursion when called from _ensure_initialized.
+        """
+        # Generate system prompt
         self._prompt = AgentPrompt()
-        # Initialize the tool attributes cache
         self._tool_attributes_cache = {}
         
         # Initialize MessageFactory only if not provided by user
@@ -244,11 +297,11 @@ class Agent(Model):
         # Create default stores if not provided
         if self.thread_store is None:
             logging.getLogger(__name__).info(f"Creating default in-memory thread store for agent {self.name}")
-            self.thread_store = ThreadStore()  # Uses in-memory backend by default
+            self.thread_store = ThreadStore()
             
         if self.file_store is None:
             logging.getLogger(__name__).info(f"Creating default file store for agent {self.name}")
-            self.file_store = FileStore()  # Uses default settings
+            self.file_store = FileStore()
 
         # Now generate the system prompt including the tools
         self._system_prompt = self._prompt.system_prompt(
@@ -258,6 +311,16 @@ class Agent(Model):
             self._processed_tools, 
             self.notes
         )
+    
+    def _initialize_helpers(self):
+        """Initialize or reinitialize helper objects and internal state.
+        
+        This method is called during __init__ and can be called after deserialization
+        to ensure all helper objects are properly initialized. It preserves any
+        user-provided helper objects (e.g., custom message_factory or completion_handler).
+        """
+        # Use the full initialization method (all logic is there)
+        self._do_full_initialization()
     
     def model_post_init(self, __context: Any) -> None:
         """Pydantic v2 hook called after model initialization.
@@ -429,6 +492,9 @@ class Agent(Model):
         Returns:
             Tuple[Any, Dict]: The completion response and metrics.
         """
+        # Ensure private attributes exist (handles Weave deserialization)
+        self._ensure_initialized()
+        
         # Get thread messages (these won't include system messages as they're filtered out)
         thread_messages = await thread.get_messages_for_chat_completion(file_store=self.file_store)
         
@@ -648,6 +714,8 @@ class Agent(Model):
             print(f"Response: {result.content}")
             print(f"New messages: {len(result.new_messages)}")
         """
+        # Ensure private attributes exist (handles Weave deserialization)
+        self._ensure_initialized()
         logging.getLogger(__name__).debug("Agent.run() called (non-streaming mode)")
         return await self._run_complete(thread_or_id)
     
@@ -699,6 +767,8 @@ class Agent(Model):
                 if hasattr(chunk.choices[0].delta, 'content'):
                     print(chunk.choices[0].delta.content, end="")
         """
+        # Ensure private attributes exist (handles Weave deserialization)
+        self._ensure_initialized()
         if mode == "events":
             logging.getLogger(__name__).debug("Agent.stream() called with mode='events'")
             async for event in self._stream_events(thread_or_id):
@@ -715,6 +785,9 @@ class Agent(Model):
     @weave.op()
     async def _run_complete(self, thread_or_id: Union[Thread, str]) -> AgentResult:
         """Non-streaming implementation that collects all events and returns AgentResult."""
+        # Ensure private attributes exist (handles Weave deserialization)
+        self._ensure_initialized()
+        
         # Initialize execution tracking
         events = []
         start_time = datetime.now(timezone.utc)
@@ -999,6 +1072,9 @@ class Agent(Model):
     @weave.op()
     async def _stream_events(self, thread_or_id: Union[Thread, str]) -> AsyncGenerator[ExecutionEvent, None]:
         """Streaming implementation that yields ExecutionEvent objects in real-time."""
+        # Ensure private attributes exist (handles Weave deserialization)
+        self._ensure_initialized()
+        
         try:
             # Get thread
             thread = await self._get_thread(thread_or_id)
@@ -1560,6 +1636,9 @@ class Agent(Model):
             - No ExecutionEvent telemetry (raw chunks only)
             - Silent during tool execution (no events yielded)
         """
+        # Ensure private attributes exist (handles Weave deserialization)
+        self._ensure_initialized()
+        
         try:
             # Get thread
             thread = await self._get_thread(thread_or_id)
@@ -1785,6 +1864,9 @@ class Agent(Model):
             await agent.connect_mcp()  # Fails immediately if server unreachable
             result = await agent.go(thread)
         """
+        # Ensure private attributes exist (handles Weave deserialization)
+        self._ensure_initialized()
+        
         if not self.mcp:
             logging.getLogger(__name__).warning("connect_mcp() called but no mcp config provided")
             return
@@ -1832,6 +1914,9 @@ class Agent(Model):
         Call this when done with the agent to properly close MCP connections.
         Agent can be reused by calling connect_mcp() again if needed.
         """
+        # Ensure private attributes exist (handles Weave deserialization)
+        self._ensure_initialized()
+        
         if self._mcp_disconnect:
             await self._mcp_disconnect()
             self._mcp_disconnect = None
