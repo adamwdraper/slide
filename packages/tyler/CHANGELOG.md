@@ -1,11 +1,20 @@
+## [tyler-v5.3.0] - 2025-12-04
+
+### 🚀 Features
+
+- *(tyler)* Migrate Agent from weave.Model to pydantic.BaseModel
 ## [tyler-v5.2.3] - 2025-12-04
+
+### 🐛 Bug Fixes
+
+- Replace module-level logger and UTC with inline calls for Weave compatibility
+## [tyler-v5.2.2] - 2025-12-04
 
 ### 🐛 Bug Fixes
 
 - Exclude helper objects from Weave serialization
 - Preserve user-provided helper objects during initialization
 - Call super().model_post_init() in Agent
-- Replace module-level logger and UTC with inline calls for Weave compatibility
 
 ### 🚜 Refactor
 
