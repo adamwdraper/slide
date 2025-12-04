@@ -174,6 +174,72 @@ class TestAgentSerialization:
 class TestAgentHelperReinitializationEdgeCases:
     """Test edge cases in helper object reinitialization."""
     
+    def test_agent_with_custom_message_factory(self):
+        """Test that custom message_factory is preserved."""
+        # Create a custom message factory
+        custom_factory = MessageFactory("CustomAgent", "custom-model")
+        
+        agent = Agent(
+            name="TestAgent",
+            model_name="gpt-4.1",
+            message_factory=custom_factory
+        )
+        
+        # Custom factory should be preserved
+        assert agent.message_factory is custom_factory
+        assert agent.message_factory.agent_name == "CustomAgent"
+        assert agent.message_factory.model_name == "custom-model"
+        
+        # Completion handler should still be auto-created
+        assert agent.completion_handler is not None
+        assert agent.completion_handler.model_name == "gpt-4.1"
+    
+    def test_agent_with_custom_completion_handler(self):
+        """Test that custom completion_handler is preserved."""
+        # Create a custom completion handler
+        custom_handler = CompletionHandler(
+            model_name="custom-model",
+            temperature=0.95,
+            api_base="https://custom.api"
+        )
+        
+        agent = Agent(
+            name="TestAgent",
+            model_name="gpt-4.1",
+            completion_handler=custom_handler
+        )
+        
+        # Custom handler should be preserved
+        assert agent.completion_handler is custom_handler
+        assert agent.completion_handler.model_name == "custom-model"
+        assert agent.completion_handler.temperature == 0.95
+        assert agent.completion_handler.api_base == "https://custom.api"
+        
+        # Message factory should still be auto-created
+        assert agent.message_factory is not None
+        assert agent.message_factory.agent_name == "TestAgent"
+    
+    def test_agent_with_both_custom_helpers(self):
+        """Test that both custom helpers are preserved."""
+        custom_factory = MessageFactory("CustomAgent", "custom-model-1")
+        custom_handler = CompletionHandler(
+            model_name="custom-model-2",
+            temperature=0.99
+        )
+        
+        agent = Agent(
+            name="TestAgent",
+            model_name="gpt-4.1",
+            message_factory=custom_factory,
+            completion_handler=custom_handler
+        )
+        
+        # Both custom helpers should be preserved
+        assert agent.message_factory is custom_factory
+        assert agent.completion_handler is custom_handler
+        assert agent.message_factory.model_name == "custom-model-1"
+        assert agent.completion_handler.model_name == "custom-model-2"
+    
     def test_agent_with_custom_reasoning_config(self):
         """Test serialization with reasoning config."""
         agent = Agent(

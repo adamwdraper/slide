@@ -216,26 +216,29 @@ class Agent(Model):
         """Initialize or reinitialize helper objects and internal state.
         
         This method is called during __init__ and can be called after deserialization
-        to ensure all helper objects are properly initialized.
+        to ensure all helper objects are properly initialized. It preserves any
+        user-provided helper objects (e.g., custom message_factory or completion_handler).
         """
         # Generate system prompt once at initialization
         self._prompt = AgentPrompt()
         # Initialize the tool attributes cache
         self._tool_attributes_cache = {}
         
-        # Initialize MessageFactory for creating standardized messages
-        self.message_factory = MessageFactory(self.name, self.model_name)
+        # Initialize MessageFactory only if not provided by user
+        if self.message_factory is None:
+            self.message_factory = MessageFactory(self.name, self.model_name)
         
-        # Initialize CompletionHandler for LLM communication
-        self.completion_handler = CompletionHandler(
-            model_name=self.model_name,
-            temperature=self.temperature,
-            api_base=self.api_base,
-            api_key=self.api_key,
-            extra_headers=self.extra_headers,
-            drop_params=self.drop_params,
-            reasoning=self.reasoning
-        )
+        # Initialize CompletionHandler only if not provided by user
+        if self.completion_handler is None:
+            self.completion_handler = CompletionHandler(
+                model_name=self.model_name,
+                temperature=self.temperature,
+                api_base=self.api_base,
+                api_key=self.api_key,
+                extra_headers=self.extra_headers,
+                drop_params=self.drop_params,
+                reasoning=self.reasoning
+            )
         
         # Use ToolManager to register all tools and delegation
         tool_manager = ToolManager(tools=self.tools, agents=self.agents)
@@ -268,12 +271,14 @@ class Agent(Model):
         - Fresh Agent instances (helpers start as None with default values)
         - Deserialized instances (helpers excluded from serialization, so they're None)
         
+        The _initialize_helpers() method preserves any user-provided helpers, so it's
+        safe to call unconditionally.
+        
         Args:
             __context: Pydantic context (unused)
         """
-        # Helpers are always None at this point (either default or excluded from deserialization)
-        if self.message_factory is None or self.completion_handler is None:
-            self._initialize_helpers()
+        # Always initialize - the method preserves user-provided helpers
+        self._initialize_helpers()
     
     @classmethod
     def from_config(
