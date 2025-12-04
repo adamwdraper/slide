@@ -178,6 +178,10 @@ class Agent(Model):
     file_store: Optional[FileStore] = Field(default=None, description="File store instance for managing file attachments", exclude=True)
     mcp: Optional[Dict[str, Any]] = Field(default=None, description="MCP server configuration. Same structure as YAML config. Call connect_mcp() after creating agent to connect to servers.")
     
+    # Helper objects excluded from serialization (recreated on deserialization)
+    message_factory: Optional[MessageFactory] = Field(default=None, exclude=True, description="Factory for creating standardized messages (excluded from serialization)")
+    completion_handler: Optional[CompletionHandler] = Field(default=None, exclude=True, description="Handler for LLM completions (excluded from serialization)")
+    
     _prompt: AgentPrompt = PrivateAttr(default_factory=AgentPrompt)
     _iteration_count: int = PrivateAttr(default=0)
     _processed_tools: List[Dict] = PrivateAttr(default_factory=list)
@@ -204,6 +208,15 @@ class Agent(Model):
             from tyler.mcp.config_loader import _validate_mcp_config
             _validate_mcp_config(self.mcp)
         
+        # Initialize all helper objects and internal state
+        self._initialize_helpers()
+    
+    def _initialize_helpers(self):
+        """Initialize or reinitialize helper objects and internal state.
+        
+        This method is called during __init__ and can be called after deserialization
+        to ensure all helper objects are properly initialized.
+        """
         # Generate system prompt once at initialization
         self._prompt = AgentPrompt()
         # Initialize the tool attributes cache
@@ -244,6 +257,22 @@ class Agent(Model):
             self._processed_tools, 
             self.notes
         )
+    
+    def model_post_init(self, __context: Any) -> None:
+        """Pydantic v2 hook called after model initialization.
+        
+        This ensures helper objects are always properly initialized after
+        deserialization (e.g., from Weave). Without this, helper objects
+        like message_factory and completion_handler would be None after
+        deserialization, causing AttributeErrors.
+        
+        Args:
+            __context: Pydantic context (unused)
+        """
+        # Only reinitialize if helpers are missing (indicates deserialization)
+        if self.message_factory is None or self.completion_handler is None:
+            logger.debug(f"Reinitializing helper objects for agent {self.name} after deserialization")
+            self._initialize_helpers()
     
     @classmethod
     def from_config(
