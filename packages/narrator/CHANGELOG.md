@@ -1,3 +1,8 @@
+## [narrator-v5.2.3] - 2025-12-04
+
+### 🐛 Bug Fixes
+
+- Apply Weave serialization fix to Narrator models (Thread, Message, Attachment)
 ## [tyler-v5.2.0] - 2025-11-04
 
 ### 🚀 Features
