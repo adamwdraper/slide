@@ -7,8 +7,7 @@ import asyncio
 import json
 import weave
 from typing import Dict, Any, Optional, List, Tuple
-from browser_use import Agent as BrowserAgent, Browser, BrowserConfig
-from browser_use.browser.context import BrowserContextConfig
+from browser_use import Agent as BrowserAgent, Browser
 from langchain_openai import ChatOpenAI
 import os
 from dotenv import load_dotenv
@@ -38,22 +37,15 @@ async def browser_automate(*,
         # Initialize the LLM
         llm = ChatOpenAI(model=model)
         
-        # Configure the browser with supported parameters
-        # Create context config with settings to improve visibility
-        context_config = BrowserContextConfig(
-            highlight_elements=True,  # Highlight interactive elements with colorful bounding boxes
-            wait_for_network_idle_page_load_time=3.0,  # Wait longer for page loads to ensure content is visible
-            browser_window_size={'width': 1280, 'height': 900}  # Set a good window size for visibility
-        )
-        
-        # Configure the browser
-        browser_config = BrowserConfig(
+        # Configure the browser with the new API (browser-use 0.10+)
+        # Parameters are now passed directly to Browser() instead of via config objects
+        browser = Browser(
             headless=headless,
             disable_security=True,  # Helps with cross-site iFrames and other functionality
-            new_context_config=context_config  # Apply our context configuration
+            highlight_elements=True,  # Highlight interactive elements with colorful bounding boxes
+            wait_for_network_idle_page_load_time=3.0,  # Wait longer for page loads to ensure content is visible
+            window_size={'width': 1280, 'height': 900}  # Set a good window size for visibility
         )
-        
-        browser = Browser(config=browser_config)
         
         # Initialize the browser agent
         agent = BrowserAgent(
@@ -106,19 +98,13 @@ async def browser_screenshot(*,
             - List of file dictionaries with screenshot data
     """
     try:
-        # Configure the browser context for screenshots
-        context_config = BrowserContextConfig(
-            wait_for_network_idle_page_load_time=wait_time,  # Use the wait_time parameter
-            browser_window_size={'width': 1280, 'height': 900}  # Set a good window size for screenshots
-        )
-        
-        # Configure the browser in headless mode for screenshots
-        browser_config = BrowserConfig(
+        # Configure the browser for screenshots (headless mode)
+        # Parameters are now passed directly to Browser() instead of via config objects
+        browser = Browser(
             headless=True,
-            new_context_config=context_config
+            wait_for_network_idle_page_load_time=wait_time,  # Use the wait_time parameter
+            window_size={'width': 1280, 'height': 900}  # Set a good window size for screenshots
         )
-        
-        browser = Browser(config=browser_config)
         
         # Create a simple task to navigate to the URL and take a screenshot
         task = f"Go to {url} and take a {'full page' if full_page else 'viewport'} screenshot"

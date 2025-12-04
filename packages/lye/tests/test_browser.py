@@ -132,14 +132,11 @@ async def test_browser_config_parameters():
     # Mock dependencies
     with patch('lye.browser.ChatOpenAI') as mock_chat_openai, \
          patch('lye.browser.Browser') as mock_browser_class, \
-         patch('lye.browser.BrowserAgent', MockBrowserAgent), \
-         patch('lye.browser.BrowserConfig') as mock_browser_config, \
-         patch('lye.browser.BrowserContextConfig') as mock_context_config:
+         patch('lye.browser.BrowserAgent', MockBrowserAgent):
         
         # Setup mocks
         mock_chat_openai.return_value = MagicMock()
         mock_browser_class.return_value = MockBrowser()
-        mock_context_config.return_value = "mock_context_config"
         
         # Call the function
         await browser_automate(
@@ -147,19 +144,14 @@ async def test_browser_config_parameters():
             headless=False
         )
         
-        # Assertions for BrowserContextConfig
-        mock_context_config.assert_called_once()
-        context_config_kwargs = mock_context_config.call_args[1]
-        assert context_config_kwargs["highlight_elements"] is True
-        assert context_config_kwargs["wait_for_network_idle_page_load_time"] == 3.0
-        assert context_config_kwargs["browser_window_size"] == {'width': 1280, 'height': 900}
-        
-        # Assertions for BrowserConfig
-        mock_browser_config.assert_called_once()
-        browser_config_kwargs = mock_browser_config.call_args[1]
-        assert browser_config_kwargs["headless"] is False
-        assert browser_config_kwargs["disable_security"] is True
-        assert browser_config_kwargs["new_context_config"] == "mock_context_config"
+        # Assertions for Browser initialization (new API passes params directly)
+        mock_browser_class.assert_called_once()
+        browser_kwargs = mock_browser_class.call_args[1]
+        assert browser_kwargs["headless"] is False
+        assert browser_kwargs["disable_security"] is True
+        assert browser_kwargs["highlight_elements"] is True
+        assert browser_kwargs["wait_for_network_idle_page_load_time"] == 3.0
+        assert browser_kwargs["window_size"] == {'width': 1280, 'height': 900}
 
 # Integration test - this would be skipped by default as it requires actual browser installation
 @pytest.mark.skip(reason="Integration test requiring actual browser installation")
