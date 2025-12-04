@@ -1,12 +1,24 @@
+## [tyler-v5.2.2] - 2025-12-04
+
+### 🐛 Bug Fixes
+
+- Exclude helper objects from Weave serialization
+- Preserve user-provided helper objects during initialization
+- Call super().model_post_init() in Agent
+
+### 🚜 Refactor
+
+- Remove redundant helper initialization
 ## [tyler-v5.2.1] - 2025-11-04
-
-### 🚀 Features
-
-- Replace python-magic with filetype for pure-Python MIME detection
 
 ### 🐛 Bug Fixes
 
 - *(tyler)* Allow Weave logging in chat CLI when WANDB_PROJECT is set
+## [tyler-v5.2.0] - 2025-11-04
+
+### 🚀 Features
+
+- Replace python-magic with filetype for pure-Python MIME detection
 ## [tyler-v5.1.1] - 2025-10-31
 
 ### 🚀 Features
