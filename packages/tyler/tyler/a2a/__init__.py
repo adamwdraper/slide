@@ -19,6 +19,8 @@ from .types import (
     FilePart,
     DataPart,
     PartType,
+    # Task state
+    TaskState,
     # Artifacts
     Artifact,
     # Push notifications
@@ -66,6 +68,8 @@ __all__ = [
     "FilePart",
     "DataPart",
     "PartType",
+    # Task state
+    "TaskState",
     # Artifacts
     "Artifact",
     # Push notifications

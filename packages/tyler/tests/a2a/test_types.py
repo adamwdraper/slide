@@ -6,6 +6,11 @@ Tests cover:
 - Push notification configuration
 - URL validation for SSRF prevention
 - Type conversion utilities
+
+Updated for A2A Protocol v0.3.0 spec field names:
+- FilePart: mediaType, fileWithBytes, fileWithUri
+- DataPart: mediaType
+- Artifact: artifactId (camelCase in JSON)
 """
 
 import pytest
@@ -20,6 +25,7 @@ from tyler.a2a.types import (
     DataPart,
     Artifact,
     PartType,
+    TaskState,
     PushNotificationConfig,
     PushNotificationEvent,
     PushEventType,
@@ -53,54 +59,67 @@ class TestTextPart:
 
 
 class TestFilePart:
-    """Test cases for FilePart (AC-4, AC-5)."""
+    """Test cases for FilePart (AC-4, AC-5).
+    
+    Uses A2A v0.3.0 spec field names: mediaType, fileWithBytes, fileWithUri
+    """
     
     def test_create_file_part_inline(self):
         """Test FilePart with inline data (AC-4)."""
         data = b"Hello, file content!"
-        part = FilePart(name="test.txt", mime_type="text/plain", data=data)
+        part = FilePart(name="test.txt", media_type="text/plain", file_with_bytes=data)
         
         assert part.name == "test.txt"
+        assert part.media_type == "text/plain"
+        assert part.file_with_bytes == data
+        assert part.file_with_uri is None
+        assert part.is_inline is True
+        assert part.is_remote is False
+        
+        # Test backward compatibility aliases
         assert part.mime_type == "text/plain"
         assert part.data == data
         assert part.uri is None
-        assert part.is_inline is True
-        assert part.is_remote is False
     
     def test_create_file_part_uri(self):
         """Test FilePart with URI reference (AC-5)."""
         part = FilePart(
             name="document.pdf",
-            mime_type="application/pdf",
-            uri="https://example.com/files/document.pdf"
+            media_type="application/pdf",
+            file_with_uri="https://example.com/files/document.pdf"
         )
         
         assert part.name == "document.pdf"
+        assert part.media_type == "application/pdf"
+        assert part.file_with_bytes is None
+        assert part.file_with_uri == "https://example.com/files/document.pdf"
+        assert part.is_inline is False
+        assert part.is_remote is True
+        
+        # Test backward compatibility aliases
         assert part.mime_type == "application/pdf"
         assert part.data is None
         assert part.uri == "https://example.com/files/document.pdf"
-        assert part.is_inline is False
-        assert part.is_remote is True
     
     def test_file_part_requires_data_or_uri(self):
-        """Test FilePart validation - must have data or uri."""
-        with pytest.raises(ValueError, match="must have either data or uri"):
-            FilePart(name="test.txt", mime_type="text/plain")
+        """Test FilePart validation - must have file_with_bytes or file_with_uri."""
+        with pytest.raises(ValueError, match="must have either file_with_bytes or file_with_uri"):
+            FilePart(name="test.txt", media_type="text/plain")
     
     def test_file_part_cannot_have_both(self):
-        """Test FilePart validation - cannot have both data and uri."""
-        with pytest.raises(ValueError, match="cannot have both data and uri"):
+        """Test FilePart validation - cannot have both file_with_bytes and file_with_uri."""
+        with pytest.raises(ValueError, match="cannot have both file_with_bytes and file_with_uri"):
             FilePart(
                 name="test.txt",
-                mime_type="text/plain",
-                data=b"content",
-                uri="https://example.com/file.txt"
+                media_type="text/plain",
+                file_with_bytes=b"content",
+                file_with_uri="https://example.com/file.txt"
             )
     
     def test_file_part_to_base64(self):
         """Test Base64 encoding of inline file."""
         data = b"Hello, world!"
-        part = FilePart(name="test.txt", mime_type="text/plain", data=data)
+        part = FilePart(name="test.txt", media_type="text/plain", file_with_bytes=data)
         
         expected = base64.b64encode(data).decode("utf-8")
         assert part.to_base64() == expected
@@ -109,8 +128,8 @@ class TestFilePart:
         """Test Base64 encoding returns None for remote file."""
         part = FilePart(
             name="test.txt",
-            mime_type="text/plain",
-            uri="https://example.com/file.txt"
+            media_type="text/plain",
+            file_with_uri="https://example.com/file.txt"
         )
         assert part.to_base64() is None
     
@@ -122,12 +141,17 @@ class TestFilePart:
         part = FilePart.from_base64("test.txt", "text/plain", base64_data)
         
         assert part.name == "test.txt"
-        assert part.mime_type == "text/plain"
+        assert part.media_type == "text/plain"
+        assert part.file_with_bytes == original_data
+        # Backward compat
         assert part.data == original_data
 
 
 class TestDataPart:
-    """Test cases for DataPart (AC-6)."""
+    """Test cases for DataPart (AC-6).
+    
+    Uses A2A v0.3.0 spec field name: mediaType
+    """
     
     def test_create_data_part(self):
         """Test basic DataPart creation."""
@@ -135,14 +159,17 @@ class TestDataPart:
         part = DataPart(data=data)
         
         assert part.data == data
+        assert part.media_type == "application/json"
+        # Backward compat
         assert part.mime_type == "application/json"
     
-    def test_data_part_custom_mime_type(self):
-        """Test DataPart with custom MIME type."""
+    def test_data_part_custom_media_type(self):
+        """Test DataPart with custom media type."""
         data = {"key": "value"}
-        part = DataPart(data=data, mime_type="application/x-custom")
+        part = DataPart(data=data, media_type="application/x-custom")
         
-        assert part.mime_type == "application/x-custom"
+        assert part.media_type == "application/x-custom"
+        assert part.mime_type == "application/x-custom"  # Backward compat
     
     def test_data_part_nested_structure(self):
         """Test DataPart with nested data structure."""
@@ -162,8 +189,27 @@ class TestDataPart:
         assert part.data["metadata"]["total"] == 2
 
 
+class TestTaskState:
+    """Test cases for TaskState enum (A2A spec Section 4.1.3)."""
+    
+    def test_task_states(self):
+        """Test all task states are defined per spec."""
+        assert TaskState.SUBMITTED.value == "submitted"
+        assert TaskState.WORKING.value == "working"
+        assert TaskState.INPUT_REQUIRED.value == "input-required"
+        assert TaskState.COMPLETED.value == "completed"
+        assert TaskState.CANCELED.value == "canceled"
+        assert TaskState.FAILED.value == "failed"
+        assert TaskState.REJECTED.value == "rejected"
+        assert TaskState.AUTH_REQUIRED.value == "auth-required"
+        assert TaskState.UNKNOWN.value == "unknown"
+
+
 class TestArtifact:
-    """Test cases for Artifact (AC-7)."""
+    """Test cases for Artifact (AC-7).
+    
+    Artifacts use artifactId (camelCase) in JSON per spec.
+    """
     
     def test_create_artifact(self):
         """Test basic Artifact creation."""
@@ -206,7 +252,7 @@ class TestArtifact:
         parts = [
             TextPart(text="Analysis results"),
             DataPart(data={"score": 0.95}),
-            FilePart(name="chart.png", mime_type="image/png", data=b"...png data..."),
+            FilePart(name="chart.png", media_type="image/png", file_with_bytes=b"...png data..."),
         ]
         
         artifact = Artifact.create(name="Multi-part Artifact", parts=parts)
@@ -215,6 +261,41 @@ class TestArtifact:
         assert isinstance(artifact.parts[0], TextPart)
         assert isinstance(artifact.parts[1], DataPart)
         assert isinstance(artifact.parts[2], FilePart)
+    
+    def test_artifact_to_dict_camel_case(self):
+        """Test Artifact serializes to camelCase per A2A spec."""
+        parts = [TextPart(text="Content")]
+        artifact = Artifact.create(
+            name="Test Artifact",
+            parts=parts,
+            description="A test artifact",
+            index=0,
+        )
+        
+        d = artifact.to_dict()
+        
+        # Should use camelCase per A2A spec
+        assert "artifactId" in d
+        assert d["artifactId"] == artifact.artifact_id
+        assert d["name"] == "Test Artifact"
+        assert d["description"] == "A test artifact"
+        assert d["index"] == 0
+    
+    def test_artifact_with_streaming_fields(self):
+        """Test Artifact with append and lastChunk fields for streaming."""
+        parts = [TextPart(text="Chunk 1")]
+        artifact = Artifact(
+            artifact_id="stream-123",
+            name="Streaming Artifact",
+            parts=parts,
+            append=True,
+            last_chunk=False,
+        )
+        
+        d = artifact.to_dict()
+        
+        assert d["append"] is True
+        assert d["lastChunk"] is False
 
 
 class TestPushNotificationConfig:
@@ -222,28 +303,31 @@ class TestPushNotificationConfig:
     
     def test_create_push_config(self):
         """Test basic push notification config creation."""
-        config = PushNotificationConfig(
-            webhook_url="https://example.com/webhook"
-        )
+        with patch('tyler.a2a.types.validate_webhook_url', return_value=True):
+            config = PushNotificationConfig(
+                webhook_url="https://example.com/webhook"
+            )
         
         assert config.webhook_url == "https://example.com/webhook"
         assert len(config.events) > 0  # Has default events
     
     def test_push_config_custom_events(self):
         """Test push config with custom events."""
-        config = PushNotificationConfig(
-            webhook_url="https://example.com/webhook",
-            events=["task.completed"]
-        )
+        with patch('tyler.a2a.types.validate_webhook_url', return_value=True):
+            config = PushNotificationConfig(
+                webhook_url="https://example.com/webhook",
+                events=["task.completed"]
+            )
         
         assert config.events == ["task.completed"]
     
     def test_push_config_with_headers(self):
         """Test push config with custom headers."""
-        config = PushNotificationConfig(
-            webhook_url="https://example.com/webhook",
-            headers={"Authorization": "Bearer token123"}
-        )
+        with patch('tyler.a2a.types.validate_webhook_url', return_value=True):
+            config = PushNotificationConfig(
+                webhook_url="https://example.com/webhook",
+                headers={"Authorization": "Bearer token123"}
+            )
         
         assert config.headers["Authorization"] == "Bearer token123"
     
@@ -366,7 +450,8 @@ class TestTypeConversion:
         
         assert len(parts) == 1
         assert isinstance(parts[0], FilePart)
-        assert parts[0].data == data
+        assert parts[0].file_with_bytes == data
+        assert parts[0].data == data  # Backward compat
     
     def test_list_to_parts(self):
         """Test converting list to parts."""
@@ -381,7 +466,7 @@ class TestTypeConversion:
         parts = [
             TextPart(text="Hello"),
             DataPart(data={"key": "value"}),
-            FilePart(name="test.txt", mime_type="text/plain", data=b"content"),
+            FilePart(name="test.txt", media_type="text/plain", file_with_bytes=b"content"),
         ]
         
         result = parts_to_tyler_content(parts)
@@ -389,6 +474,11 @@ class TestTypeConversion:
         assert result["text"] == ["Hello"]
         assert result["data"] == [{"key": "value"}]
         assert len(result["files"]) == 1
+        # Check both new and legacy field names
+        assert result["files"][0]["media_type"] == "text/plain"
+        assert result["files"][0]["mime_type"] == "text/plain"
+        assert result["files"][0]["file_with_bytes"] == b"content"
+        assert result["files"][0]["data"] == b"content"
     
     def test_extract_text_from_parts(self):
         """Test extracting text from mixed parts."""
@@ -413,4 +503,3 @@ class TestConstants:
     def test_protocol_version(self):
         """Test A2A_PROTOCOL_VERSION constant (AC-1)."""
         assert A2A_PROTOCOL_VERSION == "0.3.0"
-

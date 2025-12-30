@@ -563,14 +563,14 @@ class A2AServer:
                     content_parts.append(internal_part.text)
                 elif isinstance(internal_part, TylerFilePart):
                     # For files, include a reference in the content
-                    file_info = f"[File: {internal_part.name} ({internal_part.mime_type})]"
+                    file_info = f"[File: {internal_part.name} ({internal_part.media_type})]"
                     if internal_part.is_remote:
                         file_info += f" URI: {internal_part.uri}"
                     file_references.append(file_info)
                 elif isinstance(internal_part, TylerDataPart):
                     # For data, include formatted JSON
                     data_str = json.dumps(internal_part.data, indent=2)
-                    data_references.append(f"[Data ({internal_part.mime_type}):\n{data_str}\n]")
+                    data_references.append(f"[Data ({internal_part.media_type}):\n{data_str}\n]")
                     
             except Exception as e:
                 logger.warning(f"Error processing message part: {e}")

@@ -64,75 +64,119 @@ class FilePart:
     """Represents a file part in an A2A message.
     
     Files can be transmitted either inline (Base64 encoded) or via URI reference.
+    Per A2A spec v0.3.0 (Section 4.1.7):
+    - mediaType: MIME type of the file
+    - name: Optional filename
+    - fileWithBytes: Base64 encoded file content (mutually exclusive with fileWithUri)
+    - fileWithUri: URI reference to the file (mutually exclusive with fileWithBytes)
     
     Attributes:
-        name: The filename
-        mime_type: MIME type of the file (e.g., "application/pdf")
-        data: Raw bytes for inline file content (mutually exclusive with uri)
-        uri: URI reference to the file (mutually exclusive with data)
+        name: The filename (optional per spec, but we require it)
+        media_type: MIME type of the file (e.g., "application/pdf")
+        file_with_bytes: Raw bytes for inline file content (mutually exclusive with file_with_uri)
+        file_with_uri: URI reference to the file (mutually exclusive with file_with_bytes)
     """
     name: str
-    mime_type: str
-    data: Optional[bytes] = None
-    uri: Optional[str] = None
+    media_type: str
+    file_with_bytes: Optional[bytes] = None
+    file_with_uri: Optional[str] = None
+    
+    # Backward compatibility aliases
+    @property
+    def mime_type(self) -> str:
+        """Alias for media_type (backward compatibility)."""
+        return self.media_type
+    
+    @property
+    def data(self) -> Optional[bytes]:
+        """Alias for file_with_bytes (backward compatibility)."""
+        return self.file_with_bytes
+    
+    @property
+    def uri(self) -> Optional[str]:
+        """Alias for file_with_uri (backward compatibility)."""
+        return self.file_with_uri
     
     def __post_init__(self):
-        if self.data is None and self.uri is None:
-            raise ValueError("FilePart must have either data or uri")
-        if self.data is not None and self.uri is not None:
-            raise ValueError("FilePart cannot have both data and uri")
+        if self.file_with_bytes is None and self.file_with_uri is None:
+            raise ValueError("FilePart must have either file_with_bytes or file_with_uri")
+        if self.file_with_bytes is not None and self.file_with_uri is not None:
+            raise ValueError("FilePart cannot have both file_with_bytes and file_with_uri")
     
     @property
     def is_inline(self) -> bool:
         """Check if this is an inline file (Base64 encoded)."""
-        return self.data is not None
+        return self.file_with_bytes is not None
     
     @property
     def is_remote(self) -> bool:
         """Check if this is a remote file (URI reference)."""
-        return self.uri is not None
+        return self.file_with_uri is not None
     
     def to_base64(self) -> Optional[str]:
         """Convert inline data to Base64 string."""
-        if self.data is None:
+        if self.file_with_bytes is None:
             return None
-        return base64.b64encode(self.data).decode("utf-8")
+        return base64.b64encode(self.file_with_bytes).decode("utf-8")
     
     @classmethod
-    def from_base64(cls, name: str, mime_type: str, base64_data: str) -> "FilePart":
+    def from_base64(cls, name: str, media_type: str, base64_data: str) -> "FilePart":
         """Create FilePart from Base64 encoded string."""
         data = base64.b64decode(base64_data)
-        return cls(name=name, mime_type=mime_type, data=data)
+        return cls(name=name, media_type=media_type, file_with_bytes=data)
     
     @classmethod
-    def from_path(cls, path: Union[str, Path], mime_type: Optional[str] = None) -> "FilePart":
+    def from_path(cls, path: Union[str, Path], media_type: Optional[str] = None) -> "FilePart":
         """Create FilePart from a file path."""
         path = Path(path)
         if not path.exists():
             raise FileNotFoundError(f"File not found: {path}")
         
         # Infer MIME type if not provided
-        if mime_type is None:
+        if media_type is None:
             import filetype
             kind = filetype.guess(str(path))
-            mime_type = kind.mime if kind else "application/octet-stream"
+            media_type = kind.mime if kind else "application/octet-stream"
         
         with open(path, "rb") as f:
             data = f.read()
         
-        return cls(name=path.name, mime_type=mime_type, data=data)
+        return cls(name=path.name, media_type=media_type, file_with_bytes=data)
 
 
 @dataclass
 class DataPart:
     """Represents structured JSON data in an A2A message.
     
+    Per A2A spec v0.3.0 (Section 4.1.8):
+    - data: The structured data as a dictionary
+    - mediaType: MIME type (defaults to application/json)
+    
     Attributes:
         data: The structured data as a dictionary
-        mime_type: MIME type (defaults to application/json)
+        media_type: MIME type (defaults to application/json)
     """
     data: Dict[str, Any]
-    mime_type: str = "application/json"
+    media_type: str = "application/json"
+    
+    # Backward compatibility alias
+    @property
+    def mime_type(self) -> str:
+        """Alias for media_type (backward compatibility)."""
+        return self.media_type
+
+
+class TaskState(Enum):
+    """A2A Task states per spec Section 4.1.3."""
+    SUBMITTED = "submitted"
+    WORKING = "working"
+    INPUT_REQUIRED = "input-required"
+    COMPLETED = "completed"
+    CANCELED = "canceled"
+    FAILED = "failed"
+    REJECTED = "rejected"
+    AUTH_REQUIRED = "auth-required"
+    UNKNOWN = "unknown"
 
 
 @dataclass
@@ -140,26 +184,40 @@ class Artifact:
     """Represents a tangible output produced by an agent during task processing.
     
     Artifacts are the formal deliverables of a task, distinct from general messages.
+    Per A2A spec v0.3.0 (Section 4.1.9):
+    - artifactId: Unique identifier for this artifact (camelCase in JSON)
+    - name: Human-readable name
+    - parts: List of content parts
     
     Attributes:
-        artifact_id: Unique identifier for this artifact
+        artifact_id: Unique identifier for this artifact (serialized as artifactId)
         name: Human-readable name for the artifact
         parts: List of content parts (TextPart, FilePart, DataPart)
         created_at: Timestamp when the artifact was created
         metadata: Optional additional metadata
+        description: Optional description of the artifact
+        index: Optional index for ordering multiple artifacts
+        append: Optional flag indicating if artifact appends to previous
+        last_chunk: Optional flag indicating if this is the last chunk
     """
     artifact_id: str
     name: str
     parts: List[Union["TextPart", FilePart, DataPart]]
     created_at: datetime = field(default_factory=datetime.utcnow)
     metadata: Optional[Dict[str, Any]] = None
+    description: Optional[str] = None
+    index: Optional[int] = None
+    append: Optional[bool] = None
+    last_chunk: Optional[bool] = None
     
     @classmethod
     def create(
         cls,
         name: str,
         parts: List[Union["TextPart", FilePart, DataPart]],
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
+        description: Optional[str] = None,
+        index: Optional[int] = None,
     ) -> "Artifact":
         """Create a new artifact with auto-generated ID."""
         return cls(
@@ -167,8 +225,29 @@ class Artifact:
             name=name,
             parts=parts,
             created_at=datetime.utcnow(),
-            metadata=metadata
+            metadata=metadata,
+            description=description,
+            index=index,
         )
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary with camelCase keys per A2A spec."""
+        result = {
+            "artifactId": self.artifact_id,
+            "name": self.name,
+            "parts": [],  # Parts need separate conversion
+        }
+        if self.description:
+            result["description"] = self.description
+        if self.index is not None:
+            result["index"] = self.index
+        if self.append is not None:
+            result["append"] = self.append
+        if self.last_chunk is not None:
+            result["lastChunk"] = self.last_chunk
+        if self.metadata:
+            result["metadata"] = self.metadata
+        return result
 
 
 @dataclass
@@ -336,7 +415,7 @@ def tyler_content_to_parts(
         return [DataPart(data=content)]
     
     elif isinstance(content, bytes):
-        return [FilePart(name="data.bin", mime_type="application/octet-stream", data=content)]
+        return [FilePart(name="data.bin", media_type="application/octet-stream", file_with_bytes=content)]
     
     elif isinstance(content, Path):
         return [FilePart.from_path(content)]
@@ -376,9 +455,12 @@ def parts_to_tyler_content(
         elif isinstance(part, FilePart):
             result["files"].append({
                 "name": part.name,
-                "mime_type": part.mime_type,
-                "data": part.data,
-                "uri": part.uri,
+                "media_type": part.media_type,
+                "mime_type": part.media_type,  # Alias for backward compat
+                "file_with_bytes": part.file_with_bytes,
+                "data": part.file_with_bytes,  # Alias for backward compat
+                "file_with_uri": part.file_with_uri,
+                "uri": part.file_with_uri,  # Alias for backward compat
                 "is_inline": part.is_inline,
             })
         elif isinstance(part, DataPart):
@@ -410,6 +492,8 @@ def extract_text_from_parts(
 def to_a2a_part(part: Union[TextPart, FilePart, DataPart]) -> Any:
     """Convert internal Part to A2A SDK Part.
     
+    Uses A2A spec field names: mediaType, fileWithBytes, fileWithUri
+    
     Args:
         part: Internal Part object
         
@@ -424,22 +508,24 @@ def to_a2a_part(part: Union[TextPart, FilePart, DataPart]) -> Any:
     
     elif isinstance(part, FilePart):
         if part.is_inline:
+            # A2A SDK uses mediaType, name, and fileWithBytes for inline files
             return A2AFilePart(
                 name=part.name,
-                mime_type=part.mime_type,
-                data=part.to_base64(),
+                mediaType=part.media_type,
+                fileWithBytes=part.to_base64(),
             )
         else:
+            # A2A SDK uses mediaType, name, and fileWithUri for remote files
             return A2AFilePart(
                 name=part.name,
-                mime_type=part.mime_type,
-                uri=part.uri,
+                mediaType=part.media_type,
+                fileWithUri=part.file_with_uri,
             )
     
     elif isinstance(part, DataPart):
         return A2ADataPart(
             data=part.data,
-            mime_type=part.mime_type,
+            mediaType=part.media_type,
         )
     
     else:
@@ -448,6 +534,9 @@ def to_a2a_part(part: Union[TextPart, FilePart, DataPart]) -> Any:
 
 def from_a2a_part(a2a_part: Any) -> Union[TextPart, FilePart, DataPart]:
     """Convert A2A SDK Part to internal Part.
+    
+    Handles A2A spec field names: mediaType, fileWithBytes, fileWithUri
+    Also handles legacy field names for backward compatibility.
     
     Args:
         a2a_part: A2A SDK Part object
@@ -459,34 +548,45 @@ def from_a2a_part(a2a_part: Any) -> Union[TextPart, FilePart, DataPart]:
         raise ImportError("a2a-sdk is required for A2A support")
     
     # Check the type by attribute presence (duck typing)
+    # TextPart - has 'text' attribute
     if hasattr(a2a_part, 'text'):
         return TextPart(text=a2a_part.text)
     
-    elif hasattr(a2a_part, 'name') and hasattr(a2a_part, 'mime_type'):
-        # FilePart
-        if hasattr(a2a_part, 'data') and a2a_part.data:
-            # Inline file
-            data = base64.b64decode(a2a_part.data) if isinstance(a2a_part.data, str) else a2a_part.data
+    # FilePart - has 'name' and 'mediaType' (or legacy 'mime_type')
+    elif hasattr(a2a_part, 'name') and (hasattr(a2a_part, 'mediaType') or hasattr(a2a_part, 'mime_type')):
+        # Get media type (spec uses mediaType, legacy used mime_type)
+        media_type = getattr(a2a_part, 'mediaType', None) or getattr(a2a_part, 'mime_type', 'application/octet-stream')
+        
+        # Check for inline file (fileWithBytes or legacy data)
+        file_bytes = getattr(a2a_part, 'fileWithBytes', None) or getattr(a2a_part, 'data', None)
+        if file_bytes:
+            # Inline file - decode Base64 if needed
+            if isinstance(file_bytes, str):
+                file_bytes = base64.b64decode(file_bytes)
             return FilePart(
                 name=a2a_part.name,
-                mime_type=a2a_part.mime_type,
-                data=data,
+                media_type=media_type,
+                file_with_bytes=file_bytes,
             )
-        elif hasattr(a2a_part, 'uri') and a2a_part.uri:
-            # Remote file
+        
+        # Check for remote file (fileWithUri or legacy uri)
+        file_uri = getattr(a2a_part, 'fileWithUri', None) or getattr(a2a_part, 'uri', None)
+        if file_uri:
             return FilePart(
                 name=a2a_part.name,
-                mime_type=a2a_part.mime_type,
-                uri=a2a_part.uri,
+                media_type=media_type,
+                file_with_uri=file_uri,
             )
-        else:
-            raise ValueError("FilePart must have either data or uri")
+        
+        raise ValueError("FilePart must have either fileWithBytes or fileWithUri")
     
+    # DataPart - has 'data' as dict
     elif hasattr(a2a_part, 'data') and isinstance(getattr(a2a_part, 'data', None), dict):
-        # DataPart
+        # Get media type (spec uses mediaType, legacy used mime_type)
+        media_type = getattr(a2a_part, 'mediaType', None) or getattr(a2a_part, 'mime_type', 'application/json')
         return DataPart(
             data=a2a_part.data,
-            mime_type=getattr(a2a_part, 'mime_type', 'application/json'),
+            media_type=media_type,
         )
     
     else:
