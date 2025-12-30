@@ -72,7 +72,7 @@ async def main():
     # Create A2A server
     try:
         a2a_server = A2AServer(
-            tyler_agent=tyler_agent,
+            agent=tyler_agent,
             agent_card=agent_card_data
         )
     except ImportError as e:

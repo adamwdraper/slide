@@ -117,7 +117,7 @@ A2A_PROTOCOL_VERSION = "0.3.0"
 class TylerTaskExecution:
     """Information about a Tyler task execution."""
     task_id: str
-    tyler_agent: Any  # Tyler Agent instance
+    agent: Any  # Tyler Agent instance
     tyler_thread: Any  # Tyler Thread instance
     status: str = "running"
     created_at: datetime = None
@@ -144,13 +144,13 @@ class TylerAgentExecutor(AgentExecutor):
     are handled by the SDK's infrastructure (DefaultRequestHandler + PushNotificationSender).
     """
     
-    def __init__(self, tyler_agent):
+    def __init__(self, agent):
         """Initialize the executor.
         
         Args:
-            tyler_agent: The Tyler Agent instance to wrap
+            agent: The Tyler Agent instance to wrap
         """
-        self.tyler_agent = tyler_agent
+        self.agent = agent
         self._active_executions: Dict[str, TylerTaskExecution] = {}
     
     async def execute(self, context: RequestContext, event_queue: EventQueue) -> None:
@@ -187,7 +187,7 @@ class TylerAgentExecutor(AgentExecutor):
             # Track execution
             execution = TylerTaskExecution(
                 task_id=task_id,
-                tyler_agent=self.tyler_agent,
+                agent=self.agent,
                 tyler_thread=tyler_thread,
                 context_id=context_id,
             )
@@ -202,7 +202,7 @@ class TylerAgentExecutor(AgentExecutor):
             ))
             
             # Execute Tyler agent
-            result = await self.tyler_agent.run(tyler_thread)
+            result = await self.agent.run(tyler_thread)
             
             # Get new messages from AgentResult
             new_messages = result.new_messages or []
@@ -340,7 +340,7 @@ class A2AServer:
     
     def __init__(
         self,
-        tyler_agent,
+        agent,
         agent_card: Optional[Dict[str, Any]] = None,
         authentication: Optional[Dict[str, Any]] = None,
         push_signing_secret: Optional[str] = None,
@@ -348,7 +348,7 @@ class A2AServer:
         """Initialize the A2A server.
         
         Args:
-            tyler_agent: Tyler Agent instance to expose
+            agent: Tyler Agent instance to expose
             agent_card: Optional custom agent card data
             authentication: Optional authentication configuration
             push_signing_secret: Optional secret for HMAC signing push notifications
@@ -359,13 +359,13 @@ class A2AServer:
                 f"Import error: {_import_error if '_import_error' in dir() else 'unknown'}"
             )
         
-        self.tyler_agent = tyler_agent
+        self.agent = agent
         self._authentication = authentication
         self._push_signing_secret = push_signing_secret
-        self._agent_card = self._create_agent_card(tyler_agent, agent_card)
+        self._agent_card = self._create_agent_card(agent, agent_card)
         
         # Create executor (no longer manages push notifications directly)
-        self._executor = TylerAgentExecutor(tyler_agent)
+        self._executor = TylerAgentExecutor(agent)
         
         # SDK infrastructure
         self._task_store = InMemoryTaskStore()
@@ -379,24 +379,24 @@ class A2AServer:
         
     def _create_agent_card(
         self,
-        tyler_agent,
+        agent,
         custom_card: Optional[Dict[str, Any]] = None
     ) -> AgentCard:
         """Create an A2A agent card from Tyler agent information.
         
         Args:
-            tyler_agent: Tyler Agent instance
+            agent: Tyler Agent instance
             custom_card: Optional custom agent card data
             
         Returns:
             A2A AgentCard instance
         """
-        agent_name = getattr(tyler_agent, 'name', 'Tyler Agent')
-        agent_purpose = getattr(tyler_agent, 'purpose', 'General purpose AI agent')
-        tools = getattr(tyler_agent, 'tools', [])
+        agent_name = getattr(agent, 'name', 'Tyler Agent')
+        agent_purpose = getattr(agent, 'purpose', 'General purpose AI agent')
+        tools = getattr(agent, 'tools', [])
         
         # Build capabilities
-        skill_tags = self._extract_capabilities(tyler_agent, tools)
+        skill_tags = self._extract_capabilities(agent, tools)
         
         # Default card data
         card_data = {
@@ -436,11 +436,11 @@ class A2AServer:
         
         return AgentCard(**card_data)
     
-    def _extract_capabilities(self, tyler_agent, tools: List[Any]) -> List[str]:
+    def _extract_capabilities(self, agent, tools: List[Any]) -> List[str]:
         """Extract capability tags from Tyler agent and tools.
         
         Args:
-            tyler_agent: Tyler Agent instance
+            agent: Tyler Agent instance
             tools: List of Tyler tools
             
         Returns:
