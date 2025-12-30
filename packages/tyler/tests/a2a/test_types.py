@@ -1,0 +1,416 @@
+"""Tests for A2A type definitions and utilities.
+
+Tests cover:
+- Part type creation and validation (AC-3, AC-4, AC-5, AC-6)
+- Artifact creation (AC-7)
+- Push notification configuration
+- URL validation for SSRF prevention
+- Type conversion utilities
+"""
+
+import pytest
+import base64
+from datetime import datetime
+from pathlib import Path
+from unittest.mock import patch, MagicMock
+
+from tyler.a2a.types import (
+    TextPart,
+    FilePart,
+    DataPart,
+    Artifact,
+    PartType,
+    PushNotificationConfig,
+    PushNotificationEvent,
+    PushEventType,
+    validate_webhook_url,
+    validate_file_uri,
+    tyler_content_to_parts,
+    parts_to_tyler_content,
+    extract_text_from_parts,
+    MAX_FILE_SIZE_BYTES,
+    A2A_PROTOCOL_VERSION,
+)
+
+
+class TestTextPart:
+    """Test cases for TextPart (AC-3)."""
+    
+    def test_create_text_part(self):
+        """Test basic TextPart creation."""
+        part = TextPart(text="Hello, world!")
+        assert part.text == "Hello, world!"
+    
+    def test_text_part_empty_string(self):
+        """Test TextPart with empty string."""
+        part = TextPart(text="")
+        assert part.text == ""
+    
+    def test_text_part_unicode(self):
+        """Test TextPart with unicode content."""
+        part = TextPart(text="Hello 世界 🌍")
+        assert part.text == "Hello 世界 🌍"
+
+
+class TestFilePart:
+    """Test cases for FilePart (AC-4, AC-5)."""
+    
+    def test_create_file_part_inline(self):
+        """Test FilePart with inline data (AC-4)."""
+        data = b"Hello, file content!"
+        part = FilePart(name="test.txt", mime_type="text/plain", data=data)
+        
+        assert part.name == "test.txt"
+        assert part.mime_type == "text/plain"
+        assert part.data == data
+        assert part.uri is None
+        assert part.is_inline is True
+        assert part.is_remote is False
+    
+    def test_create_file_part_uri(self):
+        """Test FilePart with URI reference (AC-5)."""
+        part = FilePart(
+            name="document.pdf",
+            mime_type="application/pdf",
+            uri="https://example.com/files/document.pdf"
+        )
+        
+        assert part.name == "document.pdf"
+        assert part.mime_type == "application/pdf"
+        assert part.data is None
+        assert part.uri == "https://example.com/files/document.pdf"
+        assert part.is_inline is False
+        assert part.is_remote is True
+    
+    def test_file_part_requires_data_or_uri(self):
+        """Test FilePart validation - must have data or uri."""
+        with pytest.raises(ValueError, match="must have either data or uri"):
+            FilePart(name="test.txt", mime_type="text/plain")
+    
+    def test_file_part_cannot_have_both(self):
+        """Test FilePart validation - cannot have both data and uri."""
+        with pytest.raises(ValueError, match="cannot have both data and uri"):
+            FilePart(
+                name="test.txt",
+                mime_type="text/plain",
+                data=b"content",
+                uri="https://example.com/file.txt"
+            )
+    
+    def test_file_part_to_base64(self):
+        """Test Base64 encoding of inline file."""
+        data = b"Hello, world!"
+        part = FilePart(name="test.txt", mime_type="text/plain", data=data)
+        
+        expected = base64.b64encode(data).decode("utf-8")
+        assert part.to_base64() == expected
+    
+    def test_file_part_to_base64_remote(self):
+        """Test Base64 encoding returns None for remote file."""
+        part = FilePart(
+            name="test.txt",
+            mime_type="text/plain",
+            uri="https://example.com/file.txt"
+        )
+        assert part.to_base64() is None
+    
+    def test_file_part_from_base64(self):
+        """Test creating FilePart from Base64 string."""
+        original_data = b"Hello, world!"
+        base64_data = base64.b64encode(original_data).decode("utf-8")
+        
+        part = FilePart.from_base64("test.txt", "text/plain", base64_data)
+        
+        assert part.name == "test.txt"
+        assert part.mime_type == "text/plain"
+        assert part.data == original_data
+
+
+class TestDataPart:
+    """Test cases for DataPart (AC-6)."""
+    
+    def test_create_data_part(self):
+        """Test basic DataPart creation."""
+        data = {"key": "value", "number": 42}
+        part = DataPart(data=data)
+        
+        assert part.data == data
+        assert part.mime_type == "application/json"
+    
+    def test_data_part_custom_mime_type(self):
+        """Test DataPart with custom MIME type."""
+        data = {"key": "value"}
+        part = DataPart(data=data, mime_type="application/x-custom")
+        
+        assert part.mime_type == "application/x-custom"
+    
+    def test_data_part_nested_structure(self):
+        """Test DataPart with nested data structure."""
+        data = {
+            "users": [
+                {"name": "Alice", "age": 30},
+                {"name": "Bob", "age": 25}
+            ],
+            "metadata": {
+                "total": 2,
+                "page": 1
+            }
+        }
+        part = DataPart(data=data)
+        
+        assert part.data["users"][0]["name"] == "Alice"
+        assert part.data["metadata"]["total"] == 2
+
+
+class TestArtifact:
+    """Test cases for Artifact (AC-7)."""
+    
+    def test_create_artifact(self):
+        """Test basic Artifact creation."""
+        parts = [TextPart(text="Result content")]
+        artifact = Artifact(
+            artifact_id="test-id-123",
+            name="Test Artifact",
+            parts=parts
+        )
+        
+        assert artifact.artifact_id == "test-id-123"
+        assert artifact.name == "Test Artifact"
+        assert len(artifact.parts) == 1
+        assert isinstance(artifact.created_at, datetime)
+    
+    def test_artifact_create_factory(self):
+        """Test Artifact.create() factory method."""
+        parts = [TextPart(text="Result")]
+        artifact = Artifact.create(name="Auto ID Artifact", parts=parts)
+        
+        assert artifact.artifact_id  # Should be auto-generated UUID
+        assert artifact.name == "Auto ID Artifact"
+        assert len(artifact.artifact_id) == 36  # UUID format
+    
+    def test_artifact_with_metadata(self):
+        """Test Artifact with metadata."""
+        parts = [TextPart(text="Content")]
+        metadata = {"source": "test", "version": 1}
+        
+        artifact = Artifact.create(
+            name="Metadata Artifact",
+            parts=parts,
+            metadata=metadata
+        )
+        
+        assert artifact.metadata == metadata
+    
+    def test_artifact_with_multiple_parts(self):
+        """Test Artifact with multiple part types."""
+        parts = [
+            TextPart(text="Analysis results"),
+            DataPart(data={"score": 0.95}),
+            FilePart(name="chart.png", mime_type="image/png", data=b"...png data..."),
+        ]
+        
+        artifact = Artifact.create(name="Multi-part Artifact", parts=parts)
+        
+        assert len(artifact.parts) == 3
+        assert isinstance(artifact.parts[0], TextPart)
+        assert isinstance(artifact.parts[1], DataPart)
+        assert isinstance(artifact.parts[2], FilePart)
+
+
+class TestPushNotificationConfig:
+    """Test cases for PushNotificationConfig."""
+    
+    def test_create_push_config(self):
+        """Test basic push notification config creation."""
+        config = PushNotificationConfig(
+            webhook_url="https://example.com/webhook"
+        )
+        
+        assert config.webhook_url == "https://example.com/webhook"
+        assert len(config.events) > 0  # Has default events
+    
+    def test_push_config_custom_events(self):
+        """Test push config with custom events."""
+        config = PushNotificationConfig(
+            webhook_url="https://example.com/webhook",
+            events=["task.completed"]
+        )
+        
+        assert config.events == ["task.completed"]
+    
+    def test_push_config_with_headers(self):
+        """Test push config with custom headers."""
+        config = PushNotificationConfig(
+            webhook_url="https://example.com/webhook",
+            headers={"Authorization": "Bearer token123"}
+        )
+        
+        assert config.headers["Authorization"] == "Bearer token123"
+    
+    def test_push_config_invalid_url_http(self):
+        """Test push config rejects HTTP URLs."""
+        with pytest.raises(ValueError, match="Invalid webhook URL"):
+            PushNotificationConfig(webhook_url="http://example.com/webhook")
+    
+    @patch('socket.gethostbyname')
+    def test_push_config_invalid_url_private_ip(self, mock_dns):
+        """Test push config rejects private IP addresses."""
+        mock_dns.return_value = "192.168.1.1"
+        
+        with pytest.raises(ValueError, match="Invalid webhook URL"):
+            PushNotificationConfig(webhook_url="https://internal.example.com/webhook")
+
+
+class TestPushNotificationEvent:
+    """Test cases for PushNotificationEvent."""
+    
+    def test_create_event(self):
+        """Test event creation."""
+        event = PushNotificationEvent.create(
+            event_type=PushEventType.TASK_COMPLETED,
+            task_id="task-123",
+            data={"status": "completed"}
+        )
+        
+        assert event.event_type == "task.completed"
+        assert event.task_id == "task-123"
+        assert event.event_id  # Should be auto-generated
+        assert isinstance(event.timestamp, datetime)
+    
+    def test_event_with_context_id(self):
+        """Test event with context ID (AC-8)."""
+        event = PushNotificationEvent.create(
+            event_type=PushEventType.TASK_CREATED,
+            task_id="task-123",
+            data={"status": "created"},
+            context_id="context-abc"
+        )
+        
+        assert event.context_id == "context-abc"
+    
+    def test_event_to_dict(self):
+        """Test event serialization to dict."""
+        event = PushNotificationEvent.create(
+            event_type=PushEventType.TASK_UPDATED,
+            task_id="task-123",
+            data={"status": "running"},
+            context_id="ctx-1"
+        )
+        
+        d = event.to_dict()
+        
+        assert d["event_type"] == "task.updated"
+        assert d["task_id"] == "task-123"
+        assert d["context_id"] == "ctx-1"
+        assert "timestamp" in d
+        assert "event_id" in d
+
+
+class TestURLValidation:
+    """Test cases for URL validation (SSRF prevention)."""
+    
+    def test_valid_https_url(self):
+        """Test valid HTTPS URL passes validation."""
+        assert validate_webhook_url("https://example.com/webhook") is True
+    
+    def test_invalid_http_url(self):
+        """Test HTTP URL fails validation."""
+        assert validate_webhook_url("http://example.com/webhook") is False
+    
+    def test_invalid_no_scheme(self):
+        """Test URL without scheme fails validation."""
+        assert validate_webhook_url("example.com/webhook") is False
+    
+    @patch('socket.gethostbyname')
+    def test_invalid_private_ip(self, mock_dns):
+        """Test private IP fails validation."""
+        mock_dns.return_value = "10.0.0.1"
+        assert validate_webhook_url("https://internal.example.com/webhook") is False
+    
+    @patch('socket.gethostbyname')
+    def test_invalid_loopback(self, mock_dns):
+        """Test loopback address fails validation."""
+        mock_dns.return_value = "127.0.0.1"
+        assert validate_webhook_url("https://localhost/webhook") is False
+    
+    def test_file_uri_validation(self):
+        """Test file URI validation uses same rules."""
+        assert validate_file_uri("https://cdn.example.com/file.pdf") is True
+        assert validate_file_uri("http://cdn.example.com/file.pdf") is False
+
+
+class TestTypeConversion:
+    """Test cases for type conversion utilities."""
+    
+    def test_string_to_parts(self):
+        """Test converting string to parts."""
+        parts = tyler_content_to_parts("Hello, world!")
+        
+        assert len(parts) == 1
+        assert isinstance(parts[0], TextPart)
+        assert parts[0].text == "Hello, world!"
+    
+    def test_dict_to_parts(self):
+        """Test converting dict to parts."""
+        data = {"key": "value"}
+        parts = tyler_content_to_parts(data)
+        
+        assert len(parts) == 1
+        assert isinstance(parts[0], DataPart)
+        assert parts[0].data == data
+    
+    def test_bytes_to_parts(self):
+        """Test converting bytes to parts."""
+        data = b"binary content"
+        parts = tyler_content_to_parts(data)
+        
+        assert len(parts) == 1
+        assert isinstance(parts[0], FilePart)
+        assert parts[0].data == data
+    
+    def test_list_to_parts(self):
+        """Test converting list to parts."""
+        content = ["text1", "text2"]
+        parts = tyler_content_to_parts(content)
+        
+        assert len(parts) == 2
+        assert all(isinstance(p, TextPart) for p in parts)
+    
+    def test_parts_to_tyler_content(self):
+        """Test converting parts back to Tyler content."""
+        parts = [
+            TextPart(text="Hello"),
+            DataPart(data={"key": "value"}),
+            FilePart(name="test.txt", mime_type="text/plain", data=b"content"),
+        ]
+        
+        result = parts_to_tyler_content(parts)
+        
+        assert result["text"] == ["Hello"]
+        assert result["data"] == [{"key": "value"}]
+        assert len(result["files"]) == 1
+    
+    def test_extract_text_from_parts(self):
+        """Test extracting text from mixed parts."""
+        parts = [
+            TextPart(text="Line 1"),
+            DataPart(data={"key": "value"}),
+            TextPart(text="Line 2"),
+        ]
+        
+        text = extract_text_from_parts(parts)
+        
+        assert text == "Line 1\nLine 2"
+
+
+class TestConstants:
+    """Test cases for module constants."""
+    
+    def test_max_file_size(self):
+        """Test MAX_FILE_SIZE_BYTES constant."""
+        assert MAX_FILE_SIZE_BYTES == 10 * 1024 * 1024  # 10 MB
+    
+    def test_protocol_version(self):
+        """Test A2A_PROTOCOL_VERSION constant (AC-1)."""
+        assert A2A_PROTOCOL_VERSION == "0.3.0"
+

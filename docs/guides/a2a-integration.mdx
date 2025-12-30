@@ -1,9 +1,9 @@
 ---
 title: 'A2A integration guide'
-description: 'Step-by-step guide to integrating Agent-to-Agent (A2A) protocol with Tyler agents'
+description: 'Step-by-step guide to integrating Agent-to-Agent (A2A) Protocol v0.3.0 with Tyler agents'
 ---
 
-This guide walks you through integrating the Agent-to-Agent (A2A) protocol with your Tyler agents, enabling multi-agent coordination and delegation across different platforms.
+This guide walks you through integrating the Agent-to-Agent (A2A) Protocol v0.3.0 with your Tyler agents, enabling multi-agent coordination and delegation across different platforms.
 
 ## Prerequisites
 
@@ -11,21 +11,23 @@ Before starting, ensure you have:
 
 - Tyler installed and working
 - Basic understanding of Tyler agents
-- Python 3.13+ environment
+- Python 3.11+ environment
 
 ## Installation
 
-Install the A2A SDK dependency:
+Tyler includes A2A support out of the box:
 
 ```bash
-pip install a2a-sdk
+# Install Tyler (includes a2a-sdk)
+pip install slide-tyler
 
-# For server functionality (optional):
-pip install uvicorn fastapi
+# For server functionality, these are already included:
+# - fastapi
+# - uvicorn
 ```
 
 <Note>
-  The A2A integration is optional. Tyler works perfectly without it, but A2A enables powerful multi-agent coordination capabilities.
+  The A2A integration is fully supported in Tyler. All dependencies are included automatically.
 </Note>
 
 ## Part 1: Connecting to Remote A2A Agents (Client Mode)
@@ -58,9 +60,17 @@ async def connect_to_agents():
     )
     
     if research_connected and analysis_connected:
-        print("✅ Connected to both remote agents")
+        print("Connected to both remote agents")
+        
+        # Check agent capabilities
+        for agent_name in ["research_agent", "analysis_agent"]:
+            info = adapter.client.get_connection_info(agent_name)
+            print(f"{agent_name}:")
+            print(f"  Protocol version: {info['protocol_version']}")
+            print(f"  Capabilities: {info['capabilities']}")
+            print(f"  Push notifications: {info['push_notifications_supported']}")
     else:
-        print("❌ Failed to connect to one or more agents")
+        print("Failed to connect to one or more agents")
 
 asyncio.run(connect_to_agents())
 ```
@@ -76,7 +86,7 @@ delegation_tools = adapter.get_tools_for_agent()
 # Create Tyler agent that can delegate tasks
 coordinator = Agent(
     name="Project Coordinator",
-    model_name="gpt-4o",
+    model_name="gpt-4.1",
     purpose="""You coordinate complex projects by delegating specialized tasks to remote agents.
     
     You have access to:
@@ -129,7 +139,7 @@ from lye import WEB_TOOLS, FILES_TOOLS
 # Create a specialized research agent
 research_agent = Agent(
     name="Research Specialist",
-    model_name="gpt-4o-mini",
+    model_name="gpt-4.1",
     purpose="""You are an expert research specialist with web search and document processing capabilities.
     
     Your expertise includes:
@@ -143,7 +153,7 @@ research_agent = Agent(
 )
 ```
 
-### Step 2: Create A2A Server
+### Step 2: Create A2A Server with Authentication
 
 ```python
 from tyler.a2a import A2AServer
@@ -160,13 +170,18 @@ server = A2AServer(
             "fact_checking", 
             "document_analysis",
             "market_research",
-            "competitive_intelligence"
+            "competitive_intelligence",
+            "artifacts"
         ],
         "contact": {
             "name": "Your Organization",
             "email": "ai-support@yourorg.com"
         },
         "vendor": "Tyler Framework"
+    },
+    authentication={
+        "schemes": ["bearer"],
+        "required": True
     }
 )
 ```
@@ -175,8 +190,9 @@ server = A2AServer(
 
 ```python
 async def start_research_service():
-    print("🚀 Starting Tyler Research Specialist A2A Server...")
-    print("📡 Other agents can connect at: http://localhost:8000")
+    print("Starting Tyler Research Specialist A2A Server...")
+    print("Other agents can connect at: http://localhost:8000")
+    print("Agent Card available at: http://localhost:8000/.well-known/agent-card.json")
     
     # Start the server (this will run indefinitely)
     await server.start_server(host="0.0.0.0", port=8000)
@@ -186,16 +202,219 @@ if __name__ == "__main__":
     try:
         asyncio.run(start_research_service())
     except KeyboardInterrupt:
-        print("\n🛑 Server stopped by user")
+        print("\nServer stopped by user")
 ```
 
-## Part 3: Advanced Multi-Agent Patterns
+## Part 3: Working with Part Types
+
+### Sending Files to Remote Agents
+
+```python
+from tyler.a2a import A2AAdapter, FilePart
+
+adapter = A2AAdapter()
+await adapter.connect("document_processor", "https://docs.example.com")
+
+# Send a file for processing
+task_id = await adapter.create_task_with_files(
+    "document_processor",
+    "Summarize the key points from this document",
+    files=["./reports/annual_report_2024.pdf"],
+    context_id="annual-review"
+)
+
+# Or create FilePart manually for more control
+file_part = FilePart.from_path("./data/analysis.xlsx")
+print(f"File: {file_part.name}, Size: {len(file_part.data)} bytes")
+```
+
+### Sending Structured Data
+
+```python
+from tyler.a2a import A2AAdapter, DataPart
+
+adapter = A2AAdapter()
+await adapter.connect("analysis_agent", "https://analysis.example.com")
+
+# Send structured data for analysis
+task_id = await adapter.create_task_with_data(
+    "analysis_agent",
+    "Perform trend analysis on this data",
+    data={
+        "dataset": "sales_2024",
+        "metrics": ["revenue", "units", "margin"],
+        "grouping": "monthly",
+        "filters": {
+            "region": ["NA", "EU"],
+            "product_category": "electronics"
+        }
+    },
+    context_id="sales-analysis"
+)
+```
+
+## Part 4: Working with Artifacts
+
+### Retrieving Task Artifacts
+
+```python
+from tyler.a2a import A2AClient, TextPart, DataPart
+
+client = A2AClient()
+await client.connect("agent", "https://agent.example.com")
+
+# Create a task
+task_id = await client.create_task("agent", "Generate a comprehensive report")
+
+# Wait for completion (in production, use push notifications instead)
+import asyncio
+while True:
+    status = await client.get_task_status("agent", task_id)
+    if status["status"] in ["completed", "error"]:
+        break
+    await asyncio.sleep(1)
+
+# Get artifacts
+artifacts = await client.get_task_artifacts("agent", task_id)
+
+for artifact in artifacts:
+    print(f"Artifact: {artifact.name}")
+    print(f"  ID: {artifact.artifact_id}")
+    print(f"  Created: {artifact.created_at}")
+    
+    for part in artifact.parts:
+        if isinstance(part, TextPart):
+            print(f"  Text content: {part.text[:200]}...")
+        elif isinstance(part, DataPart):
+            print(f"  Data: {part.data}")
+```
+
+## Part 5: Context-Based Task Grouping
+
+```python
+from tyler.a2a import A2AClient
+
+client = A2AClient()
+await client.connect("agent", "https://agent.example.com")
+
+# Define a context for related tasks
+context_id = "market-research-project-q4"
+
+# Create multiple related tasks
+tasks = [
+    ("Research competitor pricing", "phase1-research"),
+    ("Analyze market trends", "phase2-analysis"),
+    ("Generate recommendations", "phase3-synthesis"),
+]
+
+task_ids = []
+for description, tag in tasks:
+    task_id = await client.create_task(
+        "agent",
+        f"[{tag}] {description}",
+        context_id=context_id
+    )
+    task_ids.append(task_id)
+
+# Get all tasks in the context
+related_task_ids = client.get_tasks_by_context(context_id)
+print(f"Tasks in context: {len(related_task_ids)}")
+```
+
+## Part 6: Push Notifications for Long-Running Tasks
+
+### Configuring Push Notifications
+
+```python
+from tyler.a2a import A2AClient, PushNotificationConfig
+
+client = A2AClient()
+await client.connect("agent", "https://agent.example.com")
+
+# Configure webhook for notifications
+push_config = PushNotificationConfig(
+    webhook_url="https://your-app.com/webhooks/a2a-events",
+    events=[
+        "task.created",
+        "task.updated", 
+        "task.completed",
+        "task.failed",
+        "task.artifact"
+    ],
+    headers={
+        "Authorization": "Bearer your-webhook-secret",
+        "X-App-ID": "my-coordinator"
+    },
+    secret="hmac-signing-secret"  # For payload verification
+)
+
+# Create task with push notifications
+task_id = await client.create_task(
+    "agent",
+    "Perform comprehensive analysis (this may take a while)",
+    push_notification_config=push_config
+)
+
+print(f"Task {task_id} created. Updates will be sent to your webhook.")
+```
+
+### Handling Webhook Events
+
+```python
+from fastapi import FastAPI, Request, HTTPException
+import hmac
+import hashlib
+
+app = FastAPI()
+
+WEBHOOK_SECRET = "hmac-signing-secret"
+
+@app.post("/webhooks/a2a-events")
+async def handle_a2a_event(request: Request):
+    # Verify signature
+    signature = request.headers.get("X-A2A-Signature", "")
+    body = await request.body()
+    
+    expected = hmac.new(
+        WEBHOOK_SECRET.encode(),
+        body,
+        hashlib.sha256
+    ).hexdigest()
+    
+    if not hmac.compare_digest(f"sha256={expected}", signature):
+        raise HTTPException(status_code=401, detail="Invalid signature")
+    
+    # Process event
+    event = await request.json()
+    event_type = event["event_type"]
+    task_id = event["task_id"]
+    
+    if event_type == "task.created":
+        print(f"Task {task_id} created")
+    elif event_type == "task.updated":
+        print(f"Task {task_id} status: {event['data']['status']}")
+    elif event_type == "task.completed":
+        print(f"Task {task_id} completed!")
+        artifacts = event["data"].get("artifacts", [])
+        print(f"  Produced {len(artifacts)} artifacts")
+    elif event_type == "task.failed":
+        print(f"Task {task_id} failed: {event['data']['error']}")
+    elif event_type == "task.artifact":
+        artifact = event["data"]["artifact"]
+        print(f"New artifact: {artifact['name']}")
+    
+    return {"status": "received"}
+```
+
+## Part 7: Advanced Multi-Agent Patterns
 
 ### Creating Agent Networks
 
 ```python
 import asyncio
 from typing import Dict, Any
+
+from tyler.a2a import A2AAdapter
 
 class AgentNetwork:
     """Manages a network of specialized A2A agents."""
@@ -208,17 +427,22 @@ class AgentNetwork:
         """Add a specialized agent to the network."""
         connected = await self.adapter.connect(name, base_url)
         if connected:
+            info = self.adapter.client.get_connection_info(name)
             self.agents[name] = {
                 "base_url": base_url,
                 "specialization": specialization,
-                "status": "connected"
+                "status": "connected",
+                "protocol_version": info.get("protocol_version"),
+                "capabilities": info.get("capabilities", []),
             }
-            print(f"✅ Added {name} ({specialization})")
+            print(f"Added {name} ({specialization})")
         else:
-            print(f"❌ Failed to connect to {name}")
+            print(f"Failed to connect to {name}")
     
-    async def create_coordinator(self) -> Agent:
+    async def create_coordinator(self) -> "Agent":
         """Create a coordinator agent for this network."""
+        from tyler import Agent
+        
         tools = self.adapter.get_tools_for_agent()
         
         # Build purpose description based on connected agents
@@ -231,7 +455,7 @@ class AgentNetwork:
         
         return Agent(
             name="Network Coordinator",
-            model_name="gpt-4o",
+            model_name="gpt-4.1",
             purpose=purpose,
             tools=tools
         )
@@ -242,11 +466,11 @@ class AgentNetwork:
             try:
                 status = await self.adapter.get_agent_status(name)
                 if status:
-                    print(f"✅ {name}: healthy ({status.get('active_tasks', 0)} active tasks)")
+                    print(f"{name}: healthy ({status.get('active_tasks', 0)} active tasks)")
                 else:
-                    print(f"⚠️ {name}: unreachable")
+                    print(f"{name}: unreachable")
             except Exception as e:
-                print(f"❌ {name}: error - {e}")
+                print(f"{name}: error - {e}")
 
 # Example usage
 async def setup_enterprise_network():
@@ -280,7 +504,7 @@ async def stream_coordinated_task():
         content="Create a comprehensive business plan for a new AI startup"
     ))
     
-    print("🎯 Starting coordinated task execution...")
+    print("Starting coordinated task execution...")
     print("=" * 50)
     
     async for update in coordinator.stream(thread):
@@ -290,13 +514,13 @@ async def stream_coordinated_task():
             tool_name = update.data.get("tool_name", "")
             if "delegate_to_" in tool_name:
                 agent_name = tool_name.replace("delegate_to_", "")
-                print(f"\n\n🤝 Delegating to {agent_name}...")
+                print(f"\n\nDelegating to {agent_name}...")
             print()
         elif update.type == EventType.EXECUTION_COMPLETE:
-            print("\n\n✅ Task coordination complete!")
+            print("\n\nTask coordination complete!")
 ```
 
-## Part 4: Production Considerations
+## Part 8: Production Considerations
 
 ### Security and Authentication
 
@@ -328,7 +552,11 @@ class ResilientA2AAdapter:
         self.adapter = A2AAdapter()
         self.fallback_agents: Dict[str, str] = {}
     
-    async def connect_with_fallback(self, primary_url: str, fallback_url: Optional[str] = None):
+    async def connect_with_fallback(
+        self, 
+        primary_url: str, 
+        fallback_url: Optional[str] = None
+    ):
         """Connect with automatic fallback."""
         try:
             success = await self.adapter.connect("primary", primary_url)
@@ -349,164 +577,12 @@ class ResilientA2AAdapter:
         """Delegate with retry logic."""
         for attempt in range(max_retries):
             try:
-                # Attempt task delegation
-                # Implementation would include actual delegation logic
                 return await self._execute_task(task)
             except Exception as e:
                 if attempt == max_retries - 1:
                     raise
                 print(f"Attempt {attempt + 1} failed: {e}. Retrying...")
                 await asyncio.sleep(2 ** attempt)  # Exponential backoff
-```
-
-### Monitoring and Metrics
-
-```python
-import time
-from dataclasses import dataclass
-from typing import List
-
-@dataclass
-class TaskMetrics:
-    task_id: str
-    agent_name: str
-    start_time: float
-    end_time: Optional[float] = None
-    status: str = "running"
-    error: Optional[str] = None
-
-class A2AMonitor:
-    """Monitor A2A agent performance and health."""
-    
-    def __init__(self):
-        self.metrics: List[TaskMetrics] = []
-    
-    def start_task(self, task_id: str, agent_name: str):
-        """Record task start."""
-        self.metrics.append(TaskMetrics(
-            task_id=task_id,
-            agent_name=agent_name,
-            start_time=time.time()
-        ))
-    
-    def complete_task(self, task_id: str, status: str = "completed", error: Optional[str] = None):
-        """Record task completion."""
-        for metric in self.metrics:
-            if metric.task_id == task_id:
-                metric.end_time = time.time()
-                metric.status = status
-                metric.error = error
-                break
-    
-    def get_performance_report(self) -> Dict[str, Any]:
-        """Generate performance report."""
-        completed_tasks = [m for m in self.metrics if m.end_time]
-        
-        if not completed_tasks:
-            return {"message": "No completed tasks"}
-        
-        avg_duration = sum(
-            m.end_time - m.start_time for m in completed_tasks
-        ) / len(completed_tasks)
-        
-        success_rate = sum(
-            1 for m in completed_tasks if m.status == "completed"
-        ) / len(completed_tasks)
-        
-        return {
-            "total_tasks": len(completed_tasks),
-            "avg_duration": avg_duration,
-            "success_rate": success_rate,
-            "agent_performance": self._agent_breakdown()
-        }
-    
-    def _agent_breakdown(self) -> Dict[str, Dict[str, Any]]:
-        """Break down performance by agent."""
-        agent_stats = {}
-        for metric in self.metrics:
-            if metric.agent_name not in agent_stats:
-                agent_stats[metric.agent_name] = {
-                    "total_tasks": 0,
-                    "completed_tasks": 0,
-                    "failed_tasks": 0,
-                    "avg_duration": 0
-                }
-            
-            agent_stats[metric.agent_name]["total_tasks"] += 1
-            
-            if metric.end_time:
-                if metric.status == "completed":
-                    agent_stats[metric.agent_name]["completed_tasks"] += 1
-                else:
-                    agent_stats[metric.agent_name]["failed_tasks"] += 1
-        
-        return agent_stats
-```
-
-## Part 5: Examples and Use Cases
-
-### Research Workflow Automation
-
-```python
-async def automated_research_pipeline():
-    """Example: Automated research pipeline using multiple A2A agents."""
-    
-    # Set up research network
-    adapter = A2AAdapter()
-    await adapter.connect("researcher", "https://research-ai.example.com")
-    await adapter.connect("analyzer", "https://analysis-ai.example.com") 
-    await adapter.connect("writer", "https://writing-ai.example.com")
-    
-    # Create pipeline coordinator
-    pipeline = Agent(
-        name="Research Pipeline Coordinator",
-        tools=adapter.get_tools_for_agent(),
-        purpose="""Coordinate automated research workflows:
-        1. Delegate initial research to specialist agents
-        2. Have findings analyzed for insights
-        3. Generate final reports with recommendations"""
-    )
-    
-    # Execute research pipeline
-    topics = ["AI market trends", "Blockchain adoption", "Green energy investments"]
-    
-    for topic in topics:
-        thread = Thread()
-        thread.add_message(Message(
-            role="user",
-            content=f"Execute full research pipeline for: {topic}"
-        ))
-        
-        result = await pipeline.run(thread)
-        print(f"✅ Completed research pipeline for: {topic}")
-```
-
-### Customer Support Agent Network
-
-```python
-async def customer_support_network():
-    """Example: Customer support using specialized A2A agents."""
-    
-    adapter = A2AAdapter()
-    
-    # Connect to specialized support agents
-    await adapter.connect("technical_support", "https://tech-support.company.com")
-    await adapter.connect("billing_support", "https://billing-support.company.com")
-    await adapter.connect("product_expert", "https://product-help.company.com")
-    
-    # Create support coordinator
-    support_coordinator = Agent(
-        name="Customer Support Coordinator",
-        tools=adapter.get_tools_for_agent(),
-        purpose="""Route customer inquiries to specialized support agents:
-        - Technical issues → technical_support agent
-        - Billing questions → billing_support agent  
-        - Product features → product_expert agent
-        
-        Always ensure customer gets expert help for their specific need."""
-    )
-    
-    return support_coordinator
 ```
 
 ## Troubleshooting
@@ -517,12 +593,10 @@ async def customer_support_network():
   <Accordion title="ImportError: a2a-sdk required">
     **Problem**: Getting import errors when using A2A features.
     
-    **Solution**: Install the A2A SDK:
+    **Solution**: A2A SDK is included with Tyler. Ensure you have the latest version:
     ```bash
-    pip install a2a-sdk
+    pip install --upgrade slide-tyler
     ```
-    
-    The A2A integration gracefully handles missing dependencies in examples and tests.
   </Accordion>
 
   <Accordion title="Connection Refused Errors">
@@ -539,50 +613,52 @@ async def customer_support_network():
     try:
         connected = await adapter.connect("test", "https://agent.example.com")
         if connected:
-            print("✅ Connection successful")
+            info = adapter.client.get_connection_info("test")
+            print(f"Connected! Protocol: {info['protocol_version']}")
         else:
-            print("❌ Connection failed - check agent status")
+            print("Connection failed - check agent status")
     except Exception as e:
         print(f"Connection error: {e}")
     ```
   </Accordion>
 
-  <Accordion title="Agent Card Not Found">
-    **Problem**: Agent card information is missing or invalid.
+  <Accordion title="Push Notification Failures">
+    **Problem**: Webhook notifications are not being received.
     
-    **Solution**: Verify the remote agent exposes proper A2A metadata:
+    **Solutions**:
+    - Verify webhook URL is accessible from the agent's network
+    - Check that the URL uses HTTPS (required for security)
+    - Ensure webhook server returns 2xx status codes
+    - Verify HMAC signature validation if using secrets
+    
     ```python
-    # Check agent card
-    info = adapter.get_connection_info("agent_name")
-    if info:
-        print(f"Agent: {info['agent_name']}")
-        print(f"Capabilities: {info['capabilities']}")
+    # Debug webhook configuration
+    from tyler.a2a import validate_webhook_url
+    
+    url = "https://your-service.com/webhook"
+    if validate_webhook_url(url):
+        print("URL is valid")
     else:
-        print("No agent card available - check A2A server configuration")
+        print("URL validation failed - check HTTPS and accessibility")
     ```
   </Accordion>
 
-  <Accordion title="Task Execution Failures">
-    **Problem**: Delegated tasks fail or timeout.
+  <Accordion title="Artifact Retrieval Issues">
+    **Problem**: Cannot retrieve artifacts from completed tasks.
     
     **Solutions**:
-    - Monitor task status using `get_task_status()`
-    - Implement retry logic for transient failures
-    - Check agent capacity and current load
-    - Verify task format and requirements
+    - Ensure task has actually completed
+    - Check that the remote agent supports artifacts
+    - Verify connection is still active
     
     ```python
-    # Monitor task execution
-    task_id = await adapter.create_task("agent", "task description")
+    # Check task status before retrieving artifacts
+    status = await client.get_task_status("agent", task_id)
+    print(f"Status: {status['status']}")
+    print(f"Has artifacts: {status['has_artifacts']}")
     
-    while True:
-        status = await adapter.get_task_status("agent", task_id)
-        print(f"Task status: {status['status']}")
-        
-        if status["status"] in ["completed", "error", "cancelled"]:
-            break
-        
-        await asyncio.sleep(1)
+    if status["status"] == "completed" and status["has_artifacts"]:
+        artifacts = await client.get_task_artifacts("agent", task_id)
     ```
   </Accordion>
 </AccordionGroup>
@@ -597,12 +673,14 @@ async def customer_support_network():
   
   **Task Delegation**
   - Be specific in task descriptions for remote agents
-  - Monitor task progress and handle timeouts
-  - Implement fallback strategies for critical workflows
+  - Use context IDs to group related tasks
+  - Monitor task progress with push notifications for long-running tasks
+  - Retrieve and process artifacts for structured results
   
   **Security**
   - Always use HTTPS in production
   - Implement proper authentication and authorization
+  - Use HMAC signing for webhook verification
   - Validate agent cards and capabilities
   
   **Performance**
@@ -636,11 +714,11 @@ Now that you have A2A integration working, explore these advanced topics:
     Advanced agent delegation patterns
   </Card>
   <Card
-    title="A2A Examples"
-    icon="code"
-    href="/packages/tyler/examples#a2a"
+    title="A2A Specification"
+    icon="book"
+    href="https://a2a-protocol.org/latest/"
   >
-    Complete A2A integration examples
+    Official A2A Protocol v0.3.0 specification
   </Card>
   <Card
     title="Production Deployment"

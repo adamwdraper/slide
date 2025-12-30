@@ -124,6 +124,9 @@ dependencies = [
     "zipp>=3.21.0",
     "apscheduler>=3.11.0",
     "email-validator>=2.2.0",
+    "a2a-sdk>=0.3.0",
+    "fastapi>=0.115.0",
+    "uvicorn>=0.34.0",
 ]
 
 [project.optional-dependencies]

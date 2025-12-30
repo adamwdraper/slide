@@ -1,0 +1,330 @@
+"""Tests for A2A server implementation.
+
+Tests cover:
+- Protocol version (AC-1)
+- Agent Card path (AC-2)
+- Artifact production (AC-7)
+- Context ID support (AC-8)
+- Push notifications (AC-9, AC-10, AC-11)
+- Authentication declaration (AC-12)
+"""
+
+import pytest
+from datetime import datetime
+from unittest.mock import MagicMock, AsyncMock, patch
+
+# Mock the a2a-sdk imports before importing server
+import sys
+mock_a2a = MagicMock()
+mock_a2a.server = MagicMock()
+mock_a2a.types = MagicMock()
+sys.modules['a2a'] = mock_a2a
+sys.modules['a2a.server'] = mock_a2a.server
+sys.modules['a2a.types'] = mock_a2a.types
+
+from tyler.a2a.server import A2AServer, A2A_PROTOCOL_VERSION, TylerTaskExecution
+from tyler.a2a.types import (
+    Artifact,
+    TextPart,
+    FilePart,
+    DataPart,
+    PushNotificationConfig,
+)
+
+
+class TestA2AProtocolVersion:
+    """Test cases for protocol version (AC-1)."""
+    
+    def test_protocol_version_constant(self):
+        """Test A2A_PROTOCOL_VERSION is 0.3.0."""
+        assert A2A_PROTOCOL_VERSION == "0.3.0"
+    
+    def test_agent_card_includes_protocol_version(self):
+        """Test agent card includes correct protocol version."""
+        # Create mock Tyler agent
+        mock_agent = MagicMock()
+        mock_agent.name = "Test Agent"
+        mock_agent.purpose = "Testing"
+        mock_agent.tools = []
+        
+        with patch('tyler.a2a.server.HAS_A2A', True):
+            with patch('tyler.a2a.server.AgentCard') as mock_card:
+                server = A2AServer(tyler_agent=mock_agent)
+                
+                # Check that AgentCard was called with correct protocol_version
+                call_kwargs = mock_card.call_args.kwargs
+                assert call_kwargs["protocol_version"] == "0.3.0"
+
+
+class TestAgentCardConfiguration:
+    """Test cases for Agent Card configuration (AC-2, AC-12)."""
+    
+    def test_agent_card_from_tyler_agent(self):
+        """Test Agent Card is created from Tyler agent info."""
+        mock_agent = MagicMock()
+        mock_agent.name = "Research Assistant"
+        mock_agent.purpose = "Research and analysis"
+        mock_agent.tools = []
+        
+        with patch('tyler.a2a.server.HAS_A2A', True):
+            with patch('tyler.a2a.server.AgentCard') as mock_card:
+                server = A2AServer(tyler_agent=mock_agent)
+                
+                call_kwargs = mock_card.call_args.kwargs
+                assert call_kwargs["name"] == "Research Assistant"
+                assert call_kwargs["description"] == "Research and analysis"
+    
+    def test_agent_card_with_authentication(self):
+        """Test Agent Card includes authentication when configured (AC-12)."""
+        mock_agent = MagicMock()
+        mock_agent.name = "Secure Agent"
+        mock_agent.purpose = "Secure operations"
+        mock_agent.tools = []
+        
+        auth_config = {
+            "schemes": ["bearer"],
+            "required": True
+        }
+        
+        with patch('tyler.a2a.server.HAS_A2A', True):
+            with patch('tyler.a2a.server.AgentCard') as mock_card:
+                server = A2AServer(
+                    tyler_agent=mock_agent,
+                    authentication=auth_config
+                )
+                
+                call_kwargs = mock_card.call_args.kwargs
+                assert call_kwargs["authentication"] == auth_config
+    
+    def test_agent_card_push_notifications_declared(self):
+        """Test Agent Card declares push notification support."""
+        mock_agent = MagicMock()
+        mock_agent.name = "Test Agent"
+        mock_agent.purpose = "Testing"
+        mock_agent.tools = []
+        
+        with patch('tyler.a2a.server.HAS_A2A', True):
+            with patch('tyler.a2a.server.AgentCard') as mock_card:
+                server = A2AServer(tyler_agent=mock_agent)
+                
+                call_kwargs = mock_card.call_args.kwargs
+                assert "push_notifications" in call_kwargs
+                assert call_kwargs["push_notifications"]["supported"] is True
+    
+    def test_agent_card_custom_override(self):
+        """Test custom agent card data overrides defaults."""
+        mock_agent = MagicMock()
+        mock_agent.name = "Default Name"
+        mock_agent.purpose = "Default purpose"
+        mock_agent.tools = []
+        
+        custom_card = {
+            "name": "Custom Name",
+            "version": "2.0.0",
+        }
+        
+        with patch('tyler.a2a.server.HAS_A2A', True):
+            with patch('tyler.a2a.server.AgentCard') as mock_card:
+                server = A2AServer(
+                    tyler_agent=mock_agent,
+                    agent_card=custom_card
+                )
+                
+                call_kwargs = mock_card.call_args.kwargs
+                assert call_kwargs["name"] == "Custom Name"
+                assert call_kwargs["version"] == "2.0.0"
+
+
+class TestTylerTaskExecution:
+    """Test cases for TylerTaskExecution dataclass."""
+    
+    def test_task_execution_defaults(self):
+        """Test TylerTaskExecution has proper defaults."""
+        task = TylerTaskExecution(
+            task_id="test-123",
+            tyler_agent=MagicMock(),
+            tyler_thread=MagicMock(),
+        )
+        
+        assert task.status == "running"
+        assert isinstance(task.created_at, datetime)
+        assert isinstance(task.updated_at, datetime)
+        assert task.result_messages == []
+        assert task.artifacts == []
+        assert task.context_id is None
+        assert task.push_notification_config is None
+    
+    def test_task_execution_with_context(self):
+        """Test TylerTaskExecution with context_id (AC-8)."""
+        task = TylerTaskExecution(
+            task_id="test-123",
+            tyler_agent=MagicMock(),
+            tyler_thread=MagicMock(),
+            context_id="context-abc",
+        )
+        
+        assert task.context_id == "context-abc"
+    
+    def test_task_execution_with_push_config(self):
+        """Test TylerTaskExecution with push notification config."""
+        with patch('tyler.a2a.types.validate_webhook_url', return_value=True):
+            push_config = PushNotificationConfig(
+                webhook_url="https://example.com/webhook"
+            )
+        
+        task = TylerTaskExecution(
+            task_id="test-123",
+            tyler_agent=MagicMock(),
+            tyler_thread=MagicMock(),
+            push_notification_config=push_config,
+        )
+        
+        assert task.push_notification_config is not None
+        assert task.push_notification_config.webhook_url == "https://example.com/webhook"
+
+
+class TestCapabilityExtraction:
+    """Test cases for capability extraction from tools."""
+    
+    def test_extract_file_capability(self):
+        """Test file operations capability is extracted."""
+        mock_agent = MagicMock()
+        mock_agent.name = "Test"
+        mock_agent.purpose = "Test"
+        mock_agent.tools = [
+            {
+                "definition": {
+                    "function": {
+                        "name": "read_file",
+                        "description": "Read a file from disk"
+                    }
+                }
+            }
+        ]
+        
+        with patch('tyler.a2a.server.HAS_A2A', True):
+            with patch('tyler.a2a.server.AgentCard') as mock_card:
+                server = A2AServer(tyler_agent=mock_agent)
+                
+                call_kwargs = mock_card.call_args.kwargs
+                assert "file_operations" in call_kwargs["capabilities"]
+    
+    def test_extract_web_capability(self):
+        """Test web operations capability is extracted."""
+        mock_agent = MagicMock()
+        mock_agent.name = "Test"
+        mock_agent.purpose = "Test"
+        mock_agent.tools = [
+            {
+                "definition": {
+                    "function": {
+                        "name": "web_search",
+                        "description": "Search the web"
+                    }
+                }
+            }
+        ]
+        
+        with patch('tyler.a2a.server.HAS_A2A', True):
+            with patch('tyler.a2a.server.AgentCard') as mock_card:
+                server = A2AServer(tyler_agent=mock_agent)
+                
+                call_kwargs = mock_card.call_args.kwargs
+                assert "web_operations" in call_kwargs["capabilities"]
+    
+    def test_base_capabilities_always_included(self):
+        """Test base capabilities are always included."""
+        mock_agent = MagicMock()
+        mock_agent.name = "Test"
+        mock_agent.purpose = "Test"
+        mock_agent.tools = []
+        
+        with patch('tyler.a2a.server.HAS_A2A', True):
+            with patch('tyler.a2a.server.AgentCard') as mock_card:
+                server = A2AServer(tyler_agent=mock_agent)
+                
+                call_kwargs = mock_card.call_args.kwargs
+                assert "task_execution" in call_kwargs["capabilities"]
+                assert "conversation_management" in call_kwargs["capabilities"]
+                assert "artifacts" in call_kwargs["capabilities"]
+
+
+class TestServerMethods:
+    """Test cases for A2AServer methods."""
+    
+    def test_get_agent_card(self):
+        """Test get_agent_card returns the agent card."""
+        mock_agent = MagicMock()
+        mock_agent.name = "Test"
+        mock_agent.purpose = "Test"
+        mock_agent.tools = []
+        
+        with patch('tyler.a2a.server.HAS_A2A', True):
+            mock_card = MagicMock()
+            with patch('tyler.a2a.server.AgentCard', return_value=mock_card):
+                server = A2AServer(tyler_agent=mock_agent)
+                
+                assert server.get_agent_card() == mock_card
+    
+    def test_get_active_tasks_empty(self):
+        """Test get_active_tasks returns empty list initially."""
+        mock_agent = MagicMock()
+        mock_agent.name = "Test"
+        mock_agent.purpose = "Test"
+        mock_agent.tools = []
+        
+        with patch('tyler.a2a.server.HAS_A2A', True):
+            with patch('tyler.a2a.server.AgentCard'):
+                server = A2AServer(tyler_agent=mock_agent)
+                
+                assert server.get_active_tasks() == []
+    
+    def test_get_tasks_by_context(self):
+        """Test get_tasks_by_context filters correctly (AC-8)."""
+        mock_agent = MagicMock()
+        mock_agent.name = "Test"
+        mock_agent.purpose = "Test"
+        mock_agent.tools = []
+        
+        with patch('tyler.a2a.server.HAS_A2A', True):
+            with patch('tyler.a2a.server.AgentCard'):
+                server = A2AServer(tyler_agent=mock_agent)
+                
+                # Add some tasks
+                server._active_tasks["task-1"] = TylerTaskExecution(
+                    task_id="task-1",
+                    tyler_agent=mock_agent,
+                    tyler_thread=MagicMock(),
+                    context_id="context-a",
+                )
+                server._active_tasks["task-2"] = TylerTaskExecution(
+                    task_id="task-2",
+                    tyler_agent=mock_agent,
+                    tyler_thread=MagicMock(),
+                    context_id="context-b",
+                )
+                server._active_tasks["task-3"] = TylerTaskExecution(
+                    task_id="task-3",
+                    tyler_agent=mock_agent,
+                    tyler_thread=MagicMock(),
+                    context_id="context-a",
+                )
+                
+                # Filter by context
+                context_a_tasks = server.get_tasks_by_context("context-a")
+                
+                assert len(context_a_tasks) == 2
+                assert all(t["task_id"] in ["task-1", "task-3"] for t in context_a_tasks)
+
+
+class TestImportError:
+    """Test cases for import error handling (AC-14)."""
+    
+    def test_import_error_without_a2a_sdk(self):
+        """Test ImportError is raised when a2a-sdk is not installed."""
+        mock_agent = MagicMock()
+        
+        with patch('tyler.a2a.server.HAS_A2A', False):
+            with pytest.raises(ImportError, match="a2a-sdk is required"):
+                A2AServer(tyler_agent=mock_agent)
+

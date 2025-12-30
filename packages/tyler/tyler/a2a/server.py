@@ -1,21 +1,31 @@
 """A2A server implementation for Tyler.
 
 This module provides server functionality to expose Tyler agents 
-as A2A (Agent-to-Agent) protocol endpoints, allowing other agents
+as A2A (Agent-to-Agent) protocol v0.3.0 endpoints, allowing other agents
 to delegate tasks to Tyler agents.
 """
 
 import json
 import logging
 import asyncio
-from typing import Dict, List, Any, Optional, Callable
-from dataclasses import dataclass, asdict
+from typing import Dict, List, Any, Optional
+from dataclasses import dataclass
 from datetime import datetime
 import uuid
 
 try:
     from a2a.server import A2AHttpServer
-    from a2a.types import AgentCard, Task, Message, Part, TextPart, TaskStatus
+    from a2a.types import (
+        AgentCard,
+        Task,
+        Message,
+        Part,
+        TextPart,
+        FilePart as A2AFilePart,
+        DataPart as A2ADataPart,
+        TaskStatus,
+        Artifact as A2AArtifact,
+    )
     from fastapi import FastAPI
     HAS_A2A = True
 except ImportError:
@@ -33,12 +43,43 @@ except ImportError:
         pass
     class TextPart:
         pass
+    class A2AFilePart:
+        pass
+    class A2ADataPart:
+        pass
     class TaskStatus:
+        pass
+    class A2AArtifact:
         pass
     class FastAPI:
         pass
 
+from .types import (
+    Artifact,
+    TextPart as TylerTextPart,
+    FilePart as TylerFilePart,
+    DataPart as TylerDataPart,
+    PushNotificationConfig,
+    PushEventType,
+    from_a2a_part,
+    to_a2a_part,
+    to_a2a_artifact,
+    parts_to_tyler_content,
+    extract_text_from_parts,
+)
+from .notifications import (
+    PushNotificationHandler,
+    create_task_created_event,
+    create_task_updated_event,
+    create_task_completed_event,
+    create_task_failed_event,
+    create_artifact_event,
+)
+
 logger = logging.getLogger(__name__)
+
+# Protocol version
+A2A_PROTOCOL_VERSION = "0.3.0"
 
 
 @dataclass
@@ -51,6 +92,9 @@ class TylerTaskExecution:
     created_at: datetime = None
     updated_at: datetime = None
     result_messages: List[str] = None
+    context_id: Optional[str] = None
+    artifacts: List[Artifact] = None
+    push_notification_config: Optional[PushNotificationConfig] = None
     
     def __post_init__(self):
         if self.created_at is None:
@@ -59,17 +103,25 @@ class TylerTaskExecution:
             self.updated_at = datetime.utcnow()
         if self.result_messages is None:
             self.result_messages = []
+        if self.artifacts is None:
+            self.artifacts = []
 
 
 class A2AServer:
-    """Server to expose Tyler agents via A2A protocol."""
+    """Server to expose Tyler agents via A2A protocol v0.3.0."""
     
-    def __init__(self, tyler_agent, agent_card: Optional[Dict[str, Any]] = None):
+    def __init__(
+        self,
+        tyler_agent,
+        agent_card: Optional[Dict[str, Any]] = None,
+        authentication: Optional[Dict[str, Any]] = None,
+    ):
         """Initialize the A2A server.
         
         Args:
             tyler_agent: Tyler Agent instance to expose
             agent_card: Optional custom agent card. If None, generates one from Tyler agent
+            authentication: Optional authentication configuration for the agent card
         """
         if not HAS_A2A:
             raise ImportError(
@@ -77,12 +129,18 @@ class A2AServer:
             )
         
         self.tyler_agent = tyler_agent
+        self._authentication = authentication
         self._agent_card = self._create_agent_card(tyler_agent, agent_card)
         self._server: Optional[A2AHttpServer] = None
         self._app: Optional[FastAPI] = None
         self._active_tasks: Dict[str, TylerTaskExecution] = {}
+        self._notification_handler = PushNotificationHandler()
         
-    def _create_agent_card(self, tyler_agent, custom_card: Optional[Dict[str, Any]] = None) -> AgentCard:
+    def _create_agent_card(
+        self,
+        tyler_agent,
+        custom_card: Optional[Dict[str, Any]] = None
+    ) -> AgentCard:
         """Create an A2A agent card from Tyler agent information.
         
         Args:
@@ -108,8 +166,22 @@ class A2AServer:
                 "email": "noreply@tyler.ai"
             },
             "vendor": "Tyler Framework",
-            "protocol_version": "1.0"
+            "protocol_version": A2A_PROTOCOL_VERSION,
+            "push_notifications": {
+                "supported": True,
+                "events": [
+                    PushEventType.TASK_CREATED.value,
+                    PushEventType.TASK_UPDATED.value,
+                    PushEventType.TASK_COMPLETED.value,
+                    PushEventType.TASK_FAILED.value,
+                    PushEventType.ARTIFACT_PRODUCED.value,
+                ]
+            }
         }
+        
+        # Add authentication if configured
+        if self._authentication:
+            card_data["authentication"] = self._authentication
         
         # Override with custom data if provided
         if custom_card:
@@ -127,7 +199,7 @@ class A2AServer:
         Returns:
             List of capability strings
         """
-        capabilities = ["task_execution", "conversation_management"]
+        capabilities = ["task_execution", "conversation_management", "artifacts"]
         
         # Add tool-based capabilities
         tool_categories = set()
@@ -183,22 +255,31 @@ class A2AServer:
             
             # Start the server
             import uvicorn
-            await uvicorn.run(
-                self._app, 
-                host=host, 
+            config = uvicorn.Config(
+                self._app,
+                host=host,
                 port=port,
                 log_level="info"
             )
+            server = uvicorn.Server(config)
+            await server.serve()
             
         except Exception as e:
             logger.error(f"Failed to start A2A server: {e}")
             raise
     
-    async def _handle_create_task(self, message: Message) -> Task:
+    async def _handle_create_task(
+        self,
+        message: Message,
+        context_id: Optional[str] = None,
+        push_notification_config: Optional[Dict[str, Any]] = None,
+    ) -> Task:
         """Handle task creation requests.
         
         Args:
             message: Initial task message
+            context_id: Optional context ID for grouping related tasks
+            push_notification_config: Optional push notification configuration
             
         Returns:
             Created task
@@ -206,7 +287,15 @@ class A2AServer:
         task_id = str(uuid.uuid4())
         
         try:
-            # Extract content from A2A message
+            # Parse push notification config if provided
+            push_config = None
+            if push_notification_config:
+                try:
+                    push_config = PushNotificationConfig(**push_notification_config)
+                except Exception as e:
+                    logger.warning(f"Invalid push notification config: {e}")
+            
+            # Extract content from A2A message (supports all Part types)
             content = self._extract_message_content(message)
             
             # Import Tyler classes here to avoid circular imports
@@ -222,10 +311,20 @@ class A2AServer:
                 task_id=task_id,
                 tyler_agent=self.tyler_agent,
                 tyler_thread=tyler_thread,
-                status="running"
+                status="running",
+                context_id=context_id,
+                push_notification_config=push_config,
             )
             
             self._active_tasks[task_id] = task_execution
+            
+            # Send push notification for task creation
+            if push_config:
+                event = create_task_created_event(
+                    task_id=task_id,
+                    context_id=context_id,
+                )
+                self._notification_handler.send_async(push_config, event)
             
             # Start Tyler agent processing in background
             asyncio.create_task(self._execute_tyler_task(task_execution))
@@ -256,13 +355,25 @@ class A2AServer:
         Args:
             task_execution: Task execution information
         """
+        push_config = task_execution.push_notification_config
+        
         try:
+            # Send progress update
+            if push_config:
+                event = create_task_updated_event(
+                    task_id=task_execution.task_id,
+                    status="processing",
+                    message="Tyler agent is processing the request",
+                    context_id=task_execution.context_id,
+                )
+                self._notification_handler.send_async(push_config, event)
+            
             # Execute Tyler agent
             processed_thread, new_messages = await task_execution.tyler_agent.go(
                 task_execution.tyler_thread
             )
             
-            # Extract response content
+            # Extract response content and create artifacts
             response_messages = []
             for message in new_messages:
                 if hasattr(message, 'content'):
@@ -270,10 +381,41 @@ class A2AServer:
                 else:
                     response_messages.append(str(message))
             
+            # Create artifact from response
+            if response_messages:
+                artifact = Artifact.create(
+                    name=f"Task {task_execution.task_id} Result",
+                    parts=[TylerTextPart(text="\n".join(response_messages))],
+                    metadata={
+                        "task_id": task_execution.task_id,
+                        "context_id": task_execution.context_id,
+                    }
+                )
+                task_execution.artifacts.append(artifact)
+                
+                # Send artifact notification
+                if push_config:
+                    event = create_artifact_event(
+                        task_id=task_execution.task_id,
+                        artifact=artifact,
+                        context_id=task_execution.context_id,
+                    )
+                    self._notification_handler.send_async(push_config, event)
+            
             # Update task execution
             task_execution.result_messages = response_messages
             task_execution.status = "completed"
             task_execution.updated_at = datetime.utcnow()
+            
+            # Send completion notification
+            if push_config:
+                event = create_task_completed_event(
+                    task_id=task_execution.task_id,
+                    result=response_messages[0] if response_messages else None,
+                    artifacts=task_execution.artifacts,
+                    context_id=task_execution.context_id,
+                )
+                self._notification_handler.send_async(push_config, event)
             
             logger.info(f"Completed Tyler task {task_execution.task_id}")
             
@@ -282,6 +424,15 @@ class A2AServer:
             task_execution.status = "error"
             task_execution.result_messages = [f"Task execution failed: {str(e)}"]
             task_execution.updated_at = datetime.utcnow()
+            
+            # Send failure notification
+            if push_config:
+                event = create_task_failed_event(
+                    task_id=task_execution.task_id,
+                    error=str(e),
+                    context_id=task_execution.context_id,
+                )
+                self._notification_handler.send_async(push_config, event)
     
     async def _handle_send_message(self, task_id: str, message: Message) -> None:
         """Handle sending additional messages to a task.
@@ -301,7 +452,7 @@ class A2AServer:
             return
         
         try:
-            # Extract content from A2A message
+            # Extract content from A2A message (supports all Part types)
             content = self._extract_message_content(message)
             
             # Import Tyler Message class
@@ -342,13 +493,22 @@ class A2AServer:
         elif task_execution.status == "error":
             a2a_status = "error"
         
+        # Convert artifacts to A2A format
+        a2a_artifacts = None
+        if task_execution.artifacts:
+            a2a_artifacts = [
+                to_a2a_artifact(artifact) for artifact in task_execution.artifacts
+            ]
+        
         return TaskStatus(
             task_id=task_id,
             status=a2a_status,
             created_at=task_execution.created_at,
             updated_at=task_execution.updated_at,
             result=task_execution.result_messages if task_execution.status == "completed" else None,
-            error_message=task_execution.result_messages[0] if task_execution.status == "error" else None
+            error_message=task_execution.result_messages[0] if task_execution.status == "error" else None,
+            artifacts=a2a_artifacts,
+            context_id=task_execution.context_id,
         )
     
     async def _handle_cancel_task(self, task_id: str) -> bool:
@@ -379,6 +539,8 @@ class A2AServer:
     def _extract_message_content(self, message: Message) -> str:
         """Extract text content from an A2A message.
         
+        Supports all Part types: TextPart, FilePart, DataPart.
+        
         Args:
             message: A2A message object
             
@@ -389,16 +551,41 @@ class A2AServer:
             return str(message)
         
         content_parts = []
+        file_references = []
+        data_references = []
+        
         for part in message.parts:
-            if hasattr(part, 'text'):
-                content_parts.append(part.text)
-            else:
+            try:
+                # Convert to internal type for unified handling
+                internal_part = from_a2a_part(part)
+                
+                if isinstance(internal_part, TylerTextPart):
+                    content_parts.append(internal_part.text)
+                elif isinstance(internal_part, TylerFilePart):
+                    # For files, include a reference in the content
+                    file_info = f"[File: {internal_part.name} ({internal_part.mime_type})]"
+                    if internal_part.is_remote:
+                        file_info += f" URI: {internal_part.uri}"
+                    file_references.append(file_info)
+                elif isinstance(internal_part, TylerDataPart):
+                    # For data, include formatted JSON
+                    data_str = json.dumps(internal_part.data, indent=2)
+                    data_references.append(f"[Data ({internal_part.mime_type}):\n{data_str}\n]")
+                    
+            except Exception as e:
+                logger.warning(f"Error processing message part: {e}")
                 content_parts.append(str(part))
         
-        return "\n".join(content_parts) if content_parts else str(message)
+        # Combine all content
+        all_content = content_parts + file_references + data_references
+        return "\n".join(all_content) if all_content else str(message)
     
     async def stop_server(self) -> None:
         """Stop the A2A server and clean up."""
+        # Wait for pending notifications
+        await self._notification_handler.wait_all()
+        await self._notification_handler.close()
+        
         # Cancel all active tasks
         for task_id in list(self._active_tasks.keys()):
             await self._handle_cancel_task(task_id)
@@ -428,8 +615,31 @@ class A2AServer:
             {
                 "task_id": task.task_id,
                 "status": task.status,
+                "context_id": task.context_id,
                 "created_at": task.created_at.isoformat(),
-                "updated_at": task.updated_at.isoformat()
+                "updated_at": task.updated_at.isoformat(),
+                "artifact_count": len(task.artifacts),
             }
             for task in self._active_tasks.values()
+        ]
+    
+    def get_tasks_by_context(self, context_id: str) -> List[Dict[str, Any]]:
+        """Get all tasks grouped by a context ID.
+        
+        Args:
+            context_id: The context ID to filter by
+            
+        Returns:
+            List of task information for the given context
+        """
+        return [
+            {
+                "task_id": task.task_id,
+                "status": task.status,
+                "created_at": task.created_at.isoformat(),
+                "updated_at": task.updated_at.isoformat(),
+                "artifact_count": len(task.artifacts),
+            }
+            for task in self._active_tasks.values()
+            if task.context_id == context_id
         ]
