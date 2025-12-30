@@ -1,11 +1,15 @@
 """Tests for A2A token streaming implementation.
 
 Tests cover:
-- Streaming executor emits chunks (AC: tokens arrive within ~100ms)
+- Executor always uses streaming internally
+- Streaming executor emits chunks (AC: tokens arrive as they're generated)
 - Streaming executor final event (AC: lastChunk=True on completion)
-- Streaming disabled uses run() (AC: streaming disabled config)
 - Streaming with tool calls (AC: tool calls resume streaming)
 - Streaming error handling (AC: error emits failed status)
+
+Note: The A2A SDK handles delivery mode (aggregated for message/send,
+real-time for message/stream) - executor always streams internally.
+See: https://a2a-protocol.org/latest/tutorials/python/4-agent-executor/
 """
 
 import pytest
@@ -115,8 +119,8 @@ class TestStreamingExecutorEmitsChunks:
             
             mock_agent.stream = MagicMock(return_value=async_generator(streaming_events))
             
-            # Create executor with streaming enabled
-            executor = TylerAgentExecutor(mock_agent, streaming=True)
+            # Create executor
+            executor = TylerAgentExecutor(mock_agent)
             
             # Setup mock context and event queue
             mock_context = MagicMock()
@@ -137,7 +141,7 @@ class TestStreamingExecutorEmitsChunks:
             # Total: at least 6 events
             assert len(enqueue_calls) >= 6, f"Expected at least 6 events, got {len(enqueue_calls)}"
             
-            # Verify stream() was called (meaning streaming path was used)
+            # Verify stream() was called
             mock_agent.stream.assert_called_once()
 
 
@@ -166,7 +170,7 @@ class TestStreamingExecutorFinalEvent:
             
             mock_agent.stream = MagicMock(return_value=async_generator(streaming_events))
             
-            executor = TylerAgentExecutor(mock_agent, streaming=True)
+            executor = TylerAgentExecutor(mock_agent)
             
             mock_context = MagicMock()
             mock_context.task_id = "test-task-456"
@@ -184,16 +188,16 @@ class TestStreamingExecutorFinalEvent:
             # At least 4 events for this simple case
             assert len(enqueue_calls) >= 4, f"Expected at least 4 events, got {len(enqueue_calls)}"
             
-            # Verify stream() was called (meaning streaming path was used)
+            # Verify stream() was called
             mock_agent.stream.assert_called_once()
 
 
-class TestStreamingDisabledUsesRun:
-    """Test that when streaming is disabled, executor uses agent.run()."""
+class TestExecutorAlwaysStreams:
+    """Test that executor always uses streaming internally."""
     
     @pytest.mark.asyncio
-    async def test_streaming_disabled_uses_run(self):
-        """Test that executor falls back to agent.run() when streaming disabled."""
+    async def test_executor_always_uses_stream(self):
+        """Test that executor uses agent.stream() for all requests."""
         a2a_mocks = setup_a2a_mocks()
         
         with patch.dict('sys.modules', a2a_mocks):
@@ -206,13 +210,15 @@ class TestStreamingDisabledUsesRun:
             mock_agent = MagicMock()
             mock_agent.name = "Test Agent"
             
-            # Setup run() to return AgentResult
-            mock_result = MagicMock()
-            mock_result.new_messages = [MagicMock(content="Hello", role="assistant")]
-            mock_agent.run = AsyncMock(return_value=mock_result)
-            mock_agent.stream = MagicMock()  # Should NOT be called
+            streaming_events = [
+                create_mock_event(EventType.LLM_STREAM_CHUNK, {"content_chunk": "Response"}),
+                create_mock_event(EventType.EXECUTION_COMPLETE, {"duration_ms": 50}),
+            ]
             
-            executor = TylerAgentExecutor(mock_agent, streaming=False)
+            mock_agent.stream = MagicMock(return_value=async_generator(streaming_events))
+            mock_agent.run = AsyncMock()  # Should NOT be called
+            
+            executor = TylerAgentExecutor(mock_agent)
             
             mock_context = MagicMock()
             mock_context.task_id = "test-task-789"
@@ -224,9 +230,9 @@ class TestStreamingDisabledUsesRun:
             
             await executor.execute(mock_context, mock_event_queue)
             
-            # Verify run() was called, stream() was not
-            mock_agent.run.assert_called_once()
-            mock_agent.stream.assert_not_called()
+            # Verify stream() was called, run() was NOT called
+            mock_agent.stream.assert_called_once()
+            mock_agent.run.assert_not_called()
 
 
 class TestStreamingWithToolCalls:
@@ -260,7 +266,7 @@ class TestStreamingWithToolCalls:
             
             mock_agent.stream = MagicMock(return_value=async_generator(streaming_events))
             
-            executor = TylerAgentExecutor(mock_agent, streaming=True)
+            executor = TylerAgentExecutor(mock_agent)
             
             mock_context = MagicMock()
             mock_context.task_id = "test-task-tool"
@@ -309,7 +315,7 @@ class TestStreamingErrorHandling:
             
             mock_agent.stream = MagicMock(return_value=async_generator(streaming_events))
             
-            executor = TylerAgentExecutor(mock_agent, streaming=True)
+            executor = TylerAgentExecutor(mock_agent)
             
             mock_context = MagicMock()
             mock_context.task_id = "test-task-error"
@@ -331,11 +337,11 @@ class TestStreamingErrorHandling:
             mock_agent.stream.assert_called_once()
 
 
-class TestA2AServerStreamingConfig:
-    """Test A2AServer streaming configuration."""
+class TestA2AServerInitialization:
+    """Test A2AServer initialization."""
     
-    def test_server_accepts_streaming_param(self):
-        """Test that A2AServer accepts streaming parameter."""
+    def test_server_creates_executor(self):
+        """Test that A2AServer creates TylerAgentExecutor."""
         a2a_mocks = setup_a2a_mocks()
         
         with patch.dict('sys.modules', a2a_mocks):
@@ -344,6 +350,7 @@ class TestA2AServerStreamingConfig:
             importlib.reload(server_module)
             
             A2AServer = server_module.A2AServer
+            TylerAgentExecutor = server_module.TylerAgentExecutor
             
             mock_agent = MagicMock()
             mock_agent.name = "Test"
@@ -351,36 +358,9 @@ class TestA2AServerStreamingConfig:
             mock_agent.tools = []
             
             with patch.object(server_module, 'HAS_A2A', True):
-                # Test default (streaming enabled)
                 server = A2AServer(agent=mock_agent)
-                assert server._streaming_enabled is True
                 
-                # Test explicit enable
-                server_enabled = A2AServer(agent=mock_agent, streaming=True)
-                assert server_enabled._streaming_enabled is True
-                
-                # Test explicit disable
-                server_disabled = A2AServer(agent=mock_agent, streaming=False)
-                assert server_disabled._streaming_enabled is False
-    
-    def test_streaming_config_passed_to_executor(self):
-        """Test that streaming config is passed to executor."""
-        a2a_mocks = setup_a2a_mocks()
-        
-        with patch.dict('sys.modules', a2a_mocks):
-            import importlib
-            import tyler.a2a.server as server_module
-            importlib.reload(server_module)
-            
-            A2AServer = server_module.A2AServer
-            
-            mock_agent = MagicMock()
-            mock_agent.name = "Test"
-            mock_agent.purpose = "Test"
-            mock_agent.tools = []
-            
-            with patch.object(server_module, 'HAS_A2A', True):
-                server = A2AServer(agent=mock_agent, streaming=False)
-                
-                # Executor should have streaming disabled
-                assert server._executor._streaming_enabled is False
+                # Executor should be created
+                assert server._executor is not None
+                assert isinstance(server._executor, TylerAgentExecutor)
+                assert server._executor.agent is mock_agent

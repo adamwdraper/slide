@@ -2,13 +2,19 @@
 
 **Author**: Agent  
 **Date**: 2024-12-30  
+**Updated**: 2024-12-30 — Simplified design (always stream internally)  
 **Links**: [Spec](spec.md), [Impact](impact.md)
 
 ---
 
 ## 1. Summary
 
-This TDR describes the implementation of real-time token streaming for Tyler agents exposed via the A2A protocol. Currently, the `TylerAgentExecutor` uses `agent.run()` which waits for complete execution before emitting results. We will modify it to use `agent.stream()` and emit `TaskArtifactUpdateEvent`s for each token chunk, providing A2A clients with real-time response visibility.
+This TDR describes the implementation of real-time token streaming for Tyler agents exposed via the A2A protocol. The `TylerAgentExecutor` now uses `agent.stream()` internally for all requests, emitting `TaskArtifactUpdateEvent`s for each token chunk. The A2A SDK's `DefaultRequestHandler` handles delivery based on the client's request type:
+
+- **`message/send`**: SDK aggregates events into a single response
+- **`message/stream`**: SDK streams events via SSE in real-time
+
+This follows the pattern documented in the A2A SDK: https://a2a-protocol.org/latest/tutorials/python/4-agent-executor/
 
 Tyler already has robust streaming infrastructure via `agent.stream()` that yields `ExecutionEvent` objects including `LLM_STREAM_CHUNK`. This TDR focuses on wiring that infrastructure into the A2A server's event queue.
 
@@ -18,6 +24,7 @@ Tyler already has robust streaming infrastructure via `agent.stream()` that yiel
 - Protocol compliance: A2A spec explicitly supports streaming via SSE
 - User experience: Real-time feedback for long-running responses
 - Low implementation effort: Tyler streaming already exists
+- Simplicity: Single execution path (always stream) vs. dispatch logic
 
 **Non-Goals:**
 - Batching/throttling optimization (future enhancement if needed)
@@ -73,24 +80,27 @@ Replace `agent.run()` with `agent.stream()` in `TylerAgentExecutor.execute()` an
 
 | Component | Responsibility |
 |-----------|---------------|
-| `TylerAgentExecutor` | Consume Tyler stream, emit A2A events |
-| `EventQueue` (SDK) | Buffer and deliver SSE events to clients |
-| `A2AServer` | Configuration (streaming enabled/disabled) |
+| `TylerAgentExecutor` | Always use `agent.stream()`, emit A2A events for each chunk |
+| `DefaultRequestHandler` (SDK) | Route requests to executor, handle delivery mode |
+| `EventQueue` (SDK) | Buffer events; aggregate for send, stream for SSE |
+| `A2AServer` | Create executor and SDK infrastructure |
 
-### Proposed Interface Changes
+### Interface (Simplified)
+
+No new configuration needed. The executor always streams internally:
 
 ```python
-class A2AServer:
-    def __init__(
-        self,
-        agent,
-        agent_card: Optional[Dict[str, Any]] = None,
-        authentication: Optional[Dict[str, Any]] = None,
-        push_signing_secret: Optional[str] = None,
-        streaming: bool = True,  # NEW: Enable token streaming
-    ):
-        ...
-        self._streaming_enabled = streaming
+class TylerAgentExecutor(AgentExecutor):
+    """Always uses streaming internally. SDK handles delivery mode."""
+    
+    def __init__(self, agent):
+        self.agent = agent
+    
+    async def execute(self, context: RequestContext, event_queue: EventQueue) -> None:
+        # Always use agent.stream() - SDK handles aggregation for message/send
+        async for event in self.agent.stream(tyler_thread):
+            if event.type == EventType.LLM_STREAM_CHUNK:
+                await event_queue.enqueue_event(TaskArtifactUpdateEvent(...))
 ```
 
 ### Event Mapping
@@ -190,13 +200,11 @@ async def execute(self, context: RequestContext, event_queue: EventQueue) -> Non
 
 ### Backward Compatibility
 
-When `streaming=False`:
-```python
-if not self._streaming_enabled:
-    # Use existing non-streaming path
-    result = await self.agent.run(tyler_thread)
-    # ... emit single artifact as before ...
-```
+The A2A SDK handles backward compatibility automatically:
+- Clients calling `message/send` receive aggregated responses (no change)
+- Clients calling `message/stream` receive real-time SSE events
+
+No configuration flag needed—the executor always streams, SDK handles delivery.
 
 ## 5. Alternatives Considered
 
@@ -205,17 +213,22 @@ if not self._streaming_enabled:
 - **Cons**: Adds latency, more complex implementation
 - **Decision**: Skip for MVP; add if performance issues arise
 
-### Option B: Stream via separate endpoint
-- **Pros**: Clean separation of concerns
-- **Cons**: Doesn't leverage A2A protocol's built-in streaming
-- **Decision**: Rejected—use protocol-native approach
+### Option B: Separate `execute()` and `stream()` methods in executor
+- **Pros**: Explicit separation of streaming vs non-streaming
+- **Cons**: A2A SDK routes both request types to `execute()`; would fight the framework
+- **Decision**: Rejected—follow SDK design; always stream internally
 
-### Option C: Stream only final content, not tokens
+### Option C: Configuration flag to enable/disable streaming
+- **Pros**: Opt-in control
+- **Cons**: Unnecessary complexity; SDK handles delivery mode automatically
+- **Decision**: Rejected—simplified to always stream
+
+### Option D: Stream only final content, not tokens
 - **Pros**: Simpler implementation
 - **Cons**: No real-time feedback; defeats purpose of streaming
 - **Decision**: Rejected—token streaming is the goal
 
-**Chosen**: Direct token streaming via `agent.stream()` mapped to A2A events.
+**Chosen**: Always stream internally via `agent.stream()`, let SDK handle delivery.
 
 ## 6. Data Model & Contract Changes
 
@@ -223,9 +236,11 @@ if not self._streaming_enabled:
 
 | Change | Type | Backward Compatible |
 |--------|------|---------------------|
-| `A2AServer(streaming=True)` | New optional parameter | Yes (defaults to True) |
+| `TylerAgentExecutor` now streams internally | Behavioral change | Yes (SDK handles delivery) |
 | `TaskArtifactUpdateEvent.append` | Existing A2A field | N/A (protocol-defined) |
 | `TaskArtifactUpdateEvent.lastChunk` | Existing A2A field | N/A (protocol-defined) |
+
+**No new parameters added.** The simplified design removes the need for configuration.
 
 ### No Database Changes
 Feature is stateless; no migrations required.
@@ -260,20 +275,19 @@ Existing A2A server health monitoring is sufficient.
 
 ## 9. Rollout & Migration
 
-### Feature Flag
-```python
-A2AServer(agent, streaming=True)  # Default enabled
-A2AServer(agent, streaming=False)  # Opt-out
-```
+### No Feature Flag Needed
+The simplified design always streams internally. The A2A SDK handles delivery mode:
+- `message/send` clients receive aggregated responses (existing behavior)
+- `message/stream` clients receive real-time SSE events (new capability)
 
 ### Rollout Plan
-1. Deploy with `streaming=True` default
+1. Deploy updated executor
 2. Monitor for issues in staging
 3. Promote to production
 4. No data migration required
 
 ### Revert Plan
-Set `streaming=False` in server configuration.
+Revert the code change to use `agent.run()` instead of `agent.stream()`.
 
 ## 10. Test Strategy & Spec Coverage (TDD)
 
@@ -281,23 +295,26 @@ Set `streaming=False` in server configuration.
 
 | Acceptance Criterion | Test ID |
 |---------------------|---------|
-| Tokens arrive within 100ms | `test_streaming_latency` |
-| Non-streaming clients work | `test_non_streaming_fallback` |
-| Streaming disabled config | `test_streaming_disabled_config` |
+| Tokens arrive as generated | `test_streaming_executor_emits_chunks` |
+| Executor always uses stream | `test_executor_always_uses_stream` |
+| Final event has lastChunk | `test_streaming_executor_final_event_has_last_chunk` |
 | Tool calls resume streaming | `test_streaming_with_tool_calls` |
-| Error handling | `test_streaming_error_handling` |
+| Error handling | `test_streaming_error_emits_failed_status` |
+| Server creates executor | `test_server_creates_executor` |
 
 ### Test Tiers
 
 **Unit Tests** (`tests/a2a/test_streaming.py`):
 - `test_streaming_executor_emits_chunks` — Verify chunks emitted for each `LLM_STREAM_CHUNK`
-- `test_streaming_executor_final_event` — Verify `lastChunk=True` on completion
-- `test_streaming_disabled_uses_run` — Verify fallback to `agent.run()`
+- `test_streaming_executor_final_event_has_last_chunk` — Verify `lastChunk=True` on completion
+- `test_executor_always_uses_stream` — Verify `agent.stream()` always called, not `run()`
+- `test_streaming_with_tool_calls` — Verify streaming across tool call iterations
 - `test_streaming_error_emits_failed_status` — Verify error handling
+- `test_server_creates_executor` — Verify A2AServer creates TylerAgentExecutor
 
-**Integration Tests**:
+**Integration Tests** (future):
 - `test_streaming_e2e_with_mock_agent` — Full flow with mocked Tyler agent
-- `test_streaming_with_tool_calls` — Multi-iteration streaming
+- `test_message_send_aggregates_response` — Verify SDK aggregation for message/send
 
 ### Negative/Edge Cases
 - LLM returns empty response → Emit completion with no chunks
@@ -319,17 +336,19 @@ Set `streaming=False` in server configuration.
 
 ## 12. Milestones / Plan (post-approval)
 
-| Task | DoD | Estimate |
-|------|-----|----------|
-| Add `streaming` param to `A2AServer` | Tests pass, param works | 15 min |
-| Refactor `execute()` to use `agent.stream()` | Chunks emitted, tests pass | 1 hour |
-| Handle tool call iterations | Multi-turn streaming works | 30 min |
-| Add unit tests | All test IDs implemented, CI green | 1 hour |
-| Update docstrings | Docs reflect new behavior | 15 min |
+| Task | DoD | Status |
+|------|-----|--------|
+| Refactor `execute()` to always use `agent.stream()` | Chunks emitted, tests pass | ✅ Complete |
+| Map Tyler events to A2A events | All event types handled | ✅ Complete |
+| Handle tool call iterations | Multi-turn streaming works | ✅ Complete |
+| Add unit tests | All test IDs implemented, CI green | ✅ Complete (6 tests) |
+| Update docstrings | Docs reflect new behavior | ✅ Complete |
+| Simplify design (remove config flag) | Single execution path | ✅ Complete |
 
-**Total estimate**: ~3 hours
+**Implementation complete**: Simplified design with always-streaming executor.
 
 ---
 
-**Approval Gate**: Do not start coding until this TDR is reviewed and approved.
+**Approval Gate**: ~~Do not start coding until this TDR is reviewed and approved.~~  
+**Implementation Status**: Complete. See `tyler/a2a/server.py` and `tests/a2a/test_streaming.py`.
 

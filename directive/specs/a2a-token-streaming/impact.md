@@ -1,17 +1,19 @@
 # Impact Analysis — A2A Token-Level Streaming
 
-## Modules/packages likely touched
-- `packages/tyler/tyler/a2a/server.py` — Primary change: modify `TylerAgentExecutor.execute()` to use `agent.stream()` instead of `agent.run()`
-- `packages/tyler/tyler/a2a/__init__.py` — May need to export new config options
-- `packages/tyler/tests/a2a/` — New/updated tests for streaming behavior
+**Updated**: 2024-12-30 — Simplified design (always stream internally)
 
-## Contracts to update (APIs, events, schemas, migrations)
+## Modules/packages touched
+- `packages/tyler/tyler/a2a/server.py` — Modified `TylerAgentExecutor.execute()` to always use `agent.stream()`. Removed dispatch logic.
+- `packages/tyler/tests/a2a/test_streaming.py` — New tests for streaming behavior (6 tests)
+
+## Contracts updated (APIs, events, schemas, migrations)
 - **A2A Event Contract**: No protocol changes—we're implementing existing A2A spec behavior:
   - `TaskArtifactUpdateEvent` with `append=True` for intermediate chunks
   - `TaskArtifactUpdateEvent` with `lastChunk=True` for final chunk
-- **A2AServer Constructor**: Add optional `streaming: bool = True` parameter
+- **A2AServer Constructor**: No new parameters (simplified design)
+- **Behavioral change**: Executor always streams internally; SDK handles delivery mode
 - **No database migrations**: Feature is stateless
-- **No breaking changes**: Existing non-streaming behavior preserved
+- **No breaking changes**: SDK aggregates events for `message/send` clients automatically
 
 ## Risks
 - **Security**: None identified. Token streaming doesn't expose additional data—same content, different delivery timing.
@@ -28,10 +30,11 @@
   - *Mitigation*: Sequential event emission within each LLM response; new artifact ID per response cycle
 
 ## Observability needs
-- **Logs**: 
-  - DEBUG: Log chunk count and total bytes streamed per task
-  - INFO: Log streaming mode enabled/disabled on server start
-  - ERROR: Log streaming failures with task ID
+- **Logs** (implemented): 
+  - DEBUG: `Starting execution for task {task_id}`
+  - DEBUG: `Execution complete for task {task_id}: {chunk_count} chunks`
+  - INFO: `Completed task {task_id}: {chunk_count} chunks, {total_bytes} bytes`
+  - ERROR: `Execution error for task {task_id}: {error_msg}`
   
 - **Metrics** (future, not required for MVP):
   - `a2a_stream_chunks_total` — Counter of chunks emitted
