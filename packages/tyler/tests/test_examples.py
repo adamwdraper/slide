@@ -21,7 +21,13 @@ EXAMPLES_DIR = Path(__file__).parent.parent / "examples"
 example_files = [f for f in EXAMPLES_DIR.glob("*.py") if f.is_file() and not f.name.startswith("__")]
 
 # Skip these examples in automated tests (if any are problematic or require user interaction)
-SKIP_EXAMPLES = []
+# A2A examples are skipped because they start servers or make network calls
+SKIP_EXAMPLES = [
+    "401_a2a_basic_server.py",  # Starts a server that runs indefinitely
+    "402_a2a_basic_client.py",  # Requires a running A2A server
+    "403_a2a_multi_agent.py",   # Starts multiple servers
+    "a2a_manual_test.py",       # Manual test script
+]
 
 
 def import_module_from_path(path):

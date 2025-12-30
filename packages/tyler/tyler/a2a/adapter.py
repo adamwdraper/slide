@@ -2,13 +2,26 @@
 
 This module adapts A2A agent capabilities to work with Tyler's tool system,
 allowing Tyler agents to delegate tasks to remote A2A agents.
+
+Supports A2A Protocol v0.3.0 including all Part types (TextPart, FilePart, DataPart),
+Artifacts, context-based task grouping, and push notifications.
 """
 
 import re
+import json
 import logging
-from typing import Dict, List, Any, Optional, AsyncGenerator
+from typing import Dict, List, Any, Optional, AsyncGenerator, Union
 
 from .client import A2AClient, HAS_A2A
+from .types import (
+    TextPart,
+    FilePart,
+    DataPart,
+    Artifact,
+    tyler_content_to_parts,
+    parts_to_tyler_content,
+    extract_text_from_parts,
+)
 from ..utils.tool_runner import tool_runner
 
 logger = logging.getLogger(__name__)
@@ -20,6 +33,12 @@ class A2AAdapter:
     This adapter handles the conversion between A2A agent capabilities
     and Tyler's internal tool representation, enabling Tyler agents to
     delegate tasks to remote A2A agents.
+    
+    Supports A2A Protocol v0.3.0 features:
+    - All Part types (TextPart, FilePart, DataPart)
+    - Artifact production and consumption
+    - Context-based task grouping
+    - Push notifications for long-running tasks
     """
     
     def __init__(self, a2a_client: Optional[A2AClient] = None):
@@ -105,13 +124,18 @@ class A2AAdapter:
         # Extract capabilities and description from agent card
         capabilities = getattr(agent_card, 'capabilities', [])
         description = getattr(agent_card, 'description', f'Delegate tasks to {agent_name} agent')
+        protocol_version = getattr(agent_card, 'protocol_version', 'unknown')
+        
+        # Check for push notification support
+        push_config = getattr(agent_card, 'push_notifications', None)
+        supports_push = push_config and getattr(push_config, 'supported', False)
         
         # Enhanced description with capabilities
         if capabilities:
             cap_list = ", ".join(capabilities)
             description = f"{description}. Capabilities: {cap_list}"
         
-        # Create the Tyler tool definition
+        # Create the Tyler tool definition with v0.3.0 features
         tyler_tool = {
             "definition": {
                 "type": "function",
@@ -130,6 +154,22 @@ class A2AAdapter:
                                 "description": "Additional context or constraints for the task (optional)",
                                 "default": ""
                             },
+                            "context_id": {
+                                "type": "string",
+                                "description": "Optional context ID to group related tasks together",
+                                "default": ""
+                            },
+                            "include_files": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "Optional list of file paths to include with the task",
+                                "default": []
+                            },
+                            "include_data": {
+                                "type": "object",
+                                "description": "Optional structured data to include with the task",
+                                "default": {}
+                            },
                             "stream_response": {
                                 "type": "boolean",
                                 "description": "Whether to stream the response as it arrives",
@@ -145,8 +185,13 @@ class A2AAdapter:
                 "source": "a2a",
                 "agent_name": agent_name,
                 "agent_capabilities": capabilities,
+                "protocol_version": protocol_version,
                 "delegation_tool": True,
-                "supports_streaming": True
+                "supports_streaming": True,
+                "supports_push_notifications": supports_push,
+                "supports_files": True,
+                "supports_data": True,
+                "supports_artifacts": True,
             }
         }
         
@@ -185,18 +230,46 @@ class A2AAdapter:
         async def delegate_task(
             task_description: str, 
             context: str = "",
+            context_id: str = "",
+            include_files: List[str] = None,
+            include_data: Dict[str, Any] = None,
             stream_response: bool = False,
             **kwargs
         ):
-            """Delegate a task to the A2A agent."""
+            """Delegate a task to the A2A agent with full v0.3.0 support."""
             try:
-                # Prepare the full task content
+                # Build content parts
+                parts: List[Union[TextPart, FilePart, DataPart]] = []
+                
+                # Add text content
                 full_content = task_description
                 if context:
                     full_content = f"{task_description}\n\nContext: {context}"
+                parts.append(TextPart(text=full_content))
                 
-                # Create task
-                task_id = await self.client.create_task(agent_name, full_content, **kwargs)
+                # Add file parts if specified
+                if include_files:
+                    for file_path in include_files:
+                        try:
+                            file_part = FilePart.from_path(file_path)
+                            parts.append(file_part)
+                            logger.debug(f"Added file part: {file_path}")
+                        except Exception as e:
+                            logger.warning(f"Failed to add file {file_path}: {e}")
+                
+                # Add data part if specified
+                if include_data:
+                    parts.append(DataPart(data=include_data))
+                    logger.debug(f"Added data part with {len(include_data)} keys")
+                
+                # Create task with context_id if provided
+                task_id = await self.client.create_task(
+                    agent_name,
+                    parts,
+                    context_id=context_id if context_id else None,
+                    **kwargs
+                )
+                
                 if not task_id:
                     return f"Failed to create task with agent {agent_name}"
                 
@@ -204,7 +277,7 @@ class A2AAdapter:
                     # Return a streaming response
                     return self._handle_streaming_response(agent_name, task_id, full_content)
                 else:
-                    # Wait for completion and return final result
+                    # Wait for completion and return final result with artifacts
                     return await self._handle_sync_response(agent_name, task_id, full_content)
                 
             except Exception as e:
@@ -218,8 +291,13 @@ class A2AAdapter:
         
         return delegate_task
     
-    async def _handle_sync_response(self, agent_name: str, task_id: str, task_content: str) -> str:
-        """Handle synchronous task completion.
+    async def _handle_sync_response(
+        self,
+        agent_name: str,
+        task_id: str,
+        task_content: str
+    ) -> str:
+        """Handle synchronous task completion with artifact support.
         
         Args:
             agent_name: Name of the agent
@@ -227,7 +305,7 @@ class A2AAdapter:
             task_content: Original task content
             
         Returns:
-            Final task result
+            Final task result including artifacts
         """
         try:
             # Collect all messages from the task
@@ -235,13 +313,35 @@ class A2AAdapter:
             async for message in self.client.stream_task_messages(agent_name, task_id):
                 messages.append(message["content"])
                 
-                # Check if task is complete (implementation may vary)
+                # Check if task is complete
                 status = await self.client.get_task_status(agent_name, task_id)
-                if status and status.get("status") == "completed":
+                if status and status.get("status") in ["completed", "error", "cancelled"]:
                     break
             
+            # Get artifacts
+            artifacts = await self.client.get_task_artifacts(agent_name, task_id)
+            
+            # Build response
+            response_parts = []
+            
             if messages:
-                return "\n".join(messages)
+                response_parts.append("\n".join(messages))
+            
+            # Include artifact information
+            if artifacts:
+                artifact_info = []
+                for artifact in artifacts:
+                    artifact_info.append(f"- {artifact.name} (ID: {artifact.artifact_id})")
+                    # Extract text content from artifact parts
+                    text_content = extract_text_from_parts(artifact.parts)
+                    if text_content:
+                        artifact_info.append(f"  Content: {text_content[:500]}...")
+                
+                if artifact_info:
+                    response_parts.append("\n\nArtifacts produced:\n" + "\n".join(artifact_info))
+            
+            if response_parts:
+                return "\n".join(response_parts)
             else:
                 return f"Task {task_id} completed but no response received"
                 
@@ -357,3 +457,67 @@ class A2AAdapter:
             ])
         
         return info
+    
+    async def create_task_with_files(
+        self,
+        agent_name: str,
+        task_description: str,
+        files: List[str],
+        context_id: Optional[str] = None,
+    ) -> Optional[str]:
+        """Convenience method to create a task with file attachments.
+        
+        Args:
+            agent_name: Name of the connected agent
+            task_description: Description of the task
+            files: List of file paths to attach
+            context_id: Optional context ID
+            
+        Returns:
+            Task ID if successful, None otherwise
+        """
+        parts: List[Union[TextPart, FilePart, DataPart]] = [
+            TextPart(text=task_description)
+        ]
+        
+        for file_path in files:
+            try:
+                file_part = FilePart.from_path(file_path)
+                parts.append(file_part)
+            except Exception as e:
+                logger.warning(f"Failed to attach file {file_path}: {e}")
+        
+        return await self.client.create_task(
+            agent_name,
+            parts,
+            context_id=context_id,
+        )
+    
+    async def create_task_with_data(
+        self,
+        agent_name: str,
+        task_description: str,
+        data: Dict[str, Any],
+        context_id: Optional[str] = None,
+    ) -> Optional[str]:
+        """Convenience method to create a task with structured data.
+        
+        Args:
+            agent_name: Name of the connected agent
+            task_description: Description of the task
+            data: Structured data to include
+            context_id: Optional context ID
+            
+        Returns:
+            Task ID if successful, None otherwise
+        """
+        parts: List[Union[TextPart, FilePart, DataPart]] = [
+            TextPart(text=task_description),
+            DataPart(data=data),
+        ]
+        
+        return await self.client.create_task(
+            agent_name,
+            parts,
+            context_id=context_id,
+        )

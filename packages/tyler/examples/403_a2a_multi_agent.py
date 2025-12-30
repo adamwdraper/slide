@@ -71,7 +71,7 @@ async def create_research_agent_server(port: int) -> A2AServer:
     }
     
     try:
-        server = A2AServer(tyler_agent=research_agent, agent_card=agent_card)
+        server = A2AServer(agent=research_agent, agent_card=agent_card)
     except ImportError as e:
         if "a2a-sdk" in str(e):
             print("Skipping A2A server creation - a2a-sdk not installed")
@@ -111,7 +111,7 @@ async def create_analysis_agent_server(port: int) -> A2AServer:
     }
     
     try:
-        server = A2AServer(tyler_agent=analysis_agent, agent_card=agent_card)
+        server = A2AServer(agent=analysis_agent, agent_card=agent_card)
     except ImportError as e:
         if "a2a-sdk" in str(e):
             print("Skipping A2A server creation - a2a-sdk not installed")

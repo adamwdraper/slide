@@ -62,30 +62,17 @@ async def main():
     )
     
     # Custom agent card for A2A exposure
+    # Note: Only override basic info - A2AServer auto-generates capabilities from tools
     agent_card_data = {
         "name": "Tyler Research Assistant",
         "version": "1.0.0",
         "description": "Advanced AI research assistant powered by Tyler framework with web search and file processing capabilities",
-        "capabilities": [
-            "research_and_analysis",
-            "web_search",
-            "document_processing", 
-            "technical_explanation",
-            "business_strategy",
-            "trend_analysis"
-        ],
-        "contact": {
-            "name": "Tyler Framework Team",
-            "email": "hello@tyler.ai"
-        },
-        "vendor": "Tyler Framework",
-        "protocol_version": "1.0"
     }
     
     # Create A2A server
     try:
         a2a_server = A2AServer(
-            tyler_agent=tyler_agent,
+            agent=tyler_agent,
             agent_card=agent_card_data
         )
     except ImportError as e:
@@ -94,24 +81,30 @@ async def main():
             return
         raise
     
+    # Get the generated agent card
+    agent_card = a2a_server.get_agent_card()
+    
     logger.info("Starting Tyler A2A server...")
     logger.info("The server will expose the Tyler agent via A2A protocol")
     logger.info("Other agents can connect and delegate tasks to this agent")
     
     print("\n" + "="*60)
-    print("Tyler A2A Server")
+    print("Tyler A2A Server (A2A Protocol v0.3.0)")
     print("="*60)
-    print(f"Agent Name: {agent_card_data['name']}")
-    print(f"Description: {agent_card_data['description']}")
-    print(f"Capabilities: {', '.join(agent_card_data['capabilities'])}")
+    print(f"Agent Name: {agent_card.name}")
+    print(f"Description: {agent_card.description}")
+    print(f"Protocol Version: {agent_card.protocol_version}")
+    print(f"Streaming: {agent_card.capabilities.streaming}")
+    print(f"Push Notifications: {agent_card.capabilities.push_notifications}")
+    print(f"Skills: {[s.name for s in agent_card.skills]}")
     print("\nServer starting on http://localhost:8000")
-    print("Agent card available at: http://localhost:8000/.well-known/agent")
+    print("Agent card available at: http://localhost:8000/.well-known/agent.json")
     print("\nTo connect from another agent:")
     print("  base_url = 'http://localhost:8000'")
     print("\nTo test with the client example:")
     print("  python examples/402_a2a_basic_client.py")
     print("\nPress Ctrl+C to stop the server")
-    print("="*60)
+    print("="*60 + "\n")
     
     try:
         # Start the server (this will block)
