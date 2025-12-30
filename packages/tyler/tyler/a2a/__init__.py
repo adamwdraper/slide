@@ -23,10 +23,6 @@ from .types import (
     TaskState,
     # Artifacts
     Artifact,
-    # Push notifications (kept for backward compatibility)
-    PushNotificationConfig,
-    PushNotificationEvent,
-    PushEventType,
     # Utility functions
     tyler_content_to_parts,
     parts_to_tyler_content,
@@ -65,10 +61,7 @@ __all__ = [
     "TaskState",
     # Artifacts
     "Artifact",
-    # Push notifications
-    "PushNotificationConfig",
-    "PushNotificationEvent",
-    "PushEventType",
+    # Push notifications (uses SDK infrastructure)
     "TylerPushNotificationSender",
     "create_push_notification_sender",
     # Utility functions

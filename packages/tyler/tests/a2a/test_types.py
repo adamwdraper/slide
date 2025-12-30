@@ -26,9 +26,6 @@ from tyler.a2a.types import (
     Artifact,
     PartType,
     TaskState,
-    PushNotificationConfig,
-    PushNotificationEvent,
-    PushEventType,
     tyler_content_to_parts,
     parts_to_tyler_content,
     extract_text_from_parts,
@@ -294,82 +291,6 @@ class TestArtifact:
         
         assert d["append"] is True
         assert d["lastChunk"] is False
-
-
-class TestPushNotificationConfig:
-    """Test cases for PushNotificationConfig."""
-    
-    def test_create_push_config(self):
-        """Test basic push notification config creation."""
-        config = PushNotificationConfig(
-            webhook_url="https://example.com/webhook"
-        )
-        
-        assert config.webhook_url == "https://example.com/webhook"
-        assert len(config.events) > 0  # Has default events
-    
-    def test_push_config_custom_events(self):
-        """Test push config with custom events."""
-        config = PushNotificationConfig(
-            webhook_url="https://example.com/webhook",
-            events=["task.completed"]
-        )
-        
-        assert config.events == ["task.completed"]
-    
-    def test_push_config_with_headers(self):
-        """Test push config with custom headers."""
-        config = PushNotificationConfig(
-            webhook_url="https://example.com/webhook",
-            headers={"Authorization": "Bearer token123"}
-        )
-        
-        assert config.headers["Authorization"] == "Bearer token123"
-
-
-class TestPushNotificationEvent:
-    """Test cases for PushNotificationEvent."""
-    
-    def test_create_event(self):
-        """Test event creation."""
-        event = PushNotificationEvent.create(
-            event_type=PushEventType.TASK_COMPLETED,
-            task_id="task-123",
-            data={"status": "completed"}
-        )
-        
-        assert event.event_type == "task.completed"
-        assert event.task_id == "task-123"
-        assert event.event_id  # Should be auto-generated
-        assert isinstance(event.timestamp, datetime)
-    
-    def test_event_with_context_id(self):
-        """Test event with context ID (AC-8)."""
-        event = PushNotificationEvent.create(
-            event_type=PushEventType.TASK_CREATED,
-            task_id="task-123",
-            data={"status": "created"},
-            context_id="context-abc"
-        )
-        
-        assert event.context_id == "context-abc"
-    
-    def test_event_to_dict(self):
-        """Test event serialization to dict."""
-        event = PushNotificationEvent.create(
-            event_type=PushEventType.TASK_UPDATED,
-            task_id="task-123",
-            data={"status": "running"},
-            context_id="ctx-1"
-        )
-        
-        d = event.to_dict()
-        
-        assert d["event_type"] == "task.updated"
-        assert d["task_id"] == "task-123"
-        assert d["context_id"] == "ctx-1"
-        assert "timestamp" in d
-        assert "event_id" in d
 
 
 class TestTypeConversion:

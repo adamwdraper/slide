@@ -13,12 +13,6 @@ import hashlib
 import hmac
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from tyler.a2a.types import (
-    PushNotificationConfig,
-    PushNotificationEvent,
-    PushEventType,
-)
-
 
 # Mock SDK types for testing
 class MockTask:
@@ -235,76 +229,3 @@ class TestCreatePushNotificationSender:
             
         except ImportError:
             pytest.skip("a2a-sdk not installed")
-
-
-class TestLegacyPushTypes:
-    """Test cases for legacy push notification types (backward compatibility)."""
-    
-    def test_push_notification_config_creation(self):
-        """Test PushNotificationConfig can still be created."""
-        config = PushNotificationConfig(
-            webhook_url="https://example.com/webhook",
-            events=["task.created", "task.completed"],
-            secret="my-secret",
-        )
-        
-        assert config.webhook_url == "https://example.com/webhook"
-        assert "task.created" in config.events
-        assert config.secret == "my-secret"
-    
-    def test_push_notification_event_creation(self):
-        """Test PushNotificationEvent can still be created."""
-        event = PushNotificationEvent.create(
-            event_type=PushEventType.TASK_CREATED,
-            task_id="task-123",
-            data={"status": "created"},
-            context_id="ctx-456",
-        )
-        
-        assert event.event_type == "task.created"
-        assert event.task_id == "task-123"
-        assert event.context_id == "ctx-456"
-    
-    def test_push_event_type_enum(self):
-        """Test PushEventType enum values."""
-        assert PushEventType.TASK_CREATED.value == "task.created"
-        assert PushEventType.TASK_UPDATED.value == "task.updated"
-        assert PushEventType.TASK_COMPLETED.value == "task.completed"
-        assert PushEventType.TASK_FAILED.value == "task.failed"
-        assert PushEventType.ARTIFACT_PRODUCED.value == "task.artifact"
-    
-    def test_event_to_dict(self):
-        """Test event serialization."""
-        event = PushNotificationEvent.create(
-            event_type=PushEventType.TASK_COMPLETED,
-            task_id="task-123",
-            data={"result": "success"},
-        )
-        
-        d = event.to_dict()
-        
-        assert "event_id" in d
-        assert d["event_type"] == "task.completed"
-        assert d["task_id"] == "task-123"
-        assert "timestamp" in d
-        assert d["data"]["result"] == "success"
-    
-    def test_event_json_serializable(self):
-        """Test that event dict is JSON serializable."""
-        event = PushNotificationEvent.create(
-            event_type=PushEventType.TASK_UPDATED,
-            task_id="task-123",
-            data={"status": "running"},
-            context_id="ctx-789",
-        )
-        
-        d = event.to_dict()
-        
-        # Should not raise
-        json_str = json.dumps(d)
-        assert json_str
-        
-        # Should round-trip
-        parsed = json.loads(json_str)
-        assert parsed["task_id"] == "task-123"
-        assert parsed["context_id"] == "ctx-789"

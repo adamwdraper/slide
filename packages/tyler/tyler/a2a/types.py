@@ -52,15 +52,6 @@ class PartType(Enum):
     DATA = "data"
 
 
-class PushEventType(Enum):
-    """Enumeration of push notification event types."""
-    TASK_CREATED = "task.created"
-    TASK_UPDATED = "task.updated"
-    TASK_COMPLETED = "task.completed"
-    TASK_FAILED = "task.failed"
-    ARTIFACT_PRODUCED = "task.artifact"
-
-
 @dataclass
 class FilePart:
     """Represents a file part in an A2A message.
@@ -260,77 +251,6 @@ class TextPart:
         text: The text content
     """
     text: str
-
-
-@dataclass
-class PushNotificationConfig:
-    """Configuration for push notifications on task updates.
-    
-    Attributes:
-        webhook_url: URL to POST notifications to (must be HTTPS)
-        events: List of event types to subscribe to
-        headers: Optional custom headers to include in webhook requests
-        secret: Optional secret for HMAC signing of webhook payloads
-    """
-    webhook_url: str
-    events: List[str] = field(default_factory=lambda: [
-        PushEventType.TASK_CREATED.value,
-        PushEventType.TASK_UPDATED.value,
-        PushEventType.TASK_COMPLETED.value,
-    ])
-    headers: Optional[Dict[str, str]] = None
-    secret: Optional[str] = None
-
-
-@dataclass
-class PushNotificationEvent:
-    """A push notification event to be sent to a webhook.
-    
-    Attributes:
-        event_id: Unique identifier for this event
-        event_type: Type of event (from PushEventType)
-        task_id: ID of the task this event relates to
-        context_id: Optional context ID grouping related tasks
-        timestamp: When the event occurred
-        data: Event-specific payload data
-    """
-    event_id: str
-    event_type: str
-    task_id: str
-    timestamp: datetime
-    data: Dict[str, Any]
-    context_id: Optional[str] = None
-    
-    @classmethod
-    def create(
-        cls,
-        event_type: PushEventType,
-        task_id: str,
-        data: Dict[str, Any],
-        context_id: Optional[str] = None
-    ) -> "PushNotificationEvent":
-        """Create a new push notification event."""
-        return cls(
-            event_id=str(uuid.uuid4()),
-            event_type=event_type.value,
-            task_id=task_id,
-            timestamp=datetime.now(timezone.utc),
-            data=data,
-            context_id=context_id
-        )
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert event to dictionary for JSON serialization."""
-        result = {
-            "event_id": self.event_id,
-            "event_type": self.event_type,
-            "task_id": self.task_id,
-            "timestamp": self.timestamp.isoformat(),
-            "data": self.data,
-        }
-        if self.context_id:
-            result["context_id"] = self.context_id
-        return result
 
 
 # Type conversion utilities

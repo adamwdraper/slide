@@ -18,7 +18,6 @@ from .types import (
     FilePart,
     DataPart,
     Artifact,
-    PushNotificationConfig,
     tyler_content_to_parts,
     parts_to_tyler_content,
     extract_text_from_parts,

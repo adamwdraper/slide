@@ -50,12 +50,17 @@ from .types import (
     FilePart as TylerFilePart,
     DataPart as TylerDataPart,
     Artifact,
-    PushNotificationConfig,
     to_a2a_part,
     from_a2a_part,
     from_a2a_artifact,
     tyler_content_to_parts,
 )
+
+# Import SDK's PushNotificationConfig for type hints
+try:
+    from a2a.types import PushNotificationConfig
+except ImportError:
+    PushNotificationConfig = None
 
 logger = logging.getLogger(__name__)
 
