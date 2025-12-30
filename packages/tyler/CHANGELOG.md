@@ -1,8 +1,9 @@
-## [tyler-v5.4.0] - 2025-12-30
+## [tyler-v5.5.0] - 2025-12-30
 
 ### 🚀 Features
 
 - *(a2a)* [**breaking**] Add full A2A Protocol v0.3.0 support
+- *(a2a)* Add real-time token streaming support
 
 ### 🐛 Bug Fixes
 
@@ -15,6 +16,9 @@
 - Address PR review comments
 - *(tests)* Skip A2A examples in CI to prevent hangs
 - *(security)* Avoid DNS resolution in webhook URL validation
+- *(a2a)* Send initial artifact with append=False before streaming chunks
+- *(a2a)* Use append=True for final artifact to preserve content
+- *(a2a)* Address code review feedback
 
 ### 🚜 Refactor
 
@@ -22,10 +26,16 @@
 - Remove custom URL validation, trust SDK/httpx
 - Remove unused push notification types
 - Rename A2AServer param from tyler_agent to agent
+- *(a2a)* Simplify executor to always stream internally
 
 ### 📚 Documentation
 
 - *(a2a)* Update documentation for v0.3.0 SDK field names
+
+### ⚙️ Miscellaneous Tasks
+
+- Remove broken test-examples.yml workflow
+- Remove empty leftover test files
 ## [tyler-v5.3.0] - 2025-12-04
 
 ### 🚀 Features
