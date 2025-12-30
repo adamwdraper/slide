@@ -5,6 +5,23 @@ description: 'Build reliable agents with comprehensive testing'
 
 Testing is crucial for building reliable AI agents. Slide's evaluation framework lets you test agent behavior, verify tool usage, and ensure consistent responses across different scenarios.
 
+<CardGroup cols={2}>
+  <Card
+    title="Evaluation Example"
+    icon="vial"
+    href="https://github.com/adamwdraper/slide/blob/main/packages/tyler/examples/500_eval_example.py"
+  >
+    Basic agent evaluation setup
+  </Card>
+  <Card
+    title="Mock Testing"
+    icon="masks-theater"
+    href="https://github.com/adamwdraper/slide/blob/main/packages/tyler/examples/501_eval_mock_example.py"
+  >
+    Test with mocked tool responses
+  </Card>
+</CardGroup>
+
 ## Why Test Agents?
 
 AI agents are non-deterministic, making testing challenging but essential:
@@ -421,9 +438,8 @@ jobs:
     
     - name: Install dependencies
       run: |
-        pip install uv
-        uv pip install --system slide-tyler slide-lye
-        uv pip install --system pytest pytest-asyncio
+        curl -LsSf https://astral.sh/uv/install.sh | sh
+        uv sync --dev
     
     - name: Run agent tests
       env:
@@ -628,19 +644,5 @@ asyncio.run(main())
     href="/guides/cicd"
   >
     Automate agent testing
-  </Card>
-  <Card
-    title="Mock Tools"
-    icon="masks-theater"
-    href="/guides/mock-tools"
-  >
-    Advanced mocking strategies
-  </Card>
-  <Card
-    title="Performance Testing"
-    icon="gauge"
-    href="/guides/performance"
-  >
-    Test agent performance
   </Card>
 </CardGroup> 

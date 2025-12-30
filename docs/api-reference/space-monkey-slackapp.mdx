@@ -201,9 +201,13 @@ SlackApp is designed for easy containerization:
 ```dockerfile
 FROM python:3.13-slim
 WORKDIR /app
+
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
 COPY . .
-RUN pip install slide-space-monkey
-CMD ["python", "your_bot.py"]
+RUN uv sync --frozen
+CMD ["uv", "run", "your_bot.py"]
 ```
 
 See the [Slack Agent Guide](/apps/slack-agent) for complete deployment instructions.

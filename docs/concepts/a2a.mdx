@@ -15,6 +15,30 @@ The Agent-to-Agent (A2A) Protocol is an open standard that enables AI agents fro
 - Receive real-time updates via push notifications
 - Enable seamless interoperability between different agent frameworks
 
+<CardGroup cols={3}>
+  <Card
+    title="A2A Server"
+    icon="server"
+    href="https://github.com/adamwdraper/slide/blob/main/packages/tyler/examples/401_a2a_basic_server.py"
+  >
+    Expose a Tyler agent via A2A
+  </Card>
+  <Card
+    title="A2A Client"
+    icon="plug"
+    href="https://github.com/adamwdraper/slide/blob/main/packages/tyler/examples/402_a2a_basic_client.py"
+  >
+    Connect to remote A2A agents
+  </Card>
+  <Card
+    title="Multi-Agent"
+    icon="network-wired"
+    href="https://github.com/adamwdraper/slide/blob/main/packages/tyler/examples/403_a2a_multi_agent.py"
+  >
+    Coordinate multiple A2A agents
+  </Card>
+</CardGroup>
+
 ## A2A Architecture in Slide
 
 ```mermaid
@@ -444,7 +468,7 @@ await server.start_server(
 
 ```bash
 # Install Tyler (includes A2A support)
-pip install slide-tyler
+uv add slide-tyler
 
 # A2A SDK is included as a dependency
 ```
