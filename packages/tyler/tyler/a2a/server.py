@@ -106,6 +106,7 @@ from .types import (
     from_a2a_part,
 )
 from .notifications import TylerPushNotificationSender
+from ..models.execution import EventType
 
 logger = logging.getLogger(__name__)
 
@@ -140,8 +141,12 @@ class TylerTaskExecution:
 class TylerAgentExecutor(AgentExecutor):
     """A2A AgentExecutor that wraps a Tyler agent.
     
-    This executor focuses on task execution only. Push notifications
-    are handled by the SDK's infrastructure (DefaultRequestHandler + PushNotificationSender).
+    This executor uses Tyler's streaming internally for all requests.
+    The A2A SDK handles delivery based on the client's request type:
+    - message/send: SDK aggregates events into a single response
+    - message/stream: SDK streams events via SSE in real-time
+    
+    See: https://a2a-protocol.org/latest/tutorials/python/4-agent-executor/
     """
     
     def __init__(self, agent):
@@ -156,13 +161,13 @@ class TylerAgentExecutor(AgentExecutor):
     async def execute(self, context: RequestContext, event_queue: EventQueue) -> None:
         """Execute a task using the Tyler agent.
         
-        The SDK handles:
-        - Task state management (via TaskStore)
-        - Push notifications (via PushNotificationSender)
+        Always uses Tyler's streaming internally. The A2A SDK's
+        DefaultRequestHandler handles delivery based on whether the
+        client called message/send or message/stream.
         
-        We just need to:
-        - Run the Tyler agent
-        - Emit status updates and artifacts via the event queue
+        Emits TaskArtifactUpdateEvent for each token chunk, allowing
+        real-time streaming for message/stream clients while the SDK
+        aggregates events for message/send clients.
         
         Args:
             context: The request context with task information
@@ -193,7 +198,7 @@ class TylerAgentExecutor(AgentExecutor):
             )
             self._active_executions[task_id] = execution
             
-            # Send working status (SDK will forward to push notification if configured)
+            # Send working status
             await event_queue.enqueue_event(TaskStatusUpdateEvent(
                 taskId=task_id,
                 contextId=context_id or task_id,
@@ -201,38 +206,105 @@ class TylerAgentExecutor(AgentExecutor):
                 final=False,
             ))
             
-            # Execute Tyler agent
-            result = await self.agent.run(tyler_thread)
-            
-            # Get new messages from AgentResult
-            new_messages = result.new_messages or []
-            
-            # Collect response
-            response_parts = []
-            for msg in new_messages:
-                if hasattr(msg, 'content') and msg.content:
-                    response_parts.append(msg.content)
-            
-            response_text = "\n".join(response_parts) if response_parts else "Task completed."
-            
-            # Create artifact
+            # Execute with streaming - SDK handles delivery mode
             artifact_id = str(uuid.uuid4())
-            artifact = A2AArtifact(
-                artifactId=artifact_id,
-                name=f"Task {task_id[:8]} Result",
-                parts=[Part(root=TextPart(text=response_text))],
-                description="Tyler agent response",
-            )
+            content_buffer = []
+            chunk_count = 0
+            artifact_initialized = False
             
-            # Send artifact event (SDK will forward to push notification if configured)
-            await event_queue.enqueue_event(TaskArtifactUpdateEvent(
-                taskId=task_id,
-                contextId=context_id or task_id,
-                artifact=artifact,
-                lastChunk=True,
-            ))
+            logger.debug(f"Starting execution for task {task_id}")
             
-            # Send completion status (SDK will forward to push notification if configured)
+            async for event in self.agent.stream(tyler_thread):
+                if event.type == EventType.LLM_STREAM_CHUNK:
+                    # Emit token chunk as artifact update
+                    chunk = event.data.get("content_chunk", "")
+                    if chunk:
+                        content_buffer.append(chunk)
+                        chunk_count += 1
+                        
+                        # First chunk creates the artifact (append=False)
+                        # Subsequent chunks append to it (append=True)
+                        is_first_chunk = not artifact_initialized
+                        if is_first_chunk:
+                            artifact_initialized = True
+                        
+                        await event_queue.enqueue_event(TaskArtifactUpdateEvent(
+                            taskId=task_id,
+                            contextId=context_id or task_id,
+                            artifact=A2AArtifact(
+                                artifactId=artifact_id,
+                                name=f"Task {task_id[:8]} Result",
+                                parts=[Part(root=TextPart(text=chunk))],
+                                description="Tyler agent response",
+                            ),
+                            append=not is_first_chunk,  # False for first, True for rest
+                            lastChunk=False,
+                        ))
+                        
+                elif event.type == EventType.EXECUTION_ERROR:
+                    # Handle error during execution
+                    error_msg = event.data.get("message", "Unknown error")
+                    logger.error(f"Execution error for task {task_id}: {error_msg}")
+                    
+                    await event_queue.enqueue_event(TaskStatusUpdateEvent(
+                        taskId=task_id,
+                        contextId=context_id or task_id,
+                        status=TaskStatus(
+                            state=TaskState.failed,
+                            message=Message(
+                                messageId=str(uuid.uuid4()),
+                                role=Role.agent,
+                                parts=[Part(root=TextPart(text=f"Task failed: {error_msg}"))],
+                                contextId=context_id,
+                            ),
+                        ),
+                        final=True,
+                    ))
+                    
+                    execution.status = "error"
+                    # Clean up execution record to prevent memory leak
+                    del self._active_executions[task_id]
+                    return
+                    
+                elif event.type == EventType.EXECUTION_COMPLETE:
+                    # Execution complete
+                    logger.debug(f"Execution complete for task {task_id}: {chunk_count} chunks")
+                    break
+            
+            # Send final artifact event with lastChunk=True
+            # Only send if no chunks were streamed (to create an artifact with completion message)
+            # or to mark the end of the stream for clients
+            if not artifact_initialized:
+                # No chunks were sent - create a single artifact with completion message
+                await event_queue.enqueue_event(TaskArtifactUpdateEvent(
+                    taskId=task_id,
+                    contextId=context_id or task_id,
+                    artifact=A2AArtifact(
+                        artifactId=artifact_id,
+                        name=f"Task {task_id[:8]} Result",
+                        parts=[Part(root=TextPart(text="Task completed."))],
+                        description="Tyler agent response",
+                    ),
+                    append=False,
+                    lastChunk=True,
+                ))
+            else:
+                # Chunks were streamed - send empty final event to signal completion
+                # The lastChunk=True flag tells clients the stream has ended
+                await event_queue.enqueue_event(TaskArtifactUpdateEvent(
+                    taskId=task_id,
+                    contextId=context_id or task_id,
+                    artifact=A2AArtifact(
+                        artifactId=artifact_id,
+                        name=f"Task {task_id[:8]} Result",
+                        parts=[],  # Empty - content already streamed
+                        description="Tyler agent response",
+                    ),
+                    append=True,
+                    lastChunk=True,
+                ))
+            
+            # Send completion status
             await event_queue.enqueue_event(TaskStatusUpdateEvent(
                 taskId=task_id,
                 contextId=context_id or task_id,
@@ -240,12 +312,14 @@ class TylerAgentExecutor(AgentExecutor):
                 final=True,
             ))
             
-            # Update execution record
+            # Update execution record and clean up to prevent memory leak
             execution.status = "completed"
-            execution.result_messages = response_parts
+            execution.result_messages = content_buffer
             execution.updated_at = datetime.now(timezone.utc)
+            del self._active_executions[task_id]
             
-            logger.info(f"Completed Tyler task {task_id}")
+            total_bytes = sum(len(c) for c in content_buffer)
+            logger.info(f"Completed task {task_id}: {chunk_count} chunks, {total_bytes} bytes")
             
         except Exception as e:
             import traceback
@@ -269,6 +343,7 @@ class TylerAgentExecutor(AgentExecutor):
             
             if task_id in self._active_executions:
                 self._active_executions[task_id].status = "error"
+                del self._active_executions[task_id]
     
     async def cancel(self, context: RequestContext, event_queue: EventQueue) -> None:
         """Cancel a running task.
@@ -336,6 +411,13 @@ class A2AServer:
     """Server to expose Tyler agents via A2A protocol v0.3.0.
     
     Uses the SDK's built-in infrastructure for task and notification management.
+    
+    Always uses streaming internally. The A2A SDK handles delivery based on
+    the client's request type:
+    - message/send: SDK aggregates events into a single response
+    - message/stream: SDK streams events via SSE in real-time
+    
+    See: https://a2a-protocol.org/latest/tutorials/python/4-agent-executor/
     """
     
     def __init__(
@@ -364,7 +446,7 @@ class A2AServer:
         self._push_signing_secret = push_signing_secret
         self._agent_card = self._create_agent_card(agent, agent_card)
         
-        # Create executor (no longer manages push notifications directly)
+        # Create executor
         self._executor = TylerAgentExecutor(agent)
         
         # SDK infrastructure
@@ -376,6 +458,8 @@ class A2AServer:
         self._http_client: Optional[httpx.AsyncClient] = None
         self._push_sender: Optional[TylerPushNotificationSender] = None
         self._app: Optional[FastAPI] = None
+        
+        logger.info(f"A2A server initialized for agent '{getattr(agent, 'name', 'Tyler Agent')}'")
         
     def _create_agent_card(
         self,
