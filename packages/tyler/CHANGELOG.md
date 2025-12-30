@@ -1,3 +1,31 @@
+## [tyler-v5.4.0] - 2025-12-30
+
+### 🚀 Features
+
+- *(a2a)* [**breaking**] Add full A2A Protocol v0.3.0 support
+
+### 🐛 Bug Fixes
+
+- *(a2a)* Align field names with A2A Protocol v0.3.0 spec
+- *(a2a)* Fix test_close_handler test assertion
+- *(a2a)* Correct SDK type conversions to match v0.3.0 spec
+- *(a2a)* [**breaking**] Update server to use a2a-sdk v0.3.0 API
+- *(a2a)* Update example to use new SDK API
+- *(a2a)* Await async enqueue_event calls and use agent.run() API
+- Address PR review comments
+- *(tests)* Skip A2A examples in CI to prevent hangs
+- *(security)* Avoid DNS resolution in webhook URL validation
+
+### 🚜 Refactor
+
+- *(a2a)* Integrate with SDK push notification infrastructure
+- Remove custom URL validation, trust SDK/httpx
+- Remove unused push notification types
+- Rename A2AServer param from tyler_agent to agent
+
+### 📚 Documentation
+
+- *(a2a)* Update documentation for v0.3.0 SDK field names
 ## [tyler-v5.3.0] - 2025-12-04
 
 ### 🚀 Features
