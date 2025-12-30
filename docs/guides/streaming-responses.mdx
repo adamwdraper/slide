@@ -5,6 +5,32 @@ description: 'Build real-time interactive agents with streaming'
 
 Streaming responses enable your agents to provide real-time feedback, making interactions feel more natural and responsive. Instead of waiting for the entire response, users see content as it's generated.
 
+**💻 Code Examples**
+
+<CardGroup cols={3}>
+  <Card
+    title="Event Streaming"
+    icon="bolt"
+    href="https://github.com/adamwdraper/slide/blob/main/packages/tyler/examples/004_streaming.py"
+  >
+    Stream events with tool tracking
+  </Card>
+  <Card
+    title="Raw Streaming"
+    icon="wave-square"
+    href="https://github.com/adamwdraper/slide/blob/main/packages/tyler/examples/005_raw_streaming.py"
+  >
+    OpenAI-compatible raw chunks
+  </Card>
+  <Card
+    title="Thinking Tokens"
+    icon="brain"
+    href="https://github.com/adamwdraper/slide/blob/main/packages/tyler/examples/006_thinking_tokens.py"
+  >
+    Stream reasoning content
+  </Card>
+</CardGroup>
+
 ## Why Use Streaming?
 
 Traditional (non-streaming) approach:
@@ -830,13 +856,6 @@ asyncio.run(main())
 
 <CardGroup cols={2}>
   <Card
-    title="Web Applications"
-    icon="globe"
-    href="/examples/web-streaming"
-  >
-    Build web apps with streaming
-  </Card>
-  <Card
     title="Slack Integration"
     icon="slack"
     href="/apps/slack-agent"
@@ -849,12 +868,5 @@ asyncio.run(main())
     href="/guides/patterns"
   >
     Complex streaming patterns
-  </Card>
-  <Card
-    title="Performance"
-    icon="gauge"
-    href="/guides/performance"
-  >
-    Optimize streaming performance
   </Card>
 </CardGroup> 

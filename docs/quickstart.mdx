@@ -5,6 +5,32 @@ description: 'Build your first AI agent in 5 minutes'
 
 In this quickstart, you'll build an AI agent that can search the web and analyze images. Let's dive in!
 
+**💻 Code Examples**
+
+<CardGroup cols={3}>
+  <Card
+    title="Quickstart Code"
+    icon="rocket"
+    href="https://github.com/adamwdraper/slide/blob/main/packages/tyler/examples/003_docs_quickstart.py"
+  >
+    Complete quickstart example
+  </Card>
+  <Card
+    title="Basic Agent"
+    icon="robot"
+    href="https://github.com/adamwdraper/slide/blob/main/packages/tyler/examples/002_basic.py"
+  >
+    Minimal agent setup
+  </Card>
+  <Card
+    title="Introduction"
+    icon="book-open"
+    href="https://github.com/adamwdraper/slide/blob/main/packages/tyler/examples/001_docs_introduction.py"
+  >
+    Agent fundamentals
+  </Card>
+</CardGroup>
+
 <Note>
   **Requirements:** Python 3.11 or higher
 </Note>
@@ -217,15 +243,15 @@ Now that you have a working agent, explore these guides to add more capabilities
     uv sync
     ```
     
-    **For pip users:**
+    **For pip users:** We recommend switching to uv for better dependency management:
     ```bash
-    # Make sure you're using Python 3.11+
-    python --version  # Should show 3.11 or higher
+    # Install uv
+    curl -LsSf https://astral.sh/uv/install.sh | sh
     
-    # If not, create a new venv with Python 3.11+:
-    python3.11 -m venv venv
-    source venv/bin/activate
-    pip install slide-tyler slide-lye slide-narrator
+    # Recreate your project with uv
+    uv init my-agent
+    cd my-agent
+    uv add slide-tyler slide-lye slide-narrator
     ```
   </Accordion>
 
