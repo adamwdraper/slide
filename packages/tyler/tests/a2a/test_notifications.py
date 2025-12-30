@@ -242,12 +242,11 @@ class TestLegacyPushTypes:
     
     def test_push_notification_config_creation(self):
         """Test PushNotificationConfig can still be created."""
-        with patch('tyler.a2a.types.validate_webhook_url', return_value=True):
-            config = PushNotificationConfig(
-                webhook_url="https://example.com/webhook",
-                events=["task.created", "task.completed"],
-                secret="my-secret",
-            )
+        config = PushNotificationConfig(
+            webhook_url="https://example.com/webhook",
+            events=["task.created", "task.completed"],
+            secret="my-secret",
+        )
         
         assert config.webhook_url == "https://example.com/webhook"
         assert "task.created" in config.events

@@ -13,7 +13,6 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 from urllib.parse import urlparse
-import ipaddress
 
 try:
     from a2a.types import (
@@ -281,10 +280,6 @@ class PushNotificationConfig:
     ])
     headers: Optional[Dict[str, str]] = None
     secret: Optional[str] = None
-    
-    def __post_init__(self):
-        if not validate_webhook_url(self.webhook_url):
-            raise ValueError(f"Invalid webhook URL: {self.webhook_url}")
 
 
 @dataclass
@@ -336,66 +331,6 @@ class PushNotificationEvent:
         if self.context_id:
             result["context_id"] = self.context_id
         return result
-
-
-def validate_webhook_url(url: str) -> bool:
-    """Validate a webhook URL for security.
-    
-    Ensures the URL uses HTTPS and doesn't point to private IP ranges.
-    
-    Args:
-        url: The URL to validate
-        
-    Returns:
-        True if the URL is valid and safe, False otherwise
-    """
-    try:
-        parsed = urlparse(url)
-        
-        # Must be HTTPS
-        if parsed.scheme not in ALLOWED_URI_SCHEMES:
-            logger.warning(f"Webhook URL must use HTTPS: {url}")
-            return False
-        
-        # Must have a hostname
-        if not parsed.hostname:
-            logger.warning(f"Webhook URL missing hostname: {url}")
-            return False
-        
-        # Check for private IP ranges when the hostname is a literal IP.
-        # Avoid DNS resolution here to prevent blocking and TOCTOU issues.
-        # DNS-based SSRF protection should be handled at the HTTP client level.
-        try:
-            ip_obj = ipaddress.ip_address(parsed.hostname)
-            if ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_reserved:
-                logger.error(
-                    f"SSRF attempt blocked - private IP detected in webhook URL: {url}"
-                )
-                return False
-        except ValueError:
-            # Hostname is not a literal IP address; skip IP-range checks here.
-            # The actual HTTP client should handle DNS-level SSRF protection.
-            pass
-        
-        return True
-        
-    except Exception as e:
-        logger.warning(f"Error validating webhook URL '{url}': {e}")
-        return False
-
-
-def validate_file_uri(uri: str) -> bool:
-    """Validate a file URI for security.
-    
-    Similar to webhook URL validation - ensures HTTPS and no private IPs.
-    
-    Args:
-        uri: The URI to validate
-        
-    Returns:
-        True if the URI is valid and safe, False otherwise
-    """
-    return validate_webhook_url(uri)
 
 
 # Type conversion utilities

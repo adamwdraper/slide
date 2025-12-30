@@ -29,8 +29,6 @@ from tyler.a2a.types import (
     PushNotificationConfig,
     PushNotificationEvent,
     PushEventType,
-    validate_webhook_url,
-    validate_file_uri,
     tyler_content_to_parts,
     parts_to_tyler_content,
     extract_text_from_parts,
@@ -303,43 +301,30 @@ class TestPushNotificationConfig:
     
     def test_create_push_config(self):
         """Test basic push notification config creation."""
-        with patch('tyler.a2a.types.validate_webhook_url', return_value=True):
-            config = PushNotificationConfig(
-                webhook_url="https://example.com/webhook"
-            )
+        config = PushNotificationConfig(
+            webhook_url="https://example.com/webhook"
+        )
         
         assert config.webhook_url == "https://example.com/webhook"
         assert len(config.events) > 0  # Has default events
     
     def test_push_config_custom_events(self):
         """Test push config with custom events."""
-        with patch('tyler.a2a.types.validate_webhook_url', return_value=True):
-            config = PushNotificationConfig(
-                webhook_url="https://example.com/webhook",
-                events=["task.completed"]
-            )
+        config = PushNotificationConfig(
+            webhook_url="https://example.com/webhook",
+            events=["task.completed"]
+        )
         
         assert config.events == ["task.completed"]
     
     def test_push_config_with_headers(self):
         """Test push config with custom headers."""
-        with patch('tyler.a2a.types.validate_webhook_url', return_value=True):
-            config = PushNotificationConfig(
-                webhook_url="https://example.com/webhook",
-                headers={"Authorization": "Bearer token123"}
-            )
+        config = PushNotificationConfig(
+            webhook_url="https://example.com/webhook",
+            headers={"Authorization": "Bearer token123"}
+        )
         
         assert config.headers["Authorization"] == "Bearer token123"
-    
-    def test_push_config_invalid_url_http(self):
-        """Test push config rejects HTTP URLs."""
-        with pytest.raises(ValueError, match="Invalid webhook URL"):
-            PushNotificationConfig(webhook_url="http://example.com/webhook")
-    
-    def test_push_config_invalid_url_private_ip(self):
-        """Test push config rejects literal private IP addresses."""
-        with pytest.raises(ValueError, match="Invalid webhook URL"):
-            PushNotificationConfig(webhook_url="https://192.168.1.1/webhook")
 
 
 class TestPushNotificationEvent:
@@ -385,42 +370,6 @@ class TestPushNotificationEvent:
         assert d["context_id"] == "ctx-1"
         assert "timestamp" in d
         assert "event_id" in d
-
-
-class TestURLValidation:
-    """Test cases for URL validation (SSRF prevention)."""
-    
-    def test_valid_https_url(self):
-        """Test valid HTTPS URL passes validation."""
-        assert validate_webhook_url("https://example.com/webhook") is True
-    
-    def test_invalid_http_url(self):
-        """Test HTTP URL fails validation."""
-        assert validate_webhook_url("http://example.com/webhook") is False
-    
-    def test_invalid_no_scheme(self):
-        """Test URL without scheme fails validation."""
-        assert validate_webhook_url("example.com/webhook") is False
-    
-    def test_invalid_private_ip(self):
-        """Test literal private IP fails validation."""
-        # Literal private IPs are blocked
-        assert validate_webhook_url("https://10.0.0.1/webhook") is False
-        assert validate_webhook_url("https://192.168.1.1/webhook") is False
-        assert validate_webhook_url("https://172.16.0.1/webhook") is False
-    
-    def test_invalid_loopback(self):
-        """Test literal loopback address fails validation."""
-        # Literal loopback IPs are blocked
-        assert validate_webhook_url("https://127.0.0.1/webhook") is False
-        # Note: hostnames like "localhost" are NOT blocked here - DNS-level
-        # SSRF protection should be handled at the HTTP client level
-        assert validate_webhook_url("https://localhost/webhook") is True
-    
-    def test_file_uri_validation(self):
-        """Test file URI validation uses same rules."""
-        assert validate_file_uri("https://cdn.example.com/file.pdf") is True
-        assert validate_file_uri("http://cdn.example.com/file.pdf") is False
 
 
 class TestTypeConversion:
