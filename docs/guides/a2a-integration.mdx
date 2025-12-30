@@ -225,7 +225,7 @@ task_id = await adapter.create_task_with_files(
 
 # Or create FilePart manually for more control
 file_part = FilePart.from_path("./data/analysis.xlsx")
-print(f"File: {file_part.name}, Size: {len(file_part.data)} bytes")
+print(f"File: {file_part.name}, Size: {len(file_part.file_with_bytes)} bytes")
 ```
 
 ### Sending Structured Data

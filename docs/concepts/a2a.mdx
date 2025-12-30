@@ -127,16 +127,20 @@ from tyler.a2a import TextPart, FilePart, DataPart
 # Text content
 text = TextPart(text="Analyze this document")
 
-# File content (inline)
+# File content (inline with bytes)
 with open("document.pdf", "rb") as f:
     file_data = f.read()
-file_part = FilePart(name="document.pdf", mime_type="application/pdf", data=file_data)
+file_part = FilePart(
+    name="document.pdf", 
+    media_type="application/pdf", 
+    file_with_bytes=file_data
+)
 
-# File content (by URI)
+# File content (by URI reference)
 remote_file = FilePart(
     name="report.xlsx", 
-    mime_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    uri="https://cdn.example.com/files/report.xlsx"
+    media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    file_with_uri="https://cdn.example.com/files/report.xlsx"
 )
 
 # Structured data
