@@ -6,18 +6,19 @@ from pydantic import BaseModel, Field, PrivateAttr
 import json
 import types
 import logging
-from typing import List, Dict, Any, Optional, Union, AsyncGenerator, Tuple, Callable, Awaitable, overload, Literal
+from typing import List, Dict, Any, Optional, Union, AsyncGenerator, Tuple, Callable, Awaitable, overload, Literal, Type
 from datetime import datetime, timezone
 from litellm import acompletion
 
 # Direct imports to avoid circular dependency
 from narrator import Thread, Message, Attachment, ThreadStore, FileStore
 
-from tyler.utils.tool_runner import tool_runner
+from tyler.utils.tool_runner import tool_runner, ToolContext
 from tyler.models.execution import (
     EventType, ExecutionEvent,
-    AgentResult
+    AgentResult, StructuredOutputError, ToolContextError
 )
+from tyler.models.retry_config import RetryConfig
 from tyler.models.tool_manager import ToolManager
 from tyler.models.message_factory import MessageFactory
 from tyler.models.completion_handler import CompletionHandler
@@ -174,6 +175,10 @@ class Agent(BaseModel):
     thread_store: Optional[ThreadStore] = Field(default=None, description="Thread store instance for managing conversation threads", exclude=True)
     file_store: Optional[FileStore] = Field(default=None, description="File store instance for managing file attachments", exclude=True)
     mcp: Optional[Dict[str, Any]] = Field(default=None, description="MCP server configuration. Same structure as YAML config. Call connect_mcp() after creating agent to connect to servers.")
+    retry_config: Optional[RetryConfig] = Field(
+        default=None, 
+        description="Configuration for structured output validation retry. When set, the agent will retry on validation failures up to max_retries times."
+    )
     
     # Helper objects excluded from serialization (recreated on deserialization)
     message_factory: Optional[MessageFactory] = Field(default=None, exclude=True, description="Factory for creating standardized messages (excluded from serialization)")
@@ -186,6 +191,7 @@ class Agent(BaseModel):
     _tool_attributes_cache: Dict[str, Optional[Dict[str, Any]]] = PrivateAttr(default_factory=dict)
     _mcp_connected: bool = PrivateAttr(default=False)
     _mcp_disconnect: Optional[Callable[[], Awaitable[None]]] = PrivateAttr(default=None)
+    _tool_context: Optional[Dict[str, Any]] = PrivateAttr(default=None)
     step_errors_raise: bool = Field(default=False, description="If True, step() will raise exceptions instead of returning an error message tuple for backward compatibility.")
 
     model_config = {
@@ -395,7 +401,7 @@ class Agent(BaseModel):
             dict: Formatted tool result message
         """
         normalized_tool_call = self._normalize_tool_call(tool_call)
-        return await tool_runner.execute_tool_call(normalized_tool_call)
+        return await tool_runner.execute_tool_call(normalized_tool_call, context=self._tool_context)
     
     @weave.op()
     async def _get_completion(self, **completion_params) -> Any:
@@ -618,7 +624,9 @@ class Agent(BaseModel):
     @weave.op()
     async def run(
         self, 
-        thread_or_id: Union[Thread, str]
+        thread_or_id: Union[Thread, str],
+        response_type: Optional[Type[BaseModel]] = None,
+        tool_context: Optional[Dict[str, Any]] = None
     ) -> AgentResult:
         """
         Execute the agent and return the complete result.
@@ -630,32 +638,254 @@ class Agent(BaseModel):
         Args:
             thread_or_id: Thread object or thread ID to process. The thread will be
                          modified in-place with new messages.
+            response_type: Optional Pydantic model class for structured output.
+                          When provided, the agent will instruct the LLM to respond
+                          in JSON matching this schema, and the response will be
+                          validated and returned in result.structured_data.
+            tool_context: Optional dictionary of dependencies to inject into tools.
+                         Tools that have 'ctx' or 'context' as their first parameter
+                         will receive this context. Enables dependency injection for
+                         databases, API clients, user info, etc.
             
         Returns:
             AgentResult containing the updated thread, new messages,
-            final output, and complete execution details.
+            final output, and complete execution details. When response_type
+            is provided, result.structured_data contains the validated Pydantic model.
         
         Raises:
             ValueError: If thread_id is provided but thread is not found
+            StructuredOutputError: If response_type is provided and validation fails
+                                  after all retry attempts
+            ToolContextError: If a tool requires context but tool_context was not provided
             Exception: Re-raises any unhandled exceptions during execution,
                       but execution details are still available in the result
                       
         Example:
+            # Basic usage
             result = await agent.run(thread)
             print(f"Response: {result.content}")
-            print(f"New messages: {len(result.new_messages)}")
+            
+            # With structured output
+            class Invoice(BaseModel):
+                total: float
+                items: list[str]
+            
+            result = await agent.run(thread, response_type=Invoice)
+            invoice = result.structured_data  # Validated Invoice instance
+            
+            # With tool context
+            result = await agent.run(
+                thread, 
+                tool_context={"db": database, "user_id": current_user.id}
+            )
         """
         logging.getLogger(__name__).debug("Agent.run() called (non-streaming mode)")
-        return await self._run_complete(thread_or_id)
+        
+        # Store tool context for use by _handle_tool_execution
+        self._tool_context = tool_context
+        
+        try:
+            if response_type is not None:
+                return await self._run_with_structured_output(thread_or_id, response_type)
+            else:
+                return await self._run_complete(thread_or_id)
+        finally:
+            # Clear tool context after execution
+            self._tool_context = None
     
     # Backwards compatibility alias
     go = run
     
     @weave.op()
+    async def _run_with_structured_output(
+        self,
+        thread_or_id: Union[Thread, str],
+        response_type: Type[BaseModel]
+    ) -> AgentResult:
+        """Run agent expecting structured output matching response_type schema.
+        
+        This method:
+        1. Instructs the LLM to respond in JSON matching the Pydantic schema
+        2. Validates the response against the schema
+        3. Retries on validation failure if retry_config is set
+        4. Returns AgentResult with structured_data populated
+        
+        Args:
+            thread_or_id: Thread object or thread ID to process
+            response_type: Pydantic model class defining the expected output schema
+            
+        Returns:
+            AgentResult with structured_data containing the validated model instance
+            
+        Raises:
+            StructuredOutputError: If validation fails after all retry attempts
+        """
+        from pydantic import ValidationError
+        
+        # Get the thread
+        thread = await self._get_thread(thread_or_id)
+        
+        # Generate JSON schema from Pydantic model
+        schema = response_type.model_json_schema()
+        schema_name = response_type.__name__
+        
+        # Determine max retries
+        max_retries = 0
+        if self.retry_config and self.retry_config.retry_on_validation_error:
+            max_retries = self.retry_config.max_retries
+        
+        retry_count = 0
+        last_validation_errors = []
+        last_response = None
+        
+        # Schema instruction to append to system prompt
+        schema_instruction = f"\n\nYou MUST respond with valid JSON matching this schema:\n```json\n{json.dumps(schema, indent=2)}\n```"
+        
+        while retry_count <= max_retries:
+            # Build messages for completion using thread's method (same as step())
+            thread_messages = await thread.get_messages_for_chat_completion(file_store=self.file_store)
+            
+            # Build system message with schema instruction
+            system_content = self._system_prompt + schema_instruction
+            messages = [{"role": "system", "content": system_content}] + thread_messages
+            
+            # If this is a retry, add correction message
+            if retry_count > 0 and last_validation_errors:
+                correction_msg = (
+                    f"Your previous response did not match the required schema.\n\n"
+                    f"Validation errors:\n{json.dumps(last_validation_errors, indent=2)}\n\n"
+                    f"Please correct your response to match the {schema_name} schema exactly. "
+                    f"Return only valid JSON."
+                )
+                messages.append({"role": "user", "content": correction_msg})
+            
+            # Build completion params
+            completion_params = {
+                "model": self.model_name,
+                "messages": messages,
+                "temperature": self.temperature,
+                "response_format": {
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": schema_name,
+                        "schema": schema,
+                        "strict": True
+                    }
+                }
+            }
+            
+            # Add optional params
+            if self.api_base:
+                completion_params["api_base"] = self.api_base
+            if self.api_key:
+                completion_params["api_key"] = self.api_key
+            if self.extra_headers:
+                completion_params["extra_headers"] = self.extra_headers
+            if self.drop_params:
+                completion_params["drop_params"] = self.drop_params
+            
+            try:
+                # Get completion
+                response = await acompletion(**completion_params)
+                
+                if not response or not response.choices:
+                    raise StructuredOutputError(
+                        "No response received from LLM",
+                        validation_errors=[],
+                        last_response=None
+                    )
+                
+                content = response.choices[0].message.content or ""
+                last_response = content
+                
+                # Parse and validate JSON
+                try:
+                    raw_json = json.loads(content)
+                except json.JSONDecodeError as e:
+                    # JSON parsing failed - treat as validation error
+                    last_validation_errors = [{"type": "json_error", "msg": str(e)}]
+                    retry_count += 1
+                    
+                    if retry_count > max_retries:
+                        raise StructuredOutputError(
+                            f"Failed to parse JSON after {retry_count} attempts: {e}",
+                            validation_errors=last_validation_errors,
+                            last_response=content
+                        )
+                    
+                    # Wait before retry
+                    if self.retry_config:
+                        await asyncio.sleep(self.retry_config.backoff_base_seconds * retry_count)
+                    continue
+                
+                # Validate against Pydantic model
+                try:
+                    validated_data = response_type.model_validate(raw_json)
+                    
+                    # Success! Create the result
+                    # Create assistant message
+                    message = Message(
+                        role="assistant",
+                        content=content,
+                        source=self._create_assistant_source(include_version=True)
+                    )
+                    thread.add_message(message)
+                    
+                    # Save thread if store is configured
+                    if self.thread_store:
+                        await self.thread_store.save(thread)
+                    
+                    return AgentResult(
+                        thread=thread,
+                        new_messages=[message],
+                        content=content,
+                        structured_data=validated_data,
+                        validation_retries=retry_count
+                    )
+                    
+                except ValidationError as e:
+                    # Pydantic validation failed
+                    last_validation_errors = e.errors()
+                    retry_count += 1
+                    
+                    logging.getLogger(__name__).warning(
+                        f"Structured output validation failed (attempt {retry_count}/{max_retries + 1}): {e}"
+                    )
+                    
+                    if retry_count > max_retries:
+                        raise StructuredOutputError(
+                            f"Validation failed after {retry_count} attempts",
+                            validation_errors=last_validation_errors,
+                            last_response=raw_json
+                        )
+                    
+                    # Wait before retry
+                    if self.retry_config:
+                        await asyncio.sleep(self.retry_config.backoff_base_seconds * retry_count)
+                        
+            except StructuredOutputError:
+                raise  # Re-raise our own errors
+            except Exception as e:
+                # Unexpected error
+                raise StructuredOutputError(
+                    f"Unexpected error during structured output: {e}",
+                    validation_errors=[{"type": "unexpected_error", "msg": str(e)}],
+                    last_response=last_response
+                )
+        
+        # Should not reach here, but just in case
+        raise StructuredOutputError(
+            f"Validation failed after {retry_count} attempts",
+            validation_errors=last_validation_errors,
+            last_response=last_response
+        )
+    
+    @weave.op()
     async def stream(
         self,
         thread_or_id: Union[Thread, str],
-        mode: Literal["events", "raw"] = "events"
+        mode: Literal["events", "raw"] = "events",
+        tool_context: Optional[Dict[str, Any]] = None
     ) -> AsyncGenerator[Union[ExecutionEvent, Any], None]:
         """
         Stream agent execution events or raw chunks in real-time.
@@ -670,6 +900,9 @@ class Agent(BaseModel):
             mode: Streaming mode:
                   - "events" (default): Yields ExecutionEvent objects with detailed telemetry
                   - "raw": Yields raw LiteLLM chunks in OpenAI-compatible format
+            tool_context: Optional dictionary of dependencies to inject into tools.
+                         Tools that have 'ctx' or 'context' as their first parameter
+                         will receive this context.
             
         Yields:
             If mode="events":
@@ -683,6 +916,7 @@ class Agent(BaseModel):
         Raises:
             ValueError: If thread_id is provided but thread is not found, or
                        if an invalid mode is provided
+            ToolContextError: If a tool requires context but tool_context was not provided
             Exception: Re-raises any unhandled exceptions during execution
                       
         Example:
@@ -696,18 +930,25 @@ class Agent(BaseModel):
                 if hasattr(chunk.choices[0].delta, 'content'):
                     print(chunk.choices[0].delta.content, end="")
         """
-        if mode == "events":
-            logging.getLogger(__name__).debug("Agent.stream() called with mode='events'")
-            async for event in self._stream_events(thread_or_id):
-                yield event
-        elif mode == "raw":
-            logging.getLogger(__name__).debug("Agent.stream() called with mode='raw'")
-            async for chunk in self._stream_raw(thread_or_id):
-                yield chunk
-        else:
-            raise ValueError(
-                f"Invalid mode: {mode}. Must be 'events' or 'raw'"
-            )
+        # Store tool context for use by _handle_tool_execution
+        self._tool_context = tool_context
+        
+        try:
+            if mode == "events":
+                logging.getLogger(__name__).debug("Agent.stream() called with mode='events'")
+                async for event in self._stream_events(thread_or_id):
+                    yield event
+            elif mode == "raw":
+                logging.getLogger(__name__).debug("Agent.stream() called with mode='raw'")
+                async for chunk in self._stream_raw(thread_or_id):
+                    yield chunk
+            else:
+                raise ValueError(
+                    f"Invalid mode: {mode}. Must be 'events' or 'raw'"
+                )
+        finally:
+            # Clear tool context after execution
+            self._tool_context = None
     
     @weave.op()
     async def _run_complete(self, thread_or_id: Union[Thread, str]) -> AgentResult:

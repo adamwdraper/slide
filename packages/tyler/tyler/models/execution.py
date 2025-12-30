@@ -1,11 +1,14 @@
 """Execution observability models for agent execution tracking."""
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, TYPE_CHECKING
 from enum import Enum
 
 # Direct imports to avoid circular dependency
 from narrator import Thread, Message
+
+if TYPE_CHECKING:
+    from pydantic import BaseModel
 
 
 class EventType(Enum):
@@ -44,9 +47,76 @@ class ExecutionEvent:
 
 @dataclass
 class AgentResult:
-    """Result from agent execution"""
-    thread: Thread                    # Updated thread with new messages
-    new_messages: List[Message]       # New messages added during execution
-    content: Optional[str]            # Final assistant response content
+    """Result from agent execution.
+    
+    Attributes:
+        thread: Updated thread with new messages
+        new_messages: New messages added during execution
+        content: Final assistant response content (raw text)
+        structured_data: Validated Pydantic model when using response_type.
+            Only populated when agent.run() is called with a response_type parameter.
+        validation_retries: Number of validation retry attempts needed.
+            Only relevant when using structured output with retry_config.
+    """
+    thread: Thread
+    new_messages: List[Message]
+    content: Optional[str]
+    structured_data: Optional[Any] = None  # Optional[BaseModel] at runtime
+    validation_retries: int = 0
+
+
+class StructuredOutputError(Exception):
+    """Raised when structured output validation fails after all retry attempts.
+    
+    This exception is raised when:
+    1. A response_type is specified for agent.run()
+    2. The LLM response doesn't match the Pydantic schema
+    3. All retry attempts (if configured) have been exhausted
+    
+    Attributes:
+        validation_errors: List of Pydantic validation error details
+        last_response: The raw JSON response from the last attempt
+    
+    Example:
+        ```python
+        try:
+            result = await agent.run(thread, response_type=Invoice)
+        except StructuredOutputError as e:
+            print(f"Validation failed: {e.validation_errors}")
+            print(f"Last response was: {e.last_response}")
+        ```
+    """
+    def __init__(
+        self, 
+        message: str, 
+        validation_errors: Optional[List[Dict[str, Any]]] = None,
+        last_response: Optional[Any] = None
+    ):
+        super().__init__(message)
+        self.validation_errors = validation_errors or []
+        self.last_response = last_response
+
+
+class ToolContextError(Exception):
+    """Raised when a tool requires context but none was provided.
+    
+    This exception is raised when:
+    1. A tool's function signature includes a 'ctx' or 'context' parameter
+    2. The agent.run() was called without providing tool_context
+    
+    Example:
+        ```python
+        @tool
+        async def get_user_data(ctx: ToolContext, field: str) -> str:
+            return ctx["db"].get_user(ctx["user_id"], field)
+        
+        # This will raise ToolContextError:
+        result = await agent.run(thread)  # Missing tool_context!
+        
+        # This works:
+        result = await agent.run(thread, tool_context={"db": db, "user_id": "123"})
+        ```
+    """
+    pass
 
 

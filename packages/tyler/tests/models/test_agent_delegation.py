@@ -188,7 +188,7 @@ async def test_agent_delegation_tool_call(mock_litellm, mock_thread_store):
         ]
         
         # Mock the tool execution
-        async def mock_tool_execution(tool_call):
+        async def mock_tool_execution(tool_call, context=None):
             """Mock the execution of the delegation tool"""
             return "Specialized task completed successfully"
         
@@ -292,7 +292,7 @@ async def test_delegation_with_context(mock_litellm, mock_thread_store):
         ]
         
         # Mock the tool execution
-        async def mock_tool_execution(tool_call):
+        async def mock_tool_execution(tool_call, context=None):
             """Mock the execution of the delegation tool"""
             return "Data processed with context successfully"
         
@@ -409,7 +409,7 @@ async def test_nested_agent_delegation(mock_litellm, mock_thread_store):
         ]
         
         # Mock the tool execution
-        async def mock_tool_execution(tool_call):
+        async def mock_tool_execution(tool_call, context=None):
             """Mock the execution of the delegation tool"""
             return "Task completed successfully"
         
