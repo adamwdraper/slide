@@ -15,8 +15,6 @@ See: https://a2a-protocol.org/latest/tutorials/python/4-agent-executor/
 import pytest
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, AsyncMock, patch
-import asyncio
-import sys
 
 from tyler.models.execution import EventType, ExecutionEvent
 

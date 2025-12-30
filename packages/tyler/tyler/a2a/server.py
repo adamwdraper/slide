@@ -235,6 +235,7 @@ class TylerAgentExecutor(AgentExecutor):
                                 artifactId=artifact_id,
                                 name=f"Task {task_id[:8]} Result",
                                 parts=[Part(root=TextPart(text=chunk))],
+                                description="Tyler agent response",
                             ),
                             append=not is_first_chunk,  # False for first, True for rest
                             lastChunk=False,
@@ -261,6 +262,8 @@ class TylerAgentExecutor(AgentExecutor):
                     ))
                     
                     execution.status = "error"
+                    # Clean up execution record to prevent memory leak
+                    del self._active_executions[task_id]
                     return
                     
                 elif event.type == EventType.EXECUTION_COMPLETE:
@@ -269,20 +272,37 @@ class TylerAgentExecutor(AgentExecutor):
                     break
             
             # Send final artifact event with lastChunk=True
-            # If we sent chunks, use append=True to not replace accumulated content
-            # If no chunks were sent, use append=False to create the artifact
-            await event_queue.enqueue_event(TaskArtifactUpdateEvent(
-                taskId=task_id,
-                contextId=context_id or task_id,
-                artifact=A2AArtifact(
-                    artifactId=artifact_id,
-                    name=f"Task {task_id[:8]} Result",
-                    parts=[Part(root=TextPart(text="Task completed."))] if not artifact_initialized else [],
-                    description="Tyler agent response",
-                ),
-                append=artifact_initialized,  # True if we already created artifact, False otherwise
-                lastChunk=True,
-            ))
+            # Only send if no chunks were streamed (to create an artifact with completion message)
+            # or to mark the end of the stream for clients
+            if not artifact_initialized:
+                # No chunks were sent - create a single artifact with completion message
+                await event_queue.enqueue_event(TaskArtifactUpdateEvent(
+                    taskId=task_id,
+                    contextId=context_id or task_id,
+                    artifact=A2AArtifact(
+                        artifactId=artifact_id,
+                        name=f"Task {task_id[:8]} Result",
+                        parts=[Part(root=TextPart(text="Task completed."))],
+                        description="Tyler agent response",
+                    ),
+                    append=False,
+                    lastChunk=True,
+                ))
+            else:
+                # Chunks were streamed - send empty final event to signal completion
+                # The lastChunk=True flag tells clients the stream has ended
+                await event_queue.enqueue_event(TaskArtifactUpdateEvent(
+                    taskId=task_id,
+                    contextId=context_id or task_id,
+                    artifact=A2AArtifact(
+                        artifactId=artifact_id,
+                        name=f"Task {task_id[:8]} Result",
+                        parts=[],  # Empty - content already streamed
+                        description="Tyler agent response",
+                    ),
+                    append=True,
+                    lastChunk=True,
+                ))
             
             # Send completion status
             await event_queue.enqueue_event(TaskStatusUpdateEvent(
@@ -292,10 +312,11 @@ class TylerAgentExecutor(AgentExecutor):
                 final=True,
             ))
             
-            # Update execution record
+            # Update execution record and clean up to prevent memory leak
             execution.status = "completed"
             execution.result_messages = content_buffer
             execution.updated_at = datetime.now(timezone.utc)
+            del self._active_executions[task_id]
             
             total_bytes = sum(len(c) for c in content_buffer)
             logger.info(f"Completed task {task_id}: {chunk_count} chunks, {total_bytes} bytes")
@@ -322,6 +343,7 @@ class TylerAgentExecutor(AgentExecutor):
             
             if task_id in self._active_executions:
                 self._active_executions[task_id].status = "error"
+                del self._active_executions[task_id]
     
     async def cancel(self, context: RequestContext, event_queue: EventQueue) -> None:
         """Cancel a running task.
