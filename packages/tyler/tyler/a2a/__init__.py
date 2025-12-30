@@ -7,7 +7,7 @@ Key features:
 - Full Part type support (TextPart, FilePart, DataPart)
 - Artifact production and consumption
 - Context-based task grouping
-- Push notifications for long-running tasks
+- Push notifications for long-running tasks (using SDK infrastructure)
 """
 
 from .adapter import A2AAdapter
@@ -23,7 +23,7 @@ from .types import (
     TaskState,
     # Artifacts
     Artifact,
-    # Push notifications
+    # Push notifications (kept for backward compatibility)
     PushNotificationConfig,
     PushNotificationEvent,
     PushEventType,
@@ -43,13 +43,8 @@ from .types import (
     A2A_PROTOCOL_VERSION,
 )
 from .notifications import (
-    PushNotificationHandler,
-    PushNotificationError,
-    create_task_created_event,
-    create_task_updated_event,
-    create_task_completed_event,
-    create_task_failed_event,
-    create_artifact_event,
+    TylerPushNotificationSender,
+    create_push_notification_sender,
 )
 
 # Protocol version
@@ -76,14 +71,8 @@ __all__ = [
     "PushNotificationConfig",
     "PushNotificationEvent",
     "PushEventType",
-    "PushNotificationHandler",
-    "PushNotificationError",
-    # Event creation helpers
-    "create_task_created_event",
-    "create_task_updated_event",
-    "create_task_completed_event",
-    "create_task_failed_event",
-    "create_artifact_event",
+    "TylerPushNotificationSender",
+    "create_push_notification_sender",
     # Utility functions
     "tyler_content_to_parts",
     "parts_to_tyler_content",

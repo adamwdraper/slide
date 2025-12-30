@@ -3,22 +3,29 @@
 This module provides server functionality to expose Tyler agents 
 as A2A (Agent-to-Agent) protocol v0.3.0 endpoints, allowing other agents
 to delegate tasks to Tyler agents.
+
+Uses the SDK's built-in infrastructure for:
+- Task management (InMemoryTaskStore)
+- Event queuing (InMemoryQueueManager)
+- Push notifications (InMemoryPushNotificationConfigStore + TylerPushNotificationSender)
 """
 
 import json
 import logging
 import asyncio
 from typing import Dict, List, Any, Optional
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 import uuid
+
+import httpx
 
 try:
     from a2a.server.apps import A2AFastAPIApplication
     from a2a.server.request_handlers import DefaultRequestHandler
     from a2a.server.agent_execution import AgentExecutor, RequestContext
     from a2a.server.events import EventQueue, InMemoryQueueManager
-    from a2a.server.tasks import InMemoryTaskStore
+    from a2a.server.tasks import InMemoryTaskStore, InMemoryPushNotificationConfigStore
     from a2a.types import (
         AgentCard,
         AgentCapabilities,
@@ -55,6 +62,8 @@ except ImportError as e:
     class InMemoryQueueManager:
         pass
     class InMemoryTaskStore:
+        pass
+    class InMemoryPushNotificationConfigStore:
         pass
     class AgentCard:
         pass
@@ -94,22 +103,11 @@ from .types import (
     TextPart as TylerTextPart,
     FilePart as TylerFilePart,
     DataPart as TylerDataPart,
-    PushNotificationConfig,
-    PushEventType,
     from_a2a_part,
     to_a2a_part,
     to_a2a_artifact,
-    parts_to_tyler_content,
-    extract_text_from_parts,
 )
-from .notifications import (
-    PushNotificationHandler,
-    create_task_created_event,
-    create_task_updated_event,
-    create_task_completed_event,
-    create_task_failed_event,
-    create_artifact_event,
-)
+from .notifications import TylerPushNotificationSender
 
 logger = logging.getLogger(__name__)
 
@@ -129,7 +127,6 @@ class TylerTaskExecution:
     result_messages: List[str] = None
     context_id: Optional[str] = None
     artifacts: List[Artifact] = None
-    push_notification_config: Optional[PushNotificationConfig] = None
     
     def __post_init__(self):
         if self.created_at is None:
@@ -143,21 +140,31 @@ class TylerTaskExecution:
 
 
 class TylerAgentExecutor(AgentExecutor):
-    """A2A AgentExecutor that wraps a Tyler agent."""
+    """A2A AgentExecutor that wraps a Tyler agent.
     
-    def __init__(self, tyler_agent, notification_handler: PushNotificationHandler):
+    This executor focuses on task execution only. Push notifications
+    are handled by the SDK's infrastructure (DefaultRequestHandler + PushNotificationSender).
+    """
+    
+    def __init__(self, tyler_agent):
         """Initialize the executor.
         
         Args:
             tyler_agent: The Tyler Agent instance to wrap
-            notification_handler: Handler for push notifications
         """
         self.tyler_agent = tyler_agent
-        self.notification_handler = notification_handler
         self._active_executions: Dict[str, TylerTaskExecution] = {}
     
     async def execute(self, context: RequestContext, event_queue: EventQueue) -> None:
         """Execute a task using the Tyler agent.
+        
+        The SDK handles:
+        - Task state management (via TaskStore)
+        - Push notifications (via PushNotificationSender)
+        
+        We just need to:
+        - Run the Tyler agent
+        - Emit status updates and artifacts via the event queue
         
         Args:
             context: The request context with task information
@@ -188,7 +195,7 @@ class TylerAgentExecutor(AgentExecutor):
             )
             self._active_executions[task_id] = execution
             
-            # Send working status
+            # Send working status (SDK will forward to push notification if configured)
             event_queue.enqueue_event(TaskStatusUpdateEvent(
                 taskId=task_id,
                 contextId=context_id or task_id,
@@ -216,7 +223,7 @@ class TylerAgentExecutor(AgentExecutor):
                 description="Tyler agent response",
             )
             
-            # Send artifact event
+            # Send artifact event (SDK will forward to push notification if configured)
             event_queue.enqueue_event(TaskArtifactUpdateEvent(
                 taskId=task_id,
                 contextId=context_id or task_id,
@@ -224,7 +231,7 @@ class TylerAgentExecutor(AgentExecutor):
                 lastChunk=True,
             ))
             
-            # Send completion status
+            # Send completion status (SDK will forward to push notification if configured)
             event_queue.enqueue_event(TaskStatusUpdateEvent(
                 taskId=task_id,
                 contextId=context_id or task_id,
@@ -324,13 +331,17 @@ class TylerAgentExecutor(AgentExecutor):
 
 
 class A2AServer:
-    """Server to expose Tyler agents via A2A protocol v0.3.0."""
+    """Server to expose Tyler agents via A2A protocol v0.3.0.
+    
+    Uses the SDK's built-in infrastructure for task and notification management.
+    """
     
     def __init__(
         self,
         tyler_agent,
         agent_card: Optional[Dict[str, Any]] = None,
         authentication: Optional[Dict[str, Any]] = None,
+        push_signing_secret: Optional[str] = None,
     ):
         """Initialize the A2A server.
         
@@ -338,6 +349,7 @@ class A2AServer:
             tyler_agent: Tyler Agent instance to expose
             agent_card: Optional custom agent card data
             authentication: Optional authentication configuration
+            push_signing_secret: Optional secret for HMAC signing push notifications
         """
         if not HAS_A2A:
             raise ImportError(
@@ -347,13 +359,21 @@ class A2AServer:
         
         self.tyler_agent = tyler_agent
         self._authentication = authentication
+        self._push_signing_secret = push_signing_secret
         self._agent_card = self._create_agent_card(tyler_agent, agent_card)
-        self._notification_handler = PushNotificationHandler()
-        self._executor = TylerAgentExecutor(tyler_agent, self._notification_handler)
+        
+        # Create executor (no longer manages push notifications directly)
+        self._executor = TylerAgentExecutor(tyler_agent)
+        
+        # SDK infrastructure
         self._task_store = InMemoryTaskStore()
         self._queue_manager = InMemoryQueueManager()
+        self._push_config_store = InMemoryPushNotificationConfigStore()
+        
+        # HTTP client and push sender (will be created on start)
+        self._http_client: Optional[httpx.AsyncClient] = None
+        self._push_sender: Optional[TylerPushNotificationSender] = None
         self._app: Optional[FastAPI] = None
-        self._active_tasks: Dict[str, TylerTaskExecution] = {}
         
     def _create_agent_card(
         self,
@@ -460,11 +480,26 @@ class A2AServer:
                 **{**self._agent_card.model_dump(), "url": f"http://{host}:{port}/"}
             )
             
-            # Create request handler
+            # Create HTTP client for push notifications
+            self._http_client = httpx.AsyncClient(
+                timeout=httpx.Timeout(10.0),
+                follow_redirects=True,
+            )
+            
+            # Create push notification sender with our enhancements
+            self._push_sender = TylerPushNotificationSender(
+                httpx_client=self._http_client,
+                config_store=self._push_config_store,
+                signing_secret=self._push_signing_secret,
+            )
+            
+            # Create request handler with full SDK infrastructure
             handler = DefaultRequestHandler(
                 agent_executor=self._executor,
                 task_store=self._task_store,
                 queue_manager=self._queue_manager,
+                push_config_store=self._push_config_store,
+                push_sender=self._push_sender,
             )
             
             # Create A2A FastAPI application
@@ -480,6 +515,7 @@ class A2AServer:
             
             logger.info(f"Starting A2A server for '{self._agent_card.name}' on {host}:{port}")
             logger.info(f"Agent card available at: http://{host}:{port}/.well-known/agent.json")
+            logger.info(f"Push notifications: enabled (SDK-managed)")
             
             # Start the server
             import uvicorn
@@ -498,8 +534,10 @@ class A2AServer:
     
     async def stop_server(self) -> None:
         """Stop the A2A server and clean up."""
-        await self._notification_handler.wait_all()
-        await self._notification_handler.close()
+        # Close HTTP client
+        if self._http_client and not self._http_client.is_closed:
+            await self._http_client.aclose()
+        
         logger.info("A2A server stopped")
     
     def get_agent_card(self) -> AgentCard:

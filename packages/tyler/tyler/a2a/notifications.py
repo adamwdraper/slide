@@ -3,6 +3,11 @@
 This module provides webhook-based push notifications for task updates,
 implementing the A2A Protocol v0.3.0 specification for asynchronous
 task update delivery.
+
+Extends the SDK's BasePushNotificationSender with:
+- Retry logic with exponential backoff
+- HMAC signing for payload verification
+- Custom event type support
 """
 
 import asyncio
@@ -10,17 +15,25 @@ import hashlib
 import hmac
 import json
 import logging
-from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import httpx
 
-from .types import (
-    PushNotificationConfig,
-    PushNotificationEvent,
-    PushEventType,
-    Artifact,
-)
+try:
+    from a2a.server.tasks import (
+        BasePushNotificationSender,
+        PushNotificationConfigStore,
+        InMemoryPushNotificationConfigStore,
+    )
+    from a2a.types import Task as A2ATask, PushNotificationConfig as SDKPushConfig
+    HAS_A2A = True
+except ImportError:
+    HAS_A2A = False
+    BasePushNotificationSender = object
+    PushNotificationConfigStore = None
+    InMemoryPushNotificationConfigStore = None
+    A2ATask = None
+    SDKPushConfig = None
 
 logger = logging.getLogger(__name__)
 
@@ -31,359 +44,192 @@ MAX_RETRIES = 3
 RETRY_BACKOFF_SECONDS = [1, 2, 4]  # Exponential backoff
 
 
-class PushNotificationError(Exception):
-    """Error during push notification delivery."""
-    pass
-
-
-class PushNotificationHandler:
-    """Handles sending push notifications to webhook endpoints.
+class TylerPushNotificationSender(BasePushNotificationSender):
+    """Enhanced push notification sender for Tyler.
     
-    This handler implements:
-    - Async notification delivery
+    Extends the SDK's BasePushNotificationSender with:
     - Retry logic with exponential backoff
-    - HMAC signing for payload verification
-    - Fire-and-forget pattern (doesn't block task processing)
+    - HMAC signing for payload verification (if secret configured)
+    - Better error handling and logging
+    
+    Usage:
+        config_store = InMemoryPushNotificationConfigStore()
+        sender = TylerPushNotificationSender(
+            httpx_client=httpx.AsyncClient(),
+            config_store=config_store,
+            signing_secret="optional-secret-for-hmac"
+        )
     """
     
     def __init__(
         self,
-        timeout: float = DEFAULT_TIMEOUT_SECONDS,
+        httpx_client: httpx.AsyncClient,
+        config_store: "PushNotificationConfigStore",
+        signing_secret: Optional[str] = None,
         max_retries: int = MAX_RETRIES,
-    ):
-        """Initialize the push notification handler.
+        timeout: float = DEFAULT_TIMEOUT_SECONDS,
+    ) -> None:
+        """Initialize the Tyler push notification sender.
         
         Args:
-            timeout: HTTP request timeout in seconds
+            httpx_client: Async HTTP client for sending notifications
+            config_store: Store for push notification configurations
+            signing_secret: Optional secret for HMAC signing payloads
             max_retries: Maximum number of retry attempts
+            timeout: HTTP request timeout in seconds
         """
-        self.timeout = timeout
-        self.max_retries = max_retries
-        self._client: Optional[httpx.AsyncClient] = None
-        self._pending_notifications: List[asyncio.Task] = []
-    
-    async def _get_client(self) -> httpx.AsyncClient:
-        """Get or create the HTTP client."""
-        if self._client is None or self._client.is_closed:
-            self._client = httpx.AsyncClient(
-                timeout=httpx.Timeout(self.timeout),
-                follow_redirects=True,
-            )
-        return self._client
-    
-    async def close(self) -> None:
-        """Close the HTTP client and cancel pending notifications."""
-        # Cancel pending notifications
-        for task in self._pending_notifications:
-            if not task.done():
-                task.cancel()
-        self._pending_notifications.clear()
+        if not HAS_A2A:
+            raise ImportError("a2a-sdk is required for push notifications")
         
-        # Close client
-        if self._client and not self._client.is_closed:
-            await self._client.aclose()
-            self._client = None
+        super().__init__(httpx_client, config_store)
+        self._signing_secret = signing_secret
+        self._max_retries = max_retries
+        self._timeout = timeout
     
-    def _sign_payload(self, payload: str, secret: str) -> str:
+    def _sign_payload(self, payload: str) -> Optional[str]:
         """Generate HMAC signature for payload.
         
         Args:
             payload: JSON payload string
-            secret: Secret key for signing
             
         Returns:
-            HMAC-SHA256 signature as hex string
+            HMAC-SHA256 signature as hex string, or None if no secret
         """
+        if not self._signing_secret:
+            return None
+        
         return hmac.new(
-            secret.encode("utf-8"),
+            self._signing_secret.encode("utf-8"),
             payload.encode("utf-8"),
             hashlib.sha256
         ).hexdigest()
     
-    async def _send_notification(
-        self,
-        config: PushNotificationConfig,
-        event: PushNotificationEvent,
+    async def _dispatch_notification(
+        self, task: "A2ATask", push_info: "SDKPushConfig"
     ) -> bool:
-        """Send a single notification with retry logic.
+        """Send a notification with retry logic.
+        
+        Overrides the base implementation to add:
+        - Retry with exponential backoff
+        - HMAC signing
+        - Better error handling
         
         Args:
-            config: Push notification configuration
-            event: Event to send
+            task: The task to send
+            push_info: Push notification configuration
             
         Returns:
-            True if notification was delivered successfully
+            True if notification was sent successfully
         """
-        payload = json.dumps(event.to_dict())
-        headers = dict(config.headers or {})
-        headers["Content-Type"] = "application/json"
+        url = push_info.url
+        payload = task.model_dump(mode='json', exclude_none=True)
+        payload_json = json.dumps(payload)
         
-        # Add HMAC signature if secret is configured
-        if config.secret:
-            signature = self._sign_payload(payload, config.secret)
+        headers = {"Content-Type": "application/json"}
+        
+        # Add token if configured
+        if push_info.token:
+            headers["X-A2A-Notification-Token"] = push_info.token
+        
+        # Add HMAC signature if we have a signing secret
+        signature = self._sign_payload(payload_json)
+        if signature:
             headers["X-A2A-Signature"] = f"sha256={signature}"
         
-        # Add event metadata headers
-        headers["X-A2A-Event-Type"] = event.event_type
-        headers["X-A2A-Event-ID"] = event.event_id
+        # Add task metadata headers
+        headers["X-A2A-Task-ID"] = task.id
+        if task.context_id:
+            headers["X-A2A-Context-ID"] = task.context_id
         
-        client = await self._get_client()
         last_error: Optional[Exception] = None
         
-        for attempt in range(self.max_retries):
+        for attempt in range(self._max_retries):
             try:
-                response = await client.post(
-                    config.webhook_url,
-                    content=payload,
+                response = await self._client.post(
+                    url,
+                    content=payload_json,
                     headers=headers,
+                    timeout=self._timeout,
                 )
                 
                 if response.is_success:
                     logger.info(
-                        f"Push notification sent successfully: "
-                        f"event={event.event_type} task={event.task_id}"
+                        f"Push notification sent: task_id={task.id} url={url}"
                     )
                     return True
                 else:
                     logger.warning(
                         f"Push notification failed with status {response.status_code}: "
-                        f"event={event.event_type} task={event.task_id} "
-                        f"(attempt {attempt + 1}/{self.max_retries})"
+                        f"task_id={task.id} (attempt {attempt + 1}/{self._max_retries})"
                     )
-                    last_error = PushNotificationError(
-                        f"HTTP {response.status_code}: {response.text}"
-                    )
+                    last_error = Exception(f"HTTP {response.status_code}")
                     
             except httpx.TimeoutException as e:
                 logger.warning(
-                    f"Push notification timeout: event={event.event_type} "
-                    f"(attempt {attempt + 1}/{self.max_retries})"
+                    f"Push notification timeout: task_id={task.id} "
+                    f"(attempt {attempt + 1}/{self._max_retries})"
                 )
                 last_error = e
                 
             except httpx.RequestError as e:
                 logger.warning(
                     f"Push notification request error: {e} "
-                    f"(attempt {attempt + 1}/{self.max_retries})"
+                    f"(attempt {attempt + 1}/{self._max_retries})"
                 )
                 last_error = e
             
             # Wait before retry (if not last attempt)
-            if attempt < self.max_retries - 1:
+            if attempt < self._max_retries - 1:
                 backoff = RETRY_BACKOFF_SECONDS[min(attempt, len(RETRY_BACKOFF_SECONDS) - 1)]
                 await asyncio.sleep(backoff)
         
         # All retries exhausted
         logger.error(
-            f"Push notification failed after {self.max_retries} attempts: "
-            f"event={event.event_type} task={event.task_id} error={last_error}"
+            f"Push notification failed after {self._max_retries} attempts: "
+            f"task_id={task.id} url={url} error={last_error}"
         )
         return False
-    
-    async def send(
-        self,
-        config: PushNotificationConfig,
-        event: PushNotificationEvent,
-    ) -> bool:
-        """Send a push notification.
-        
-        Args:
-            config: Push notification configuration
-            event: Event to send
-            
-        Returns:
-            True if notification was delivered successfully
-        """
-        # Check if this event type is subscribed
-        if event.event_type not in config.events:
-            logger.debug(
-                f"Skipping notification for unsubscribed event type: {event.event_type}"
-            )
-            return True
-        
-        return await self._send_notification(config, event)
-    
-    def send_async(
-        self,
-        config: PushNotificationConfig,
-        event: PushNotificationEvent,
-    ) -> asyncio.Task:
-        """Send a push notification asynchronously (fire-and-forget).
-        
-        This method returns immediately and the notification is sent in the background.
-        Use this for non-blocking notification delivery.
-        
-        Args:
-            config: Push notification configuration
-            event: Event to send
-            
-        Returns:
-            asyncio.Task that can be awaited or ignored
-        """
-        task = asyncio.create_task(self.send(config, event))
-        self._pending_notifications.append(task)
-        
-        # Clean up completed tasks
-        self._pending_notifications = [
-            t for t in self._pending_notifications if not t.done()
-        ]
-        
-        return task
-    
-    async def wait_all(self) -> None:
-        """Wait for all pending notifications to complete."""
-        if self._pending_notifications:
-            await asyncio.gather(*self._pending_notifications, return_exceptions=True)
-            self._pending_notifications.clear()
 
 
-# Convenience functions for creating events
-
-def create_task_created_event(
-    task_id: str,
-    context_id: Optional[str] = None,
-    metadata: Optional[Dict[str, Any]] = None,
-) -> PushNotificationEvent:
-    """Create a task.created event.
+def create_push_notification_sender(
+    signing_secret: Optional[str] = None,
+    max_retries: int = MAX_RETRIES,
+    timeout: float = DEFAULT_TIMEOUT_SECONDS,
+) -> tuple["TylerPushNotificationSender", "InMemoryPushNotificationConfigStore", httpx.AsyncClient]:
+    """Create a push notification sender with its dependencies.
+    
+    This is a convenience factory function that creates:
+    - An HTTP client
+    - A config store
+    - The push sender
     
     Args:
-        task_id: ID of the created task
-        context_id: Optional context ID
-        metadata: Optional additional metadata
+        signing_secret: Optional secret for HMAC signing
+        max_retries: Maximum retry attempts
+        timeout: HTTP timeout in seconds
         
     Returns:
-        PushNotificationEvent for task creation
-    """
-    return PushNotificationEvent.create(
-        event_type=PushEventType.TASK_CREATED,
-        task_id=task_id,
-        data={
-            "status": "created",
-            "metadata": metadata or {},
-        },
-        context_id=context_id,
-    )
-
-
-def create_task_updated_event(
-    task_id: str,
-    status: str,
-    message: Optional[str] = None,
-    context_id: Optional[str] = None,
-) -> PushNotificationEvent:
-    """Create a task.updated event.
-    
-    Args:
-        task_id: ID of the task
-        status: Current task status
-        message: Optional status message
-        context_id: Optional context ID
+        Tuple of (sender, config_store, http_client)
         
-    Returns:
-        PushNotificationEvent for task update
+    Note:
+        The caller is responsible for closing the HTTP client when done.
     """
-    data: Dict[str, Any] = {"status": status}
-    if message:
-        data["message"] = message
+    if not HAS_A2A:
+        raise ImportError("a2a-sdk is required for push notifications")
     
-    return PushNotificationEvent.create(
-        event_type=PushEventType.TASK_UPDATED,
-        task_id=task_id,
-        data=data,
-        context_id=context_id,
+    http_client = httpx.AsyncClient(
+        timeout=httpx.Timeout(timeout),
+        follow_redirects=True,
     )
-
-
-def create_task_completed_event(
-    task_id: str,
-    result: Optional[str] = None,
-    artifacts: Optional[List[Artifact]] = None,
-    context_id: Optional[str] = None,
-) -> PushNotificationEvent:
-    """Create a task.completed event.
     
-    Args:
-        task_id: ID of the completed task
-        result: Optional result summary
-        artifacts: Optional list of produced artifacts
-        context_id: Optional context ID
-        
-    Returns:
-        PushNotificationEvent for task completion
-    """
-    data: Dict[str, Any] = {"status": "completed"}
-    if result:
-        data["result"] = result
-    if artifacts:
-        data["artifacts"] = [
-            {
-                "artifact_id": a.artifact_id,
-                "name": a.name,
-                "created_at": a.created_at.isoformat(),
-            }
-            for a in artifacts
-        ]
+    config_store = InMemoryPushNotificationConfigStore()
     
-    return PushNotificationEvent.create(
-        event_type=PushEventType.TASK_COMPLETED,
-        task_id=task_id,
-        data=data,
-        context_id=context_id,
+    sender = TylerPushNotificationSender(
+        httpx_client=http_client,
+        config_store=config_store,
+        signing_secret=signing_secret,
+        max_retries=max_retries,
+        timeout=timeout,
     )
-
-
-def create_task_failed_event(
-    task_id: str,
-    error: str,
-    context_id: Optional[str] = None,
-) -> PushNotificationEvent:
-    """Create a task.failed event.
     
-    Args:
-        task_id: ID of the failed task
-        error: Error message
-        context_id: Optional context ID
-        
-    Returns:
-        PushNotificationEvent for task failure
-    """
-    return PushNotificationEvent.create(
-        event_type=PushEventType.TASK_FAILED,
-        task_id=task_id,
-        data={
-            "status": "failed",
-            "error": error,
-        },
-        context_id=context_id,
-    )
-
-
-def create_artifact_event(
-    task_id: str,
-    artifact: Artifact,
-    context_id: Optional[str] = None,
-) -> PushNotificationEvent:
-    """Create a task.artifact event.
-    
-    Args:
-        task_id: ID of the task
-        artifact: The produced artifact
-        context_id: Optional context ID
-        
-    Returns:
-        PushNotificationEvent for artifact production
-    """
-    return PushNotificationEvent.create(
-        event_type=PushEventType.ARTIFACT_PRODUCED,
-        task_id=task_id,
-        data={
-            "artifact": {
-                "artifact_id": artifact.artifact_id,
-                "name": artifact.name,
-                "created_at": artifact.created_at.isoformat(),
-                "part_count": len(artifact.parts),
-            }
-        },
-        context_id=context_id,
-    )
-
+    return sender, config_store, http_client

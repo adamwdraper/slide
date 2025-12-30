@@ -1,10 +1,10 @@
-"""Tests for A2A push notification handler.
+"""Tests for A2A push notification sender.
 
 Tests cover:
-- Push notification sending (AC-9, AC-10, AC-11)
+- Push notification sending with SDK integration
 - Retry logic
 - HMAC signing
-- Event creation helpers
+- Integration with SDK's push infrastructure
 """
 
 import pytest
@@ -22,298 +22,285 @@ from tyler.a2a.types import (
     Artifact,
     TextPart,
 )
-from tyler.a2a.notifications import (
-    PushNotificationHandler,
-    PushNotificationError,
-    create_task_created_event,
-    create_task_updated_event,
-    create_task_completed_event,
-    create_task_failed_event,
-    create_artifact_event,
-)
 
 
-class TestPushNotificationHandler:
-    """Test cases for PushNotificationHandler."""
+# Mock SDK types for testing
+class MockTask:
+    """Mock A2A Task for testing."""
+    def __init__(self, task_id="test-123", context_id=None):
+        self.id = task_id
+        self.context_id = context_id
+    
+    def model_dump(self, mode=None, exclude_none=True):
+        return {
+            "id": self.id,
+            "contextId": self.context_id,
+            "status": {"state": "working"},
+        }
+
+
+class MockPushConfig:
+    """Mock SDK PushNotificationConfig for testing."""
+    def __init__(self, url="https://example.com/webhook", token=None):
+        self.url = url
+        self.token = token
+
+
+class MockConfigStore:
+    """Mock SDK PushNotificationConfigStore for testing."""
+    def __init__(self, configs=None):
+        self._configs = configs or {}
+    
+    async def get_info(self, task_id):
+        return self._configs.get(task_id, [])
+    
+    async def set_info(self, task_id, config):
+        if task_id not in self._configs:
+            self._configs[task_id] = []
+        self._configs[task_id].append(config)
+    
+    async def delete_info(self, task_id, config_id=None):
+        if task_id in self._configs:
+            del self._configs[task_id]
+
+
+class TestTylerPushNotificationSender:
+    """Test cases for TylerPushNotificationSender."""
     
     @pytest.fixture
-    def handler(self):
-        """Create a handler instance."""
-        return PushNotificationHandler(timeout=5, max_retries=3)
+    def mock_http_client(self):
+        """Create a mock HTTP client."""
+        client = AsyncMock()
+        client.is_closed = False
+        return client
     
     @pytest.fixture
-    def valid_config(self):
-        """Create a valid push notification config."""
-        with patch('tyler.a2a.types.validate_webhook_url', return_value=True):
-            return PushNotificationConfig(
-                webhook_url="https://example.com/webhook",
-                events=["task.created", "task.completed"],
+    def mock_config_store(self):
+        """Create a mock config store."""
+        return MockConfigStore()
+    
+    @pytest.fixture
+    def sender(self, mock_http_client, mock_config_store):
+        """Create a sender with mocked dependencies."""
+        # Import here to handle optional SDK dependency
+        try:
+            from tyler.a2a.notifications import TylerPushNotificationSender
+            return TylerPushNotificationSender(
+                httpx_client=mock_http_client,
+                config_store=mock_config_store,
+                signing_secret="test-secret",
+                max_retries=3,
+                timeout=5.0,
             )
-    
-    @pytest.fixture
-    def event(self):
-        """Create a test event."""
-        return PushNotificationEvent.create(
-            event_type=PushEventType.TASK_CREATED,
-            task_id="test-task-123",
-            data={"status": "created"},
-        )
+        except ImportError:
+            pytest.skip("a2a-sdk not installed")
     
     @pytest.mark.asyncio
-    async def test_send_success(self, handler, valid_config, event):
-        """Test successful notification send (AC-9)."""
+    async def test_send_notification_no_configs(self, sender, mock_http_client):
+        """Test that no HTTP call is made when no push configs exist."""
+        task = MockTask(task_id="task-no-config")
+        
+        await sender.send_notification(task)
+        
+        # No HTTP calls should be made
+        mock_http_client.post.assert_not_called()
+    
+    @pytest.mark.asyncio
+    async def test_send_notification_success(self, sender, mock_http_client, mock_config_store):
+        """Test successful notification sending."""
+        # Add config for the task
+        config = MockPushConfig(url="https://example.com/webhook", token="auth-token")
+        await mock_config_store.set_info("task-123", config)
+        
+        # Mock successful response
         mock_response = MagicMock()
         mock_response.is_success = True
-        mock_response.status_code = 200
+        mock_response.raise_for_status = MagicMock()
+        mock_http_client.post = AsyncMock(return_value=mock_response)
         
-        with patch.object(handler, '_get_client') as mock_client:
-            mock_http = AsyncMock()
-            mock_http.post = AsyncMock(return_value=mock_response)
-            mock_client.return_value = mock_http
-            
-            result = await handler.send(valid_config, event)
+        task = MockTask(task_id="task-123")
+        await sender.send_notification(task)
         
-        assert result is True
-        mock_http.post.assert_called_once()
+        # Should have made exactly one HTTP call
+        mock_http_client.post.assert_called_once()
+        
+        # Check the call args
+        call_kwargs = mock_http_client.post.call_args.kwargs
+        assert call_kwargs["headers"]["X-A2A-Notification-Token"] == "auth-token"
     
     @pytest.mark.asyncio
-    async def test_send_skips_unsubscribed_event(self, handler, valid_config, event):
-        """Test that unsubscribed events are skipped."""
-        # Event type not in config.events
-        event.event_type = "task.updated"
+    async def test_send_notification_with_hmac_signature(self, sender, mock_http_client, mock_config_store):
+        """Test that HMAC signature is included when signing secret is set."""
+        config = MockPushConfig(url="https://example.com/webhook")
+        await mock_config_store.set_info("task-456", config)
         
-        result = await handler.send(valid_config, event)
+        mock_response = MagicMock()
+        mock_response.is_success = True
+        mock_http_client.post = AsyncMock(return_value=mock_response)
         
-        # Should return True (success) without making HTTP call
-        assert result is True
+        task = MockTask(task_id="task-456")
+        await sender.send_notification(task)
+        
+        # Check signature header was included
+        call_kwargs = mock_http_client.post.call_args.kwargs
+        assert "X-A2A-Signature" in call_kwargs["headers"]
+        assert call_kwargs["headers"]["X-A2A-Signature"].startswith("sha256=")
     
     @pytest.mark.asyncio
-    async def test_send_retries_on_failure(self, handler, valid_config, event):
+    async def test_send_notification_retry_on_failure(self, sender, mock_http_client, mock_config_store):
         """Test retry logic on failure."""
-        mock_response_fail = MagicMock()
-        mock_response_fail.is_success = False
-        mock_response_fail.status_code = 500
-        mock_response_fail.text = "Server Error"
+        config = MockPushConfig(url="https://example.com/webhook")
+        await mock_config_store.set_info("task-retry", config)
         
-        with patch.object(handler, '_get_client') as mock_client:
-            mock_http = AsyncMock()
-            mock_http.post = AsyncMock(return_value=mock_response_fail)
-            mock_client.return_value = mock_http
-            
-            with patch('asyncio.sleep', new_callable=AsyncMock):
-                result = await handler.send(valid_config, event)
-        
-        assert result is False
-        assert mock_http.post.call_count == 3  # max_retries
-    
-    @pytest.mark.asyncio
-    async def test_send_async_returns_task(self, handler, valid_config, event):
-        """Test async send returns a task."""
+        # Mock failed response
         mock_response = MagicMock()
-        mock_response.is_success = True
+        mock_response.is_success = False
+        mock_response.status_code = 500
+        mock_http_client.post = AsyncMock(return_value=mock_response)
         
-        with patch.object(handler, '_get_client') as mock_client:
-            mock_http = AsyncMock()
-            mock_http.post = AsyncMock(return_value=mock_response)
-            mock_client.return_value = mock_http
-            
-            task = handler.send_async(valid_config, event)
-            
-            assert isinstance(task, asyncio.Task)
-            await task
+        task = MockTask(task_id="task-retry")
+        
+        with patch('asyncio.sleep', new_callable=AsyncMock):
+            await sender.send_notification(task)
+        
+        # Should have retried max_retries times
+        assert mock_http_client.post.call_count == 3
     
-    def test_sign_payload(self, handler):
+    def test_sign_payload(self, sender):
         """Test HMAC payload signing."""
         payload = '{"task_id": "123"}'
-        secret = "my-secret-key"
         
-        signature = handler._sign_payload(payload, secret)
+        signature = sender._sign_payload(payload)
         
         # Verify it's a valid HMAC-SHA256 signature
         expected = hmac.new(
-            secret.encode("utf-8"),
+            "test-secret".encode("utf-8"),
             payload.encode("utf-8"),
             hashlib.sha256
         ).hexdigest()
         
         assert signature == expected
     
+    def test_sign_payload_no_secret(self, mock_http_client, mock_config_store):
+        """Test that sign_payload returns None when no secret is set."""
+        try:
+            from tyler.a2a.notifications import TylerPushNotificationSender
+            sender_no_secret = TylerPushNotificationSender(
+                httpx_client=mock_http_client,
+                config_store=mock_config_store,
+                signing_secret=None,  # No secret
+            )
+            
+            result = sender_no_secret._sign_payload('{"test": "data"}')
+            
+            assert result is None
+        except ImportError:
+            pytest.skip("a2a-sdk not installed")
+    
     @pytest.mark.asyncio
-    async def test_send_includes_signature_when_secret_set(self, handler, event):
-        """Test that signature is included when secret is configured."""
+    async def test_task_id_header_included(self, sender, mock_http_client, mock_config_store):
+        """Test that task ID is included in headers."""
+        config = MockPushConfig(url="https://example.com/webhook")
+        await mock_config_store.set_info("task-header-test", config)
+        
+        mock_response = MagicMock()
+        mock_response.is_success = True
+        mock_http_client.post = AsyncMock(return_value=mock_response)
+        
+        task = MockTask(task_id="task-header-test", context_id="ctx-123")
+        await sender.send_notification(task)
+        
+        call_kwargs = mock_http_client.post.call_args.kwargs
+        assert call_kwargs["headers"]["X-A2A-Task-ID"] == "task-header-test"
+        assert call_kwargs["headers"]["X-A2A-Context-ID"] == "ctx-123"
+
+
+class TestCreatePushNotificationSender:
+    """Test cases for the factory function."""
+    
+    def test_create_push_notification_sender(self):
+        """Test creating a sender with dependencies."""
+        try:
+            from tyler.a2a.notifications import create_push_notification_sender
+            
+            sender, config_store, http_client = create_push_notification_sender(
+                signing_secret="my-secret",
+                max_retries=5,
+                timeout=15.0,
+            )
+            
+            assert sender is not None
+            assert config_store is not None
+            assert http_client is not None
+            
+            # Verify sender has the secret set
+            assert sender._signing_secret == "my-secret"
+            assert sender._max_retries == 5
+            
+        except ImportError:
+            pytest.skip("a2a-sdk not installed")
+
+
+class TestLegacyPushTypes:
+    """Test cases for legacy push notification types (backward compatibility)."""
+    
+    def test_push_notification_config_creation(self):
+        """Test PushNotificationConfig can still be created."""
         with patch('tyler.a2a.types.validate_webhook_url', return_value=True):
             config = PushNotificationConfig(
                 webhook_url="https://example.com/webhook",
-                events=["task.created"],
+                events=["task.created", "task.completed"],
                 secret="my-secret",
             )
         
-        mock_response = MagicMock()
-        mock_response.is_success = True
-        
-        with patch.object(handler, '_get_client') as mock_client:
-            mock_http = AsyncMock()
-            mock_http.post = AsyncMock(return_value=mock_response)
-            mock_client.return_value = mock_http
-            
-            await handler.send(config, event)
-            
-            # Verify signature header was included
-            call_kwargs = mock_http.post.call_args.kwargs
-            assert "X-A2A-Signature" in call_kwargs["headers"]
-            assert call_kwargs["headers"]["X-A2A-Signature"].startswith("sha256=")
+        assert config.webhook_url == "https://example.com/webhook"
+        assert "task.created" in config.events
+        assert config.secret == "my-secret"
     
-    @pytest.mark.asyncio
-    async def test_close_handler(self, handler):
-        """Test handler cleanup."""
-        # Create a mock client
-        mock_client = AsyncMock()
-        mock_client.is_closed = False
-        handler._client = mock_client
-        
-        await handler.close()
-        
-        # close() sets _client to None after calling aclose
-        mock_client.aclose.assert_called_once()
-    
-    @pytest.mark.asyncio
-    async def test_wait_all(self, handler, valid_config, event):
-        """Test waiting for all pending notifications."""
-        mock_response = MagicMock()
-        mock_response.is_success = True
-        
-        with patch.object(handler, '_get_client') as mock_client:
-            mock_http = AsyncMock()
-            mock_http.post = AsyncMock(return_value=mock_response)
-            mock_client.return_value = mock_http
-            
-            # Send multiple async notifications
-            handler.send_async(valid_config, event)
-            handler.send_async(valid_config, event)
-            
-            await handler.wait_all()
-            
-            assert len(handler._pending_notifications) == 0
-
-
-class TestEventCreationHelpers:
-    """Test cases for event creation helper functions."""
-    
-    def test_create_task_created_event(self):
-        """Test task.created event creation (AC-9)."""
-        event = create_task_created_event(
+    def test_push_notification_event_creation(self):
+        """Test PushNotificationEvent can still be created."""
+        event = PushNotificationEvent.create(
+            event_type=PushEventType.TASK_CREATED,
             task_id="task-123",
+            data={"status": "created"},
             context_id="ctx-456",
-            metadata={"source": "test"},
         )
         
         assert event.event_type == "task.created"
         assert event.task_id == "task-123"
         assert event.context_id == "ctx-456"
-        assert event.data["status"] == "created"
-        assert event.data["metadata"]["source"] == "test"
     
-    def test_create_task_updated_event(self):
-        """Test task.updated event creation (AC-10)."""
-        event = create_task_updated_event(
-            task_id="task-123",
-            status="processing",
-            message="Working on it...",
-            context_id="ctx-456",
-        )
-        
-        assert event.event_type == "task.updated"
-        assert event.task_id == "task-123"
-        assert event.data["status"] == "processing"
-        assert event.data["message"] == "Working on it..."
+    def test_push_event_type_enum(self):
+        """Test PushEventType enum values."""
+        assert PushEventType.TASK_CREATED.value == "task.created"
+        assert PushEventType.TASK_UPDATED.value == "task.updated"
+        assert PushEventType.TASK_COMPLETED.value == "task.completed"
+        assert PushEventType.TASK_FAILED.value == "task.failed"
+        assert PushEventType.ARTIFACT_PRODUCED.value == "task.artifact"
     
-    def test_create_task_completed_event(self):
-        """Test task.completed event creation (AC-11)."""
-        artifacts = [
-            Artifact.create(name="Result", parts=[TextPart(text="Done")])
-        ]
-        
-        event = create_task_completed_event(
-            task_id="task-123",
-            result="Task completed successfully",
-            artifacts=artifacts,
-        )
-        
-        assert event.event_type == "task.completed"
-        assert event.data["status"] == "completed"
-        assert event.data["result"] == "Task completed successfully"
-        assert len(event.data["artifacts"]) == 1
-        assert event.data["artifacts"][0]["name"] == "Result"
-    
-    def test_create_task_failed_event(self):
-        """Test task.failed event creation."""
-        event = create_task_failed_event(
-            task_id="task-123",
-            error="Something went wrong",
-        )
-        
-        assert event.event_type == "task.failed"
-        assert event.data["status"] == "failed"
-        assert event.data["error"] == "Something went wrong"
-    
-    def test_create_artifact_event(self):
-        """Test artifact event creation."""
-        artifact = Artifact.create(
-            name="Analysis Result",
-            parts=[TextPart(text="Analysis complete")],
-        )
-        
-        event = create_artifact_event(
-            task_id="task-123",
-            artifact=artifact,
-            context_id="ctx-456",
-        )
-        
-        assert event.event_type == "task.artifact"
-        assert event.task_id == "task-123"
-        assert event.context_id == "ctx-456"
-        assert event.data["artifact"]["name"] == "Analysis Result"
-        assert event.data["artifact"]["part_count"] == 1
-
-
-class TestEventSerialization:
-    """Test cases for event serialization."""
-    
-    def test_event_to_dict_minimal(self):
-        """Test minimal event serialization."""
+    def test_event_to_dict(self):
+        """Test event serialization."""
         event = PushNotificationEvent.create(
-            event_type=PushEventType.TASK_CREATED,
+            event_type=PushEventType.TASK_COMPLETED,
             task_id="task-123",
-            data={"status": "created"},
+            data={"result": "success"},
         )
         
         d = event.to_dict()
         
         assert "event_id" in d
-        assert "event_type" in d
-        assert "task_id" in d
+        assert d["event_type"] == "task.completed"
+        assert d["task_id"] == "task-123"
         assert "timestamp" in d
-        assert "data" in d
-        assert "context_id" not in d  # Not included when None
+        assert d["data"]["result"] == "success"
     
-    def test_event_to_dict_with_context(self):
-        """Test event serialization with context_id."""
+    def test_event_json_serializable(self):
+        """Test that event dict is JSON serializable."""
         event = PushNotificationEvent.create(
             event_type=PushEventType.TASK_UPDATED,
             task_id="task-123",
             data={"status": "running"},
             context_id="ctx-789",
-        )
-        
-        d = event.to_dict()
-        
-        assert d["context_id"] == "ctx-789"
-    
-    def test_event_json_serializable(self):
-        """Test that event dict is JSON serializable."""
-        event = create_task_completed_event(
-            task_id="task-123",
-            result="Done",
         )
         
         d = event.to_dict()
@@ -325,4 +312,4 @@ class TestEventSerialization:
         # Should round-trip
         parsed = json.loads(json_str)
         assert parsed["task_id"] == "task-123"
-
+        assert parsed["context_id"] == "ctx-789"
