@@ -210,6 +210,7 @@ class TylerAgentExecutor(AgentExecutor):
             artifact_id = str(uuid.uuid4())
             content_buffer = []
             chunk_count = 0
+            artifact_initialized = False
             
             logger.debug(f"Starting execution for task {task_id}")
             
@@ -221,6 +222,12 @@ class TylerAgentExecutor(AgentExecutor):
                         content_buffer.append(chunk)
                         chunk_count += 1
                         
+                        # First chunk creates the artifact (append=False)
+                        # Subsequent chunks append to it (append=True)
+                        is_first_chunk = not artifact_initialized
+                        if is_first_chunk:
+                            artifact_initialized = True
+                        
                         await event_queue.enqueue_event(TaskArtifactUpdateEvent(
                             taskId=task_id,
                             contextId=context_id or task_id,
@@ -229,7 +236,7 @@ class TylerAgentExecutor(AgentExecutor):
                                 name=f"Task {task_id[:8]} Result",
                                 parts=[Part(root=TextPart(text=chunk))],
                             ),
-                            append=True,
+                            append=not is_first_chunk,  # False for first, True for rest
                             lastChunk=False,
                         ))
                         
