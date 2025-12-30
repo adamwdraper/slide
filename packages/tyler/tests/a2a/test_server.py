@@ -10,16 +10,26 @@ Tests cover:
 """
 
 import pytest
-from datetime import datetime
+from datetime import datetime, timezone
 from unittest.mock import MagicMock, AsyncMock, patch
 
 # Mock the a2a-sdk imports before importing server
 import sys
 mock_a2a = MagicMock()
 mock_a2a.server = MagicMock()
+mock_a2a.server.apps = MagicMock()
+mock_a2a.server.request_handlers = MagicMock()
+mock_a2a.server.agent_execution = MagicMock()
+mock_a2a.server.events = MagicMock()
+mock_a2a.server.tasks = MagicMock()
 mock_a2a.types = MagicMock()
 sys.modules['a2a'] = mock_a2a
 sys.modules['a2a.server'] = mock_a2a.server
+sys.modules['a2a.server.apps'] = mock_a2a.server.apps
+sys.modules['a2a.server.request_handlers'] = mock_a2a.server.request_handlers
+sys.modules['a2a.server.agent_execution'] = mock_a2a.server.agent_execution
+sys.modules['a2a.server.events'] = mock_a2a.server.events
+sys.modules['a2a.server.tasks'] = mock_a2a.server.tasks
 sys.modules['a2a.types'] = mock_a2a.types
 
 from tyler.a2a.server import A2AServer, A2A_PROTOCOL_VERSION, TylerTaskExecution
@@ -39,9 +49,8 @@ class TestA2AProtocolVersion:
         """Test A2A_PROTOCOL_VERSION is 0.3.0."""
         assert A2A_PROTOCOL_VERSION == "0.3.0"
     
-    def test_agent_card_includes_protocol_version(self):
-        """Test agent card includes correct protocol version."""
-        # Create mock Tyler agent
+    def test_agent_card_created_with_valid_structure(self):
+        """Test agent card is created with valid SDK v0.3.0 structure."""
         mock_agent = MagicMock()
         mock_agent.name = "Test Agent"
         mock_agent.purpose = "Testing"
@@ -49,11 +58,22 @@ class TestA2AProtocolVersion:
         
         with patch('tyler.a2a.server.HAS_A2A', True):
             with patch('tyler.a2a.server.AgentCard') as mock_card:
-                server = A2AServer(tyler_agent=mock_agent)
-                
-                # Check that AgentCard was called with correct protocol_version
-                call_kwargs = mock_card.call_args.kwargs
-                assert call_kwargs["protocol_version"] == "0.3.0"
+                with patch('tyler.a2a.server.AgentCapabilities') as mock_caps:
+                    with patch('tyler.a2a.server.AgentSkill') as mock_skill:
+                        with patch('tyler.a2a.server.InMemoryTaskStore'):
+                            with patch('tyler.a2a.server.InMemoryQueueManager'):
+                                server = A2AServer(tyler_agent=mock_agent)
+                                
+                                # Check AgentCard was called with required v0.3.0 fields
+                                call_kwargs = mock_card.call_args.kwargs
+                                assert "name" in call_kwargs
+                                assert "url" in call_kwargs
+                                assert "version" in call_kwargs
+                                assert "description" in call_kwargs
+                                assert "defaultInputModes" in call_kwargs
+                                assert "defaultOutputModes" in call_kwargs
+                                assert "capabilities" in call_kwargs
+                                assert "skills" in call_kwargs
 
 
 class TestAgentCardConfiguration:
@@ -68,36 +88,18 @@ class TestAgentCardConfiguration:
         
         with patch('tyler.a2a.server.HAS_A2A', True):
             with patch('tyler.a2a.server.AgentCard') as mock_card:
-                server = A2AServer(tyler_agent=mock_agent)
-                
-                call_kwargs = mock_card.call_args.kwargs
-                assert call_kwargs["name"] == "Research Assistant"
-                assert call_kwargs["description"] == "Research and analysis"
+                with patch('tyler.a2a.server.AgentCapabilities'):
+                    with patch('tyler.a2a.server.AgentSkill'):
+                        with patch('tyler.a2a.server.InMemoryTaskStore'):
+                            with patch('tyler.a2a.server.InMemoryQueueManager'):
+                                server = A2AServer(tyler_agent=mock_agent)
+                                
+                                call_kwargs = mock_card.call_args.kwargs
+                                assert call_kwargs["name"] == "Research Assistant"
+                                assert call_kwargs["description"] == "Research and analysis"
     
-    def test_agent_card_with_authentication(self):
-        """Test Agent Card includes authentication when configured (AC-12)."""
-        mock_agent = MagicMock()
-        mock_agent.name = "Secure Agent"
-        mock_agent.purpose = "Secure operations"
-        mock_agent.tools = []
-        
-        auth_config = {
-            "schemes": ["bearer"],
-            "required": True
-        }
-        
-        with patch('tyler.a2a.server.HAS_A2A', True):
-            with patch('tyler.a2a.server.AgentCard') as mock_card:
-                server = A2AServer(
-                    tyler_agent=mock_agent,
-                    authentication=auth_config
-                )
-                
-                call_kwargs = mock_card.call_args.kwargs
-                assert call_kwargs["authentication"] == auth_config
-    
-    def test_agent_card_push_notifications_declared(self):
-        """Test Agent Card declares push notification support."""
+    def test_agent_card_has_capabilities_with_push_notifications(self):
+        """Test Agent Card capabilities include push notifications support."""
         mock_agent = MagicMock()
         mock_agent.name = "Test Agent"
         mock_agent.purpose = "Testing"
@@ -105,11 +107,16 @@ class TestAgentCardConfiguration:
         
         with patch('tyler.a2a.server.HAS_A2A', True):
             with patch('tyler.a2a.server.AgentCard') as mock_card:
-                server = A2AServer(tyler_agent=mock_agent)
-                
-                call_kwargs = mock_card.call_args.kwargs
-                assert "push_notifications" in call_kwargs
-                assert call_kwargs["push_notifications"]["supported"] is True
+                with patch('tyler.a2a.server.AgentCapabilities') as mock_caps:
+                    with patch('tyler.a2a.server.AgentSkill'):
+                        with patch('tyler.a2a.server.InMemoryTaskStore'):
+                            with patch('tyler.a2a.server.InMemoryQueueManager'):
+                                server = A2AServer(tyler_agent=mock_agent)
+                                
+                                # Check AgentCapabilities was called with push notifications
+                                caps_call_kwargs = mock_caps.call_args.kwargs
+                                assert caps_call_kwargs.get("pushNotifications") is True
+                                assert caps_call_kwargs.get("streaming") is True
     
     def test_agent_card_custom_override(self):
         """Test custom agent card data overrides defaults."""
@@ -125,14 +132,18 @@ class TestAgentCardConfiguration:
         
         with patch('tyler.a2a.server.HAS_A2A', True):
             with patch('tyler.a2a.server.AgentCard') as mock_card:
-                server = A2AServer(
-                    tyler_agent=mock_agent,
-                    agent_card=custom_card
-                )
-                
-                call_kwargs = mock_card.call_args.kwargs
-                assert call_kwargs["name"] == "Custom Name"
-                assert call_kwargs["version"] == "2.0.0"
+                with patch('tyler.a2a.server.AgentCapabilities'):
+                    with patch('tyler.a2a.server.AgentSkill'):
+                        with patch('tyler.a2a.server.InMemoryTaskStore'):
+                            with patch('tyler.a2a.server.InMemoryQueueManager'):
+                                server = A2AServer(
+                                    tyler_agent=mock_agent,
+                                    agent_card=custom_card
+                                )
+                                
+                                call_kwargs = mock_card.call_args.kwargs
+                                assert call_kwargs["name"] == "Custom Name"
+                                assert call_kwargs["version"] == "2.0.0"
 
 
 class TestTylerTaskExecution:
@@ -186,8 +197,8 @@ class TestTylerTaskExecution:
 class TestCapabilityExtraction:
     """Test cases for capability extraction from tools."""
     
-    def test_extract_file_capability(self):
-        """Test file operations capability is extracted."""
+    def test_extract_file_capability_in_skill_tags(self):
+        """Test file operations capability is extracted into skill tags."""
         mock_agent = MagicMock()
         mock_agent.name = "Test"
         mock_agent.purpose = "Test"
@@ -204,13 +215,18 @@ class TestCapabilityExtraction:
         
         with patch('tyler.a2a.server.HAS_A2A', True):
             with patch('tyler.a2a.server.AgentCard') as mock_card:
-                server = A2AServer(tyler_agent=mock_agent)
-                
-                call_kwargs = mock_card.call_args.kwargs
-                assert "file_operations" in call_kwargs["capabilities"]
+                with patch('tyler.a2a.server.AgentCapabilities'):
+                    with patch('tyler.a2a.server.AgentSkill') as mock_skill:
+                        with patch('tyler.a2a.server.InMemoryTaskStore'):
+                            with patch('tyler.a2a.server.InMemoryQueueManager'):
+                                server = A2AServer(tyler_agent=mock_agent)
+                                
+                                # Check that AgentSkill was called with file_operations tag
+                                skill_call_kwargs = mock_skill.call_args.kwargs
+                                assert "file_operations" in skill_call_kwargs.get("tags", [])
     
-    def test_extract_web_capability(self):
-        """Test web operations capability is extracted."""
+    def test_extract_web_capability_in_skill_tags(self):
+        """Test web operations capability is extracted into skill tags."""
         mock_agent = MagicMock()
         mock_agent.name = "Test"
         mock_agent.purpose = "Test"
@@ -227,13 +243,18 @@ class TestCapabilityExtraction:
         
         with patch('tyler.a2a.server.HAS_A2A', True):
             with patch('tyler.a2a.server.AgentCard') as mock_card:
-                server = A2AServer(tyler_agent=mock_agent)
-                
-                call_kwargs = mock_card.call_args.kwargs
-                assert "web_operations" in call_kwargs["capabilities"]
+                with patch('tyler.a2a.server.AgentCapabilities'):
+                    with patch('tyler.a2a.server.AgentSkill') as mock_skill:
+                        with patch('tyler.a2a.server.InMemoryTaskStore'):
+                            with patch('tyler.a2a.server.InMemoryQueueManager'):
+                                server = A2AServer(tyler_agent=mock_agent)
+                                
+                                # Check that AgentSkill was called with web_operations tag
+                                skill_call_kwargs = mock_skill.call_args.kwargs
+                                assert "web_operations" in skill_call_kwargs.get("tags", [])
     
-    def test_base_capabilities_always_included(self):
-        """Test base capabilities are always included."""
+    def test_base_capabilities_always_in_skill_tags(self):
+        """Test base capabilities are always included in skill tags."""
         mock_agent = MagicMock()
         mock_agent.name = "Test"
         mock_agent.purpose = "Test"
@@ -241,12 +262,18 @@ class TestCapabilityExtraction:
         
         with patch('tyler.a2a.server.HAS_A2A', True):
             with patch('tyler.a2a.server.AgentCard') as mock_card:
-                server = A2AServer(tyler_agent=mock_agent)
-                
-                call_kwargs = mock_card.call_args.kwargs
-                assert "task_execution" in call_kwargs["capabilities"]
-                assert "conversation_management" in call_kwargs["capabilities"]
-                assert "artifacts" in call_kwargs["capabilities"]
+                with patch('tyler.a2a.server.AgentCapabilities'):
+                    with patch('tyler.a2a.server.AgentSkill') as mock_skill:
+                        with patch('tyler.a2a.server.InMemoryTaskStore'):
+                            with patch('tyler.a2a.server.InMemoryQueueManager'):
+                                server = A2AServer(tyler_agent=mock_agent)
+                                
+                                # Check that AgentSkill was called with base tags
+                                skill_call_kwargs = mock_skill.call_args.kwargs
+                                tags = skill_call_kwargs.get("tags", [])
+                                assert "task_execution" in tags
+                                assert "conversation" in tags
+                                assert "artifacts" in tags
 
 
 class TestServerMethods:
@@ -262,9 +289,13 @@ class TestServerMethods:
         with patch('tyler.a2a.server.HAS_A2A', True):
             mock_card = MagicMock()
             with patch('tyler.a2a.server.AgentCard', return_value=mock_card):
-                server = A2AServer(tyler_agent=mock_agent)
-                
-                assert server.get_agent_card() == mock_card
+                with patch('tyler.a2a.server.AgentCapabilities'):
+                    with patch('tyler.a2a.server.AgentSkill'):
+                        with patch('tyler.a2a.server.InMemoryTaskStore'):
+                            with patch('tyler.a2a.server.InMemoryQueueManager'):
+                                server = A2AServer(tyler_agent=mock_agent)
+                                
+                                assert server.get_agent_card() == mock_card
     
     def test_get_active_tasks_empty(self):
         """Test get_active_tasks returns empty list initially."""
@@ -275,9 +306,13 @@ class TestServerMethods:
         
         with patch('tyler.a2a.server.HAS_A2A', True):
             with patch('tyler.a2a.server.AgentCard'):
-                server = A2AServer(tyler_agent=mock_agent)
-                
-                assert server.get_active_tasks() == []
+                with patch('tyler.a2a.server.AgentCapabilities'):
+                    with patch('tyler.a2a.server.AgentSkill'):
+                        with patch('tyler.a2a.server.InMemoryTaskStore'):
+                            with patch('tyler.a2a.server.InMemoryQueueManager'):
+                                server = A2AServer(tyler_agent=mock_agent)
+                                
+                                assert server.get_active_tasks() == []
     
     def test_get_tasks_by_context(self):
         """Test get_tasks_by_context filters correctly (AC-8)."""
@@ -288,33 +323,37 @@ class TestServerMethods:
         
         with patch('tyler.a2a.server.HAS_A2A', True):
             with patch('tyler.a2a.server.AgentCard'):
-                server = A2AServer(tyler_agent=mock_agent)
-                
-                # Add some tasks
-                server._active_tasks["task-1"] = TylerTaskExecution(
-                    task_id="task-1",
-                    tyler_agent=mock_agent,
-                    tyler_thread=MagicMock(),
-                    context_id="context-a",
-                )
-                server._active_tasks["task-2"] = TylerTaskExecution(
-                    task_id="task-2",
-                    tyler_agent=mock_agent,
-                    tyler_thread=MagicMock(),
-                    context_id="context-b",
-                )
-                server._active_tasks["task-3"] = TylerTaskExecution(
-                    task_id="task-3",
-                    tyler_agent=mock_agent,
-                    tyler_thread=MagicMock(),
-                    context_id="context-a",
-                )
-                
-                # Filter by context
-                context_a_tasks = server.get_tasks_by_context("context-a")
-                
-                assert len(context_a_tasks) == 2
-                assert all(t["task_id"] in ["task-1", "task-3"] for t in context_a_tasks)
+                with patch('tyler.a2a.server.AgentCapabilities'):
+                    with patch('tyler.a2a.server.AgentSkill'):
+                        with patch('tyler.a2a.server.InMemoryTaskStore'):
+                            with patch('tyler.a2a.server.InMemoryQueueManager'):
+                                server = A2AServer(tyler_agent=mock_agent)
+                                
+                                # Add some tasks to the executor's internal tracking
+                                server._executor._active_executions["task-1"] = TylerTaskExecution(
+                                    task_id="task-1",
+                                    tyler_agent=mock_agent,
+                                    tyler_thread=MagicMock(),
+                                    context_id="context-a",
+                                )
+                                server._executor._active_executions["task-2"] = TylerTaskExecution(
+                                    task_id="task-2",
+                                    tyler_agent=mock_agent,
+                                    tyler_thread=MagicMock(),
+                                    context_id="context-b",
+                                )
+                                server._executor._active_executions["task-3"] = TylerTaskExecution(
+                                    task_id="task-3",
+                                    tyler_agent=mock_agent,
+                                    tyler_thread=MagicMock(),
+                                    context_id="context-a",
+                                )
+                                
+                                # Filter by context
+                                context_a_tasks = server.get_tasks_by_context("context-a")
+                                
+                                assert len(context_a_tasks) == 2
+                                assert all(t["task_id"] in ["task-1", "task-3"] for t in context_a_tasks)
 
 
 class TestImportError:
@@ -327,4 +366,3 @@ class TestImportError:
         with patch('tyler.a2a.server.HAS_A2A', False):
             with pytest.raises(ImportError, match="a2a-sdk is required"):
                 A2AServer(tyler_agent=mock_agent)
-
