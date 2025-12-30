@@ -107,11 +107,15 @@ class TylerAgentExecutor(AgentExecutor):
 
 | Tyler Event | A2A Event | Notes |
 |-------------|-----------|-------|
-| `LLM_STREAM_CHUNK` | `TaskArtifactUpdateEvent(append=True)` | Token chunk |
+| First `LLM_STREAM_CHUNK` | `TaskArtifactUpdateEvent(append=False)` | Creates artifact |
+| Subsequent `LLM_STREAM_CHUNK` | `TaskArtifactUpdateEvent(append=True)` | Appends to artifact |
 | `LLM_THINKING_CHUNK` | (skip or separate artifact) | Optional |
 | `TOOL_SELECTED` | `TaskStatusUpdateEvent(working)` | Status update |
-| `EXECUTION_COMPLETE` | `TaskArtifactUpdateEvent(lastChunk=True)` + `TaskStatusUpdateEvent(completed)` | Final events |
+| `EXECUTION_COMPLETE` | `TaskArtifactUpdateEvent(append=True, lastChunk=True)` + `TaskStatusUpdateEvent(completed)` | Final events |
 | `EXECUTION_ERROR` | `TaskStatusUpdateEvent(failed)` | Error handling |
+
+**Important**: The first chunk must use `append=False` to create the artifact. The SDK's
+`append_artifact_to_task` helper ignores events with `append=True` when no artifact exists.
 
 ### Streaming Execute Implementation
 
@@ -131,12 +135,20 @@ async def execute(self, context: RequestContext, event_queue: EventQueue) -> Non
     
     artifact_id = str(uuid.uuid4())
     content_buffer = []
+    artifact_initialized = False
     
     async for event in self.agent.stream(tyler_thread):
         if event.type == EventType.LLM_STREAM_CHUNK:
             chunk = event.data.get("content_chunk", "")
             if chunk:
                 content_buffer.append(chunk)
+                
+                # First chunk creates artifact (append=False)
+                # Subsequent chunks append (append=True)
+                is_first = not artifact_initialized
+                if is_first:
+                    artifact_initialized = True
+                
                 await event_queue.enqueue_event(TaskArtifactUpdateEvent(
                     taskId=task_id,
                     contextId=context_id or task_id,
@@ -145,7 +157,7 @@ async def execute(self, context: RequestContext, event_queue: EventQueue) -> Non
                         name=f"Task {task_id[:8]} Result",
                         parts=[Part(root=TextPart(text=chunk))],
                     ),
-                    append=True,
+                    append=not is_first,  # False for first, True for rest
                     lastChunk=False,
                 ))
                 
@@ -154,16 +166,16 @@ async def execute(self, context: RequestContext, event_queue: EventQueue) -> Non
             pass
             
         elif event.type == EventType.EXECUTION_COMPLETE:
-            # Send final artifact event
+            # Send final artifact event - use append=True if artifact exists
             await event_queue.enqueue_event(TaskArtifactUpdateEvent(
                 taskId=task_id,
                 contextId=context_id or task_id,
                 artifact=A2AArtifact(
                     artifactId=artifact_id,
                     name=f"Task {task_id[:8]} Result",
-                    parts=[],  # Empty parts for final marker
+                    parts=[Part(root=TextPart(text="Task completed."))] if not artifact_initialized else [],
                 ),
-                append=False,
+                append=artifact_initialized,  # True if artifact exists, False to create
                 lastChunk=True,
             ))
             
