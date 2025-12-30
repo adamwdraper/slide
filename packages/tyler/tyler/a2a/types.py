@@ -8,7 +8,7 @@ import base64
 import logging
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
@@ -207,7 +207,7 @@ class Artifact:
     artifact_id: str
     name: str
     parts: List[Union["TextPart", FilePart, DataPart]]
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     metadata: Optional[Dict[str, Any]] = None
     description: Optional[str] = None
     index: Optional[int] = None
@@ -228,7 +228,7 @@ class Artifact:
             artifact_id=str(uuid.uuid4()),
             name=name,
             parts=parts,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
             metadata=metadata,
             description=description,
             index=index,
@@ -320,7 +320,7 @@ class PushNotificationEvent:
             event_id=str(uuid.uuid4()),
             event_type=event_type.value,
             task_id=task_id,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             data=data,
             context_id=context_id
         )
@@ -672,7 +672,7 @@ def from_a2a_artifact(a2a_artifact: Any) -> Artifact:
         artifact_id=a2a_artifact.artifact_id,
         name=a2a_artifact.name,
         parts=[from_a2a_part(p) for p in a2a_artifact.parts],
-        created_at=getattr(a2a_artifact, 'created_at', datetime.utcnow()),
+        created_at=getattr(a2a_artifact, 'created_at', datetime.now(timezone.utc)),
         metadata=getattr(a2a_artifact, 'metadata', None),
     )
 

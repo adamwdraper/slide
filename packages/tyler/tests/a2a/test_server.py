@@ -10,7 +10,7 @@ Tests cover:
 """
 
 import pytest
-from datetime import datetime, timezone
+from datetime import datetime
 from unittest.mock import MagicMock, AsyncMock, patch
 
 # Mock the a2a-sdk imports before importing server
