@@ -196,7 +196,7 @@ class TylerAgentExecutor(AgentExecutor):
             self._active_executions[task_id] = execution
             
             # Send working status (SDK will forward to push notification if configured)
-            event_queue.enqueue_event(TaskStatusUpdateEvent(
+            await event_queue.enqueue_event(TaskStatusUpdateEvent(
                 taskId=task_id,
                 contextId=context_id or task_id,
                 status=TaskStatus(state=TaskState.working),
@@ -204,7 +204,10 @@ class TylerAgentExecutor(AgentExecutor):
             ))
             
             # Execute Tyler agent
-            processed_thread, new_messages = await self.tyler_agent.go(tyler_thread)
+            result = await self.tyler_agent.run(tyler_thread)
+            
+            # Get new messages from AgentResult
+            new_messages = result.new_messages or []
             
             # Collect response
             response_parts = []
@@ -224,7 +227,7 @@ class TylerAgentExecutor(AgentExecutor):
             )
             
             # Send artifact event (SDK will forward to push notification if configured)
-            event_queue.enqueue_event(TaskArtifactUpdateEvent(
+            await event_queue.enqueue_event(TaskArtifactUpdateEvent(
                 taskId=task_id,
                 contextId=context_id or task_id,
                 artifact=artifact,
@@ -232,7 +235,7 @@ class TylerAgentExecutor(AgentExecutor):
             ))
             
             # Send completion status (SDK will forward to push notification if configured)
-            event_queue.enqueue_event(TaskStatusUpdateEvent(
+            await event_queue.enqueue_event(TaskStatusUpdateEvent(
                 taskId=task_id,
                 contextId=context_id or task_id,
                 status=TaskStatus(state=TaskState.completed),
@@ -247,10 +250,11 @@ class TylerAgentExecutor(AgentExecutor):
             logger.info(f"Completed Tyler task {task_id}")
             
         except Exception as e:
-            logger.error(f"Error executing Tyler task {task_id}: {e}")
+            import traceback
+            logger.error(f"Error executing Tyler task {task_id}: {e}\n{traceback.format_exc()}")
             
             # Send error status
-            event_queue.enqueue_event(TaskStatusUpdateEvent(
+            await event_queue.enqueue_event(TaskStatusUpdateEvent(
                 taskId=task_id,
                 contextId=context_id or task_id,
                 status=TaskStatus(
@@ -282,7 +286,7 @@ class TylerAgentExecutor(AgentExecutor):
             del self._active_executions[task_id]
         
         # Send cancelled status
-        event_queue.enqueue_event(TaskStatusUpdateEvent(
+        await event_queue.enqueue_event(TaskStatusUpdateEvent(
             taskId=task_id,
             contextId=context.context_id or task_id,
             status=TaskStatus(state=TaskState.canceled),
