@@ -167,12 +167,14 @@ class TestPushNotificationHandler:
     async def test_close_handler(self, handler):
         """Test handler cleanup."""
         # Create a mock client
-        handler._client = AsyncMock()
-        handler._client.is_closed = False
+        mock_client = AsyncMock()
+        mock_client.is_closed = False
+        handler._client = mock_client
         
         await handler.close()
         
-        handler._client.aclose.assert_called_once()
+        # close() sets _client to None after calling aclose
+        mock_client.aclose.assert_called_once()
     
     @pytest.mark.asyncio
     async def test_wait_all(self, handler, valid_config, event):
