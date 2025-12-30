@@ -23,6 +23,8 @@ try:
         DataPart as A2ADataPart,
         Part as A2APart,
         Artifact as A2AArtifact,
+        FileWithBytes as A2AFileWithBytes,
+        FileWithUri as A2AFileWithUri,
     )
     HAS_A2A = True
 except ImportError:
@@ -33,6 +35,8 @@ except ImportError:
     A2ADataPart = None
     A2APart = None
     A2AArtifact = None
+    A2AFileWithBytes = None
+    A2AFileWithUri = None
 
 logger = logging.getLogger(__name__)
 
@@ -492,7 +496,12 @@ def extract_text_from_parts(
 def to_a2a_part(part: Union[TextPart, FilePart, DataPart]) -> Any:
     """Convert internal Part to A2A SDK Part.
     
-    Uses A2A spec field names: mediaType, fileWithBytes, fileWithUri
+    A2A SDK structure (v0.3.0):
+    - TextPart: { text: str, kind: 'text' }
+    - FilePart: { file: FileWithBytes | FileWithUri, kind: 'file' }
+      - FileWithBytes: { bytes: str (base64), mimeType: str, name: str }
+      - FileWithUri: { uri: str, mimeType: str, name: str }
+    - DataPart: { data: dict, kind: 'data' }
     
     Args:
         part: Internal Part object
@@ -508,25 +517,24 @@ def to_a2a_part(part: Union[TextPart, FilePart, DataPart]) -> Any:
     
     elif isinstance(part, FilePart):
         if part.is_inline:
-            # A2A SDK uses mediaType, name, and fileWithBytes for inline files
-            return A2AFilePart(
+            # A2A SDK uses nested FileWithBytes for inline files
+            file_obj = A2AFileWithBytes(
+                bytes=part.to_base64(),
+                mimeType=part.media_type,
                 name=part.name,
-                mediaType=part.media_type,
-                fileWithBytes=part.to_base64(),
             )
+            return A2AFilePart(file=file_obj)
         else:
-            # A2A SDK uses mediaType, name, and fileWithUri for remote files
-            return A2AFilePart(
+            # A2A SDK uses nested FileWithUri for remote files
+            file_obj = A2AFileWithUri(
+                uri=part.file_with_uri,
+                mimeType=part.media_type,
                 name=part.name,
-                mediaType=part.media_type,
-                fileWithUri=part.file_with_uri,
             )
+            return A2AFilePart(file=file_obj)
     
     elif isinstance(part, DataPart):
-        return A2ADataPart(
-            data=part.data,
-            mediaType=part.media_type,
-        )
+        return A2ADataPart(data=part.data)
     
     else:
         raise ValueError(f"Unknown part type: {type(part)}")
@@ -535,7 +543,13 @@ def to_a2a_part(part: Union[TextPart, FilePart, DataPart]) -> Any:
 def from_a2a_part(a2a_part: Any) -> Union[TextPart, FilePart, DataPart]:
     """Convert A2A SDK Part to internal Part.
     
-    Handles A2A spec field names: mediaType, fileWithBytes, fileWithUri
+    A2A SDK structure (v0.3.0):
+    - TextPart: has 'text' attribute
+    - FilePart: has 'file' attribute (FileWithBytes or FileWithUri)
+      - FileWithBytes: has 'bytes' (base64 str), 'mime_type', 'name'
+      - FileWithUri: has 'uri', 'mime_type', 'name'
+    - DataPart: has 'data' attribute (dict)
+    
     Also handles legacy field names for backward compatibility.
     
     Args:
@@ -547,47 +561,65 @@ def from_a2a_part(a2a_part: Any) -> Union[TextPart, FilePart, DataPart]:
     if not HAS_A2A:
         raise ImportError("a2a-sdk is required for A2A support")
     
-    # Check the type by attribute presence (duck typing)
-    # TextPart - has 'text' attribute
-    if hasattr(a2a_part, 'text'):
+    # Handle Part wrapper type (SDK may wrap parts in a Part container with 'root')
+    if hasattr(a2a_part, 'root'):
+        a2a_part = a2a_part.root
+    
+    # Check the type by 'kind' attribute first (SDK v0.3.0 uses discriminator)
+    kind = getattr(a2a_part, 'kind', None)
+    
+    if kind == 'text' or hasattr(a2a_part, 'text'):
         return TextPart(text=a2a_part.text)
     
-    # FilePart - has 'name' and 'mediaType' (or legacy 'mime_type')
-    elif hasattr(a2a_part, 'name') and (hasattr(a2a_part, 'mediaType') or hasattr(a2a_part, 'mime_type')):
-        # Get media type (spec uses mediaType, legacy used mime_type)
+    elif kind == 'file' or hasattr(a2a_part, 'file'):
+        # SDK v0.3.0 uses nested 'file' object
+        file_obj = getattr(a2a_part, 'file', None)
+        if file_obj:
+            # Get name and mime_type from nested file object (SDK uses snake_case attrs)
+            name = getattr(file_obj, 'name', None) or 'unnamed'
+            media_type = getattr(file_obj, 'mime_type', None) or 'application/octet-stream'
+            
+            # Check for FileWithBytes (has 'bytes' attr)
+            file_bytes = getattr(file_obj, 'bytes', None)
+            if file_bytes:
+                # Decode Base64
+                if isinstance(file_bytes, str):
+                    file_bytes = base64.b64decode(file_bytes)
+                return FilePart(
+                    name=name,
+                    media_type=media_type,
+                    file_with_bytes=file_bytes,
+                )
+            
+            # Check for FileWithUri (has 'uri' attr)
+            file_uri = getattr(file_obj, 'uri', None)
+            if file_uri:
+                return FilePart(
+                    name=name,
+                    media_type=media_type,
+                    file_with_uri=file_uri,
+                )
+            
+            raise ValueError("FilePart.file must have either 'bytes' or 'uri'")
+        
+        # Legacy: direct attributes on FilePart
+        name = getattr(a2a_part, 'name', 'unnamed')
         media_type = getattr(a2a_part, 'mediaType', None) or getattr(a2a_part, 'mime_type', 'application/octet-stream')
         
-        # Check for inline file (fileWithBytes or legacy data)
         file_bytes = getattr(a2a_part, 'fileWithBytes', None) or getattr(a2a_part, 'data', None)
         if file_bytes:
-            # Inline file - decode Base64 if needed
             if isinstance(file_bytes, str):
                 file_bytes = base64.b64decode(file_bytes)
-            return FilePart(
-                name=a2a_part.name,
-                media_type=media_type,
-                file_with_bytes=file_bytes,
-            )
+            return FilePart(name=name, media_type=media_type, file_with_bytes=file_bytes)
         
-        # Check for remote file (fileWithUri or legacy uri)
         file_uri = getattr(a2a_part, 'fileWithUri', None) or getattr(a2a_part, 'uri', None)
         if file_uri:
-            return FilePart(
-                name=a2a_part.name,
-                media_type=media_type,
-                file_with_uri=file_uri,
-            )
+            return FilePart(name=name, media_type=media_type, file_with_uri=file_uri)
         
-        raise ValueError("FilePart must have either fileWithBytes or fileWithUri")
+        raise ValueError("FilePart must have either file data or URI")
     
-    # DataPart - has 'data' as dict
-    elif hasattr(a2a_part, 'data') and isinstance(getattr(a2a_part, 'data', None), dict):
-        # Get media type (spec uses mediaType, legacy used mime_type)
-        media_type = getattr(a2a_part, 'mediaType', None) or getattr(a2a_part, 'mime_type', 'application/json')
-        return DataPart(
-            data=a2a_part.data,
-            media_type=media_type,
-        )
+    elif kind == 'data' or (hasattr(a2a_part, 'data') and isinstance(getattr(a2a_part, 'data', None), dict)):
+        return DataPart(data=a2a_part.data)
     
     else:
         # Unknown - try to extract text
@@ -597,6 +629,14 @@ def from_a2a_part(a2a_part: Any) -> Union[TextPart, FilePart, DataPart]:
 
 def to_a2a_artifact(artifact: Artifact) -> Any:
     """Convert internal Artifact to A2A SDK Artifact.
+    
+    A2A SDK Artifact signature:
+    - artifactId: str (required)
+    - name: str | None
+    - description: str | None
+    - parts: list[Part]
+    - metadata: dict | None
+    - extensions: list[str] | None
     
     Args:
         artifact: Internal Artifact object
@@ -608,9 +648,11 @@ def to_a2a_artifact(artifact: Artifact) -> Any:
         raise ImportError("a2a-sdk is required for A2A support")
     
     return A2AArtifact(
-        artifact_id=artifact.artifact_id,
+        artifactId=artifact.artifact_id,
         name=artifact.name,
+        description=artifact.description,
         parts=[to_a2a_part(p) for p in artifact.parts],
+        metadata=artifact.metadata,
     )
 
 
