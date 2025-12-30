@@ -251,6 +251,25 @@ The A2A server uses Tyler's streaming internally for all requests. The A2A SDK h
 - **`message/send`**: Returns aggregated response after completion
 - **`message/stream`**: Streams tokens via SSE as they're generated
 
+For non-streaming requests, use `send_task` which waits for completion:
+
+```python
+from tyler.a2a import A2AClient
+
+client = A2AClient()
+await client.connect("agent", "https://agent.example.com")
+
+# Send task and wait for complete response (non-streaming)
+result = await client.send_task("agent", "Summarize this document")
+
+# Result contains the full response and artifacts
+print(f"Status: {result.status}")
+for artifact in result.artifacts:
+    print(f"Artifact: {artifact.name}")
+    for part in artifact.parts:
+        print(part.text)
+```
+
 ### 5. Push Notifications
 
 Receive real-time updates for long-running tasks via webhooks:
