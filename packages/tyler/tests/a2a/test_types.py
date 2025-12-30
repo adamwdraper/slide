@@ -336,13 +336,10 @@ class TestPushNotificationConfig:
         with pytest.raises(ValueError, match="Invalid webhook URL"):
             PushNotificationConfig(webhook_url="http://example.com/webhook")
     
-    @patch('socket.gethostbyname')
-    def test_push_config_invalid_url_private_ip(self, mock_dns):
-        """Test push config rejects private IP addresses."""
-        mock_dns.return_value = "192.168.1.1"
-        
+    def test_push_config_invalid_url_private_ip(self):
+        """Test push config rejects literal private IP addresses."""
         with pytest.raises(ValueError, match="Invalid webhook URL"):
-            PushNotificationConfig(webhook_url="https://internal.example.com/webhook")
+            PushNotificationConfig(webhook_url="https://192.168.1.1/webhook")
 
 
 class TestPushNotificationEvent:
@@ -405,17 +402,20 @@ class TestURLValidation:
         """Test URL without scheme fails validation."""
         assert validate_webhook_url("example.com/webhook") is False
     
-    @patch('socket.gethostbyname')
-    def test_invalid_private_ip(self, mock_dns):
-        """Test private IP fails validation."""
-        mock_dns.return_value = "10.0.0.1"
-        assert validate_webhook_url("https://internal.example.com/webhook") is False
+    def test_invalid_private_ip(self):
+        """Test literal private IP fails validation."""
+        # Literal private IPs are blocked
+        assert validate_webhook_url("https://10.0.0.1/webhook") is False
+        assert validate_webhook_url("https://192.168.1.1/webhook") is False
+        assert validate_webhook_url("https://172.16.0.1/webhook") is False
     
-    @patch('socket.gethostbyname')
-    def test_invalid_loopback(self, mock_dns):
-        """Test loopback address fails validation."""
-        mock_dns.return_value = "127.0.0.1"
-        assert validate_webhook_url("https://localhost/webhook") is False
+    def test_invalid_loopback(self):
+        """Test literal loopback address fails validation."""
+        # Literal loopback IPs are blocked
+        assert validate_webhook_url("https://127.0.0.1/webhook") is False
+        # Note: hostnames like "localhost" are NOT blocked here - DNS-level
+        # SSRF protection should be handled at the HTTP client level
+        assert validate_webhook_url("https://localhost/webhook") is True
     
     def test_file_uri_validation(self):
         """Test file URI validation uses same rules."""

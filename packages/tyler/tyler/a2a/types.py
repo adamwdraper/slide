@@ -14,7 +14,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 from urllib.parse import urlparse
 import ipaddress
-import socket
 
 try:
     from a2a.types import (
@@ -363,19 +362,19 @@ def validate_webhook_url(url: str) -> bool:
             logger.warning(f"Webhook URL missing hostname: {url}")
             return False
         
-        # Check for private IP ranges
+        # Check for private IP ranges when the hostname is a literal IP.
+        # Avoid DNS resolution here to prevent blocking and TOCTOU issues.
+        # DNS-based SSRF protection should be handled at the HTTP client level.
         try:
-            # Resolve hostname to IP
-            ip = socket.gethostbyname(parsed.hostname)
-            ip_obj = ipaddress.ip_address(ip)
-            
+            ip_obj = ipaddress.ip_address(parsed.hostname)
             if ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_reserved:
-                logger.error(f"SSRF attempt blocked - private IP detected: {url} -> {ip}")
+                logger.error(
+                    f"SSRF attempt blocked - private IP detected in webhook URL: {url}"
+                )
                 return False
-        except socket.gaierror:
-            # DNS resolution failed - might be valid but unreachable
-            logger.warning(f"Could not resolve hostname: {parsed.hostname}")
-            # Allow it - the request will fail at runtime if unreachable
+        except ValueError:
+            # Hostname is not a literal IP address; skip IP-range checks here.
+            # The actual HTTP client should handle DNS-level SSRF protection.
             pass
         
         return True
