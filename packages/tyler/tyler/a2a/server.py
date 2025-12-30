@@ -269,16 +269,18 @@ class TylerAgentExecutor(AgentExecutor):
                     break
             
             # Send final artifact event with lastChunk=True
+            # If we sent chunks, use append=True to not replace accumulated content
+            # If no chunks were sent, use append=False to create the artifact
             await event_queue.enqueue_event(TaskArtifactUpdateEvent(
                 taskId=task_id,
                 contextId=context_id or task_id,
                 artifact=A2AArtifact(
                     artifactId=artifact_id,
                     name=f"Task {task_id[:8]} Result",
-                    parts=[],  # Empty parts for final marker
+                    parts=[Part(root=TextPart(text="Task completed."))] if not artifact_initialized else [],
                     description="Tyler agent response",
                 ),
-                append=False,
+                append=artifact_initialized,  # True if we already created artifact, False otherwise
                 lastChunk=True,
             ))
             
