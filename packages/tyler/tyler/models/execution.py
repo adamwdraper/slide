@@ -93,6 +93,7 @@ class StructuredOutputError(Exception):
         last_response: Optional[Any] = None
     ):
         super().__init__(message)
+        self.message = message
         self.validation_errors = validation_errors or []
         self.last_response = last_response
 
