@@ -21,7 +21,12 @@ def mock_env_vars():
 
 @pytest.fixture(autouse=True)
 def mock_openai():
-    """Mock OpenAI/litellm calls for testing (both sync and async)"""
+    """Mock OpenAI/litellm calls for testing (both sync and async)
+    
+    We patch at multiple locations because modules use different import styles:
+    - litellm.completion / litellm.acompletion (direct module access)
+    - tyler.models.agent.acompletion (from litellm import acompletion)
+    """
     from unittest.mock import AsyncMock
     
     mock_response = MagicMock(
@@ -29,11 +34,13 @@ def mock_openai():
         usage=MagicMock(prompt_tokens=10, completion_tokens=20, total_tokens=30)
     )
     
+    async_mock = AsyncMock(return_value=mock_response)
+    
     with patch('litellm.completion') as mock_sync, \
-         patch('litellm.acompletion', new_callable=AsyncMock) as mock_async:
+         patch('litellm.acompletion', async_mock), \
+         patch('tyler.models.agent.acompletion', async_mock):
         mock_sync.return_value = mock_response
-        mock_async.return_value = mock_response
-        yield mock_sync, mock_async
+        yield mock_sync, async_mock
 
 @pytest.fixture(autouse=True)
 def mock_wandb():

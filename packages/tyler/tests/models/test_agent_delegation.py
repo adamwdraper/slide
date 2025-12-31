@@ -35,8 +35,15 @@ def mock_thread_store():
 
 @pytest.fixture
 def mock_litellm():
-    """Mock litellm to prevent real API calls"""
-    with patch('litellm.acompletion', autospec=True) as mock:
+    """Mock litellm to prevent real API calls
+    
+    Note: conftest.py already provides autouse mock for litellm.acompletion,
+    but tests can use this fixture to get a reference to configure return values.
+    We don't use autospec=True to avoid conflicts with the global mock.
+    """
+    from unittest.mock import AsyncMock
+    with patch('litellm.acompletion', new_callable=AsyncMock) as mock, \
+         patch('tyler.models.agent.acompletion', mock):
         yield mock
 
 @pytest.fixture
