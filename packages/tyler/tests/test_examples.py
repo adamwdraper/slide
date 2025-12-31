@@ -27,8 +27,6 @@ SKIP_EXAMPLES = [
     "402_a2a_basic_client.py",  # Requires a running A2A server
     "403_a2a_multi_agent.py",   # Starts multiple servers
     "a2a_manual_test.py",       # Manual test script
-    "600_structured_output.py", # Makes real API calls for structured output demo
-    "601_tool_context.py",      # Makes real API calls for tool context demo
 ]
 
 

@@ -63,6 +63,8 @@ jobs:
           uv sync --dev
       
       - name: Run Tyler tests
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           cd packages/tyler
           uv run pytest tests/
@@ -230,13 +232,19 @@ jobs:
           uv sync --dev
       
       - name: Run example smoke tests
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           uv run python tests/run_examples.py --smoke --verbose
       
       - name: Test example imports
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           uv run pytest tests/test_examples.py::test_examples_can_be_imported -v
       
       - name: Test examples directory structure
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           uv run pytest tests/test_examples.py::test_examples_directory_structure -v 
