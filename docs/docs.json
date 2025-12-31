@@ -25,6 +25,7 @@
           "guides/conversation-persistence",
           "guides/streaming-responses",
           "guides/agent-delegation",
+          "guides/structured-output",
           "guides/mcp-integration",
           "guides/a2a-integration",
           "guides/patterns",
@@ -57,6 +58,9 @@
             "pages": [
               "api-reference/tyler-agent",
               "api-reference/tyler-agentresult",
+              "api-reference/tyler-retryconfig",
+              "api-reference/tyler-structuredoutputerror",
+              "api-reference/tyler-toolcontext",
               "api-reference/tyler-executionevent",
               "api-reference/tyler-eventtype"
             ]

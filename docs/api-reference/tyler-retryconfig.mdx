@@ -1,0 +1,227 @@
+---
+title: 'RetryConfig'
+description: 'Configuration for automatic retry behavior in agent execution'
+---
+
+## Overview
+
+The `RetryConfig` class configures automatic retry behavior for agent operations, particularly useful when using structured output that may fail validation.
+
+## Class Definition
+
+```python
+from pydantic import BaseModel, Field
+
+class RetryConfig(BaseModel):
+    """Configuration for retry behavior in agent execution."""
+    
+    max_retries: int = Field(default=3, ge=0)
+    retry_on_validation_error: bool = Field(default=True)
+    retry_on_tool_error: bool = Field(default=False)
+    backoff_base_seconds: float = Field(default=1.0, ge=0)
+    
+    model_config = {"frozen": True}  # Immutable
+```
+
+## Properties
+
+<ParamField path="max_retries" type="int" default="3">
+  Maximum number of retry attempts for a failed operation. Set to 0 to disable retries entirely.
+  
+  - Minimum value: 0
+  - Each retry includes the error message as feedback to the LLM
+</ParamField>
+
+<ParamField path="retry_on_validation_error" type="bool" default="True">
+  When True, the agent will automatically retry if structured output validation fails.
+  
+  This handles:
+  - `JSONDecodeError` when the LLM returns invalid JSON
+  - `ValidationError` when JSON doesn't match the Pydantic schema
+</ParamField>
+
+<ParamField path="retry_on_tool_error" type="bool" default="False">
+  When True, the agent will retry if a tool execution fails with an exception.
+  
+  Use with caution—some tool errors are not recoverable by retry (e.g., authentication failures).
+</ParamField>
+
+<ParamField path="backoff_base_seconds" type="float" default="1.0">
+  Base delay in seconds for exponential backoff between retries.
+  
+  The actual delay is: `backoff_base_seconds * retry_attempt`
+  - Retry 1: 1.0s delay
+  - Retry 2: 2.0s delay
+  - Retry 3: 3.0s delay
+</ParamField>
+
+## Creating RetryConfig
+
+```python
+from tyler import RetryConfig
+
+# Default configuration (3 retries, validation retry enabled)
+config = RetryConfig()
+
+# Custom configuration
+config = RetryConfig(
+    max_retries=5,
+    retry_on_validation_error=True,
+    retry_on_tool_error=True,
+    backoff_base_seconds=2.0
+)
+
+# Disable retries
+config = RetryConfig(max_retries=0)
+```
+
+## Usage with Agent
+
+### At Agent Creation
+
+```python
+from tyler import Agent, RetryConfig
+
+agent = Agent(
+    name="DataExtractor",
+    model_name="gpt-4o",
+    purpose="To extract structured data from documents",
+    retry_config=RetryConfig(
+        max_retries=3,
+        retry_on_validation_error=True
+    )
+)
+```
+
+### At Runtime
+
+The agent's `retry_config` is used automatically when `response_type` is provided:
+
+```python
+from pydantic import BaseModel
+
+class Invoice(BaseModel):
+    vendor: str
+    total: float
+    items: list[str]
+
+# Retry config is used if structured output validation fails
+result = await agent.run(thread, response_type=Invoice)
+```
+
+## Retry Flow
+
+When a retry occurs:
+
+1. **Error Detection**: The agent catches `JSONDecodeError` or `ValidationError`
+2. **Feedback Message**: An error message is added to the thread explaining what went wrong
+3. **Backoff Delay**: The agent waits `backoff_base_seconds * attempt_number` seconds
+4. **Retry Attempt**: A new LLM call is made with the feedback in context
+5. **Repeat or Fail**: Steps 1-4 repeat until success or `max_retries` is exhausted
+
+```python
+# Example retry flow with max_retries=2
+# 
+# Attempt 1: LLM returns invalid JSON → JSONDecodeError
+# → Add error feedback to thread
+# → Wait 1.0s
+# 
+# Attempt 2: LLM returns JSON but wrong schema → ValidationError  
+# → Add error feedback to thread
+# → Wait 2.0s
+# 
+# Attempt 3: LLM returns valid structured output → Success!
+```
+
+## Error Handling
+
+When all retries are exhausted, `StructuredOutputError` is raised:
+
+```python
+from tyler import Agent, RetryConfig, StructuredOutputError
+
+agent = Agent(
+    name="extractor",
+    retry_config=RetryConfig(max_retries=2)
+)
+
+try:
+    result = await agent.run(thread, response_type=MyModel)
+except StructuredOutputError as e:
+    print(f"Failed: {e.message}")
+    print(f"Validation errors: {e.validation_errors}")
+    print(f"Last response: {e.last_response}")
+```
+
+## Immutability
+
+`RetryConfig` instances are immutable (frozen). Create a new instance to change values:
+
+```python
+config = RetryConfig(max_retries=3)
+
+# ❌ This will raise an error
+config.max_retries = 5
+
+# ✅ Create a new instance instead
+new_config = RetryConfig(
+    max_retries=5,
+    retry_on_validation_error=config.retry_on_validation_error,
+    retry_on_tool_error=config.retry_on_tool_error,
+    backoff_base_seconds=config.backoff_base_seconds
+)
+```
+
+## Best Practices
+
+### Choosing max_retries
+
+```python
+# Simple schemas - fewer retries needed
+RetryConfig(max_retries=2)
+
+# Complex schemas - may need more attempts
+RetryConfig(max_retries=5)
+
+# Critical operations - more retries with longer backoff
+RetryConfig(max_retries=5, backoff_base_seconds=2.0)
+```
+
+### When to Enable tool_error Retry
+
+```python
+# ✅ Good candidates for tool retry
+# - Network timeouts
+# - Rate limiting
+# - Transient API errors
+
+# ❌ Bad candidates (won't help)
+# - Authentication failures
+# - Invalid parameters
+# - Permission denied
+```
+
+### Production Configuration
+
+```python
+# Development - fast iteration
+dev_config = RetryConfig(
+    max_retries=1,
+    backoff_base_seconds=0.5
+)
+
+# Production - reliability focused
+prod_config = RetryConfig(
+    max_retries=3,
+    retry_on_validation_error=True,
+    retry_on_tool_error=False,  # Only retry known-recoverable errors
+    backoff_base_seconds=1.0
+)
+```
+
+## See Also
+
+- [Agent](/api-reference/tyler-agent) - The main agent class
+- [StructuredOutputError](/api-reference/tyler-structuredoutputerror) - Exception raised when retries are exhausted
+- [Structured Output Guide](/guides/structured-output) - Complete guide to structured output
+

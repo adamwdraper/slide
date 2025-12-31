@@ -1,0 +1,220 @@
+---
+title: 'StructuredOutputError'
+description: 'Exception raised when structured output validation fails after all retry attempts'
+---
+
+## Overview
+
+`StructuredOutputError` is raised when the agent fails to produce valid structured output after exhausting all retry attempts. It provides detailed information about what went wrong, including validation errors and the last LLM response.
+
+## Class Definition
+
+```python
+class StructuredOutputError(Exception):
+    """Exception raised when structured output validation fails."""
+    
+    message: str
+    validation_errors: List[Dict[str, Any]]
+    last_response: Any
+```
+
+## Properties
+
+<ParamField path="message" type="str">
+  A human-readable description of the failure, including the number of attempts made.
+</ParamField>
+
+<ParamField path="validation_errors" type="List[Dict[str, Any]]">
+  List of Pydantic validation errors or custom error dictionaries explaining what was invalid.
+  
+  For Pydantic validation errors, each dict typically contains:
+  - `type`: The error type (e.g., `"missing"`, `"type_error"`)
+  - `loc`: The location in the schema where the error occurred
+  - `msg`: A human-readable error message
+  - `input`: The invalid input value
+</ParamField>
+
+<ParamField path="last_response" type="Any">
+  The raw content from the last LLM response before the error was raised. Useful for debugging what the LLM actually returned.
+</ParamField>
+
+## Basic Usage
+
+```python
+from tyler import Agent, StructuredOutputError, RetryConfig
+from pydantic import BaseModel
+
+class UserProfile(BaseModel):
+    name: str
+    age: int
+    email: str
+
+agent = Agent(
+    name="extractor",
+    model_name="gpt-4o",
+    retry_config=RetryConfig(max_retries=2)
+)
+
+try:
+    result = await agent.run(thread, response_type=UserProfile)
+    profile = result.structured_data
+except StructuredOutputError as e:
+    print(f"Error: {e.message}")
+    # "Failed to get valid structured output after 3 attempts"
+    
+    print(f"Validation errors: {e.validation_errors}")
+    # [{"type": "missing", "loc": ["email"], "msg": "Field required"}]
+    
+    print(f"Last response: {e.last_response}")
+    # '{"name": "John", "age": 30}'  # Missing email field
+```
+
+## Error Types
+
+### JSON Decode Errors
+
+When the LLM returns invalid JSON:
+
+```python
+try:
+    result = await agent.run(thread, response_type=MyModel)
+except StructuredOutputError as e:
+    if any(err.get("type") == "json_decode_error" for err in e.validation_errors):
+        print("LLM returned invalid JSON")
+        print(f"Raw response: {e.last_response}")
+```
+
+### Schema Validation Errors
+
+When JSON is valid but doesn't match the Pydantic schema:
+
+```python
+try:
+    result = await agent.run(thread, response_type=MyModel)
+except StructuredOutputError as e:
+    for error in e.validation_errors:
+        print(f"Field: {error.get('loc')}")
+        print(f"Error: {error.get('msg')}")
+```
+
+### Unexpected Errors
+
+For other errors during structured output processing:
+
+```python
+try:
+    result = await agent.run(thread, response_type=MyModel)
+except StructuredOutputError as e:
+    if any(err.get("type") == "unexpected_error" for err in e.validation_errors):
+        print(f"Unexpected error: {e.validation_errors[0].get('msg')}")
+```
+
+## Handling Strategies
+
+### Graceful Fallback
+
+```python
+async def extract_with_fallback(thread, model_class):
+    try:
+        result = await agent.run(thread, response_type=model_class)
+        return result.structured_data
+    except StructuredOutputError as e:
+        # Fall back to unstructured response
+        result = await agent.run(thread)  # No response_type
+        return {"raw_content": result.content, "error": e.message}
+```
+
+### Retry with Simpler Schema
+
+```python
+class DetailedProfile(BaseModel):
+    name: str
+    email: str
+    phone: str
+    address: str
+    preferences: dict
+
+class SimpleProfile(BaseModel):
+    name: str
+    email: str
+
+async def extract_profile(thread):
+    try:
+        result = await agent.run(thread, response_type=DetailedProfile)
+        return result.structured_data
+    except StructuredOutputError:
+        # Try with simpler schema
+        result = await agent.run(thread, response_type=SimpleProfile)
+        return result.structured_data
+```
+
+### Logging and Monitoring
+
+```python
+import logging
+
+logger = logging.getLogger(__name__)
+
+async def extract_data(thread, response_type):
+    try:
+        result = await agent.run(thread, response_type=response_type)
+        return result.structured_data
+    except StructuredOutputError as e:
+        logger.error(
+            "Structured output failed",
+            extra={
+                "message": e.message,
+                "validation_errors": e.validation_errors,
+                "last_response_preview": str(e.last_response)[:200],
+                "response_type": response_type.__name__
+            }
+        )
+        raise
+```
+
+## Common Causes
+
+| Cause | Solution |
+|-------|----------|
+| Schema too complex | Simplify the Pydantic model or break into smaller models |
+| Missing field descriptions | Add `Field(description="...")` to help the LLM |
+| Strict constraints | Use looser constraints or handle in post-processing |
+| Model limitations | Use a more capable model (e.g., gpt-4o instead of gpt-3.5) |
+| Ambiguous prompts | Clarify what data you want extracted |
+| Wrong data type | Ensure the input contains the data you're trying to extract |
+
+## Debugging Tips
+
+1. **Check the last response**: The `last_response` field shows exactly what the LLM returned:
+
+```python
+except StructuredOutputError as e:
+    print("LLM returned:", repr(e.last_response))
+```
+
+2. **Inspect validation errors**: The errors show exactly what failed:
+
+```python
+except StructuredOutputError as e:
+    for err in e.validation_errors:
+        print(f"{err.get('loc')}: {err.get('msg')}")
+```
+
+3. **Test your schema manually**:
+
+```python
+from pydantic import ValidationError
+
+test_json = '{"name": "John"}'  # Your LLM's response
+try:
+    MyModel.model_validate_json(test_json)
+except ValidationError as e:
+    print(e.errors())
+```
+
+## See Also
+
+- [RetryConfig](/api-reference/tyler-retryconfig) - Configure retry behavior
+- [AgentResult](/api-reference/tyler-agentresult) - Successful result with structured_data
+- [Structured Output Guide](/guides/structured-output) - Complete usage guide
+

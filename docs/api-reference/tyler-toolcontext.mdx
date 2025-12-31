@@ -1,0 +1,324 @@
+---
+title: 'ToolContext'
+description: 'Type alias and patterns for dependency injection in tools'
+---
+
+## Overview
+
+`ToolContext` is a type alias for `Dict[str, Any]` that represents the runtime context passed to tool functions. It enables dependency injection, allowing tools to access databases, API clients, user information, and other runtime dependencies.
+
+## Type Definition
+
+```python
+from typing import Dict, Any
+
+# ToolContext is a type alias
+ToolContext = Dict[str, Any]
+```
+
+## Using ToolContext
+
+### In Tool Definitions
+
+Tools that need runtime dependencies declare a `ctx` or `context` parameter as their first argument:
+
+```python
+from tyler import ToolContext
+
+async def get_user_data(ctx: ToolContext, user_id: str) -> str:
+    """Get user data from the database."""
+    db = ctx["db"]
+    user = await db.get_user(user_id)
+    return f"User: {user.name}, Email: {user.email}"
+```
+
+### Passing Context to Agent
+
+When running the agent, provide the context dictionary:
+
+```python
+from tyler import Agent, Thread, Message
+
+agent = Agent(
+    name="assistant",
+    model_name="gpt-4o",
+    tools=[user_data_tool]
+)
+
+result = await agent.run(
+    thread,
+    tool_context={
+        "db": database_connection,
+        "current_user": current_user,
+        "config": app_config
+    }
+)
+```
+
+## Parameter Naming Convention
+
+The tool runner looks for specific parameter names to identify context parameters:
+
+<ParamField path="ctx" type="ToolContext">
+  Preferred short form. Must be the first parameter.
+  
+  ```python
+  async def my_tool(ctx: ToolContext, param: str) -> str:
+      ...
+  ```
+</ParamField>
+
+<ParamField path="context" type="ToolContext">
+  Alternative longer form. Must be the first parameter.
+  
+  ```python
+  async def my_tool(context: ToolContext, param: str) -> str:
+      ...
+  ```
+</ParamField>
+
+<Warning>
+The context parameter **must** be the first parameter in your function signature. If it appears elsewhere, it won't receive the injected context.
+</Warning>
+
+## Common Context Keys
+
+While `ToolContext` is a flexible dictionary, here are common keys used in practice:
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `db` | Database | Database connection or ORM session |
+| `current_user` | User | Currently authenticated user object |
+| `user_id` | str | Current user's ID |
+| `config` | dict | Application configuration |
+| `api_client` | Any | External API client instance |
+| `cache` | Cache | Caching layer |
+| `logger` | Logger | Logging instance |
+
+## Examples
+
+### Database Access
+
+```python
+async def query_orders(ctx: ToolContext, status: str, limit: int = 10) -> str:
+    """Query orders from the database."""
+    db = ctx["db"]
+    user_id = ctx["user_id"]
+    
+    orders = await db.query(
+        "SELECT * FROM orders WHERE user_id = ? AND status = ? LIMIT ?",
+        [user_id, status, limit]
+    )
+    
+    return json.dumps([dict(o) for o in orders])
+```
+
+### API Client
+
+```python
+async def send_notification(ctx: ToolContext, message: str, channel: str) -> str:
+    """Send a notification via Slack."""
+    slack = ctx["slack_client"]
+    
+    response = await slack.chat_postMessage(
+        channel=channel,
+        text=message
+    )
+    
+    return f"Notification sent: {response['ts']}"
+```
+
+### User Context
+
+```python
+async def get_personalized_recommendations(ctx: ToolContext, category: str) -> str:
+    """Get recommendations based on user preferences."""
+    user = ctx["current_user"]
+    recommender = ctx["recommendation_service"]
+    
+    recs = await recommender.get_recommendations(
+        user_id=user.id,
+        preferences=user.preferences,
+        category=category
+    )
+    
+    return json.dumps(recs)
+```
+
+### Configuration Access
+
+```python
+async def fetch_external_data(ctx: ToolContext, query: str) -> str:
+    """Fetch data from external API with configured settings."""
+    config = ctx["config"]
+    http_client = ctx["http_client"]
+    
+    api_url = config["external_api_url"]
+    api_key = config["external_api_key"]
+    
+    response = await http_client.get(
+        f"{api_url}/search",
+        params={"q": query},
+        headers={"Authorization": f"Bearer {api_key}"}
+    )
+    
+    return response.text
+```
+
+## Error Handling
+
+### Missing Context
+
+When a tool expects context but none is provided:
+
+```python
+from tyler import ToolContextError
+
+async def requires_db(ctx: ToolContext, query: str) -> str:
+    db = ctx["db"]  # KeyError if 'db' not in context
+    ...
+
+# This raises ToolContextError
+try:
+    result = await agent.run(thread)  # No tool_context!
+except ToolContextError as e:
+    print(f"Missing context: {e}")
+```
+
+### Missing Keys
+
+Handle missing keys gracefully:
+
+```python
+async def flexible_tool(ctx: ToolContext, action: str) -> str:
+    # Check for required keys
+    if "db" not in ctx:
+        raise ValueError("This tool requires 'db' in context")
+    
+    # Use optional keys with defaults
+    logger = ctx.get("logger", logging.getLogger(__name__))
+    cache = ctx.get("cache")
+    
+    if cache:
+        cached = await cache.get(action)
+        if cached:
+            return cached
+    
+    # ... rest of implementation
+```
+
+## Backward Compatibility
+
+Tools without a context parameter work normally:
+
+```python
+# This tool doesn't use context
+async def simple_math(a: int, b: int) -> str:
+    return str(a + b)
+
+# Context is ignored for this tool
+await agent.run(
+    thread,
+    tool_context={"db": database}  # Passed but not used
+)
+```
+
+## Testing with Context
+
+Mock context for testing:
+
+```python
+import pytest
+from unittest.mock import AsyncMock, MagicMock
+
+@pytest.mark.asyncio
+async def test_query_orders():
+    # Create mock context
+    mock_db = AsyncMock()
+    mock_db.query.return_value = [
+        {"id": 1, "status": "pending"},
+        {"id": 2, "status": "pending"}
+    ]
+    
+    ctx = {
+        "db": mock_db,
+        "user_id": "user_123"
+    }
+    
+    # Call tool directly
+    result = await query_orders(ctx, status="pending", limit=10)
+    
+    # Verify
+    assert "pending" in result
+    mock_db.query.assert_called_once()
+```
+
+## Best Practices
+
+### Type Documentation
+
+Document expected context keys in your tool's docstring:
+
+```python
+async def complex_tool(ctx: ToolContext, param: str) -> str:
+    """
+    Perform a complex operation.
+    
+    Args:
+        ctx: Runtime context containing:
+            - db (Database): Required. Database connection.
+            - cache (Cache): Optional. Caching layer.
+            - config (dict): Required. Application config with 'api_url' key.
+        param: The operation parameter.
+    
+    Returns:
+        Operation result as JSON string.
+    """
+```
+
+### Validation Helper
+
+Create a validation helper for complex context requirements:
+
+```python
+def validate_context(ctx: ToolContext, required: list[str]) -> None:
+    """Validate that context contains required keys."""
+    missing = [key for key in required if key not in ctx]
+    if missing:
+        raise ValueError(f"Context missing required keys: {missing}")
+
+async def my_tool(ctx: ToolContext, param: str) -> str:
+    validate_context(ctx, ["db", "user_id", "config"])
+    ...
+```
+
+### Context Factory
+
+Create context consistently across your application:
+
+```python
+class ToolContextFactory:
+    def __init__(self, db, config):
+        self.db = db
+        self.config = config
+    
+    def create(self, user: User) -> ToolContext:
+        return {
+            "db": self.db,
+            "config": self.config,
+            "current_user": user,
+            "user_id": user.id,
+            "logger": logging.getLogger(f"tools.{user.id}")
+        }
+
+# Usage
+factory = ToolContextFactory(database, app_config)
+result = await agent.run(thread, tool_context=factory.create(current_user))
+```
+
+## See Also
+
+- [Agent](/api-reference/tyler-agent) - Agent.run() with tool_context
+- [Adding Tools](/guides/adding-tools) - Creating custom tools
+- [Structured Output Guide](/guides/structured-output) - Complete guide including tool context
+

@@ -15,6 +15,7 @@ class AgentResult:
     thread: Thread                    # Updated thread with new messages
     new_messages: List[Message]       # New messages added during execution
     content: Optional[str]            # Final assistant response content
+    structured_data: Optional[BaseModel]  # Validated Pydantic model (if response_type used)
 ```
 
 ## Properties
@@ -29,6 +30,26 @@ class AgentResult:
 
 <ParamField path="content" type="Optional[str]">
   The final assistant response content. None if no assistant message was generated
+</ParamField>
+
+<ParamField path="structured_data" type="Optional[BaseModel]">
+  When `response_type` is provided to `agent.run()`, this field contains a validated instance
+  of the Pydantic model. The LLM's JSON response is parsed and validated against the schema.
+  
+  ```python
+  from pydantic import BaseModel
+  
+  class Invoice(BaseModel):
+      vendor: str
+      total: float
+  
+  result = await agent.run(thread, response_type=Invoice)
+  invoice: Invoice = result.structured_data
+  print(f"Vendor: {invoice.vendor}, Total: ${invoice.total}")
+  ```
+  
+  Returns `None` if `response_type` was not provided. See the 
+  [Structured Output Guide](/guides/structured-output) for complete usage.
 </ParamField>
 
 
@@ -203,8 +224,55 @@ await store.update_metadata(
 )
 ```
 
+## Structured Output Usage
+
+When using structured output, access the validated data through `structured_data`:
+
+```python
+from pydantic import BaseModel, Field
+from typing import List, Literal
+
+class SupportTicket(BaseModel):
+    priority: Literal["low", "medium", "high"]
+    category: str
+    summary: str = Field(max_length=500)
+    requires_escalation: bool
+
+# Run with response_type
+result = await agent.run(thread, response_type=SupportTicket)
+
+# Access structured data
+if result.structured_data:
+    ticket: SupportTicket = result.structured_data
+    print(f"Priority: {ticket.priority}")
+    print(f"Category: {ticket.category}")
+    print(f"Needs escalation: {ticket.requires_escalation}")
+
+# Raw content is still available
+print(f"Raw JSON: {result.content}")
+```
+
+### Handling Errors
+
+When structured output validation fails after all retries, `StructuredOutputError` is raised:
+
+```python
+from tyler import StructuredOutputError
+
+try:
+    result = await agent.run(thread, response_type=SupportTicket)
+except StructuredOutputError as e:
+    print(f"Failed: {e.message}")
+    print(f"Validation errors: {e.validation_errors}")
+    print(f"Last response: {e.last_response}")
+```
+
+See the [Structured Output Guide](/guides/structured-output) for complete documentation.
+
 ## See Also
 
-- [Thread](/api-reference/tyler-thread) - Conversation management
+- [Thread](/api-reference/narrator-thread) - Conversation management
 - [Agent](/api-reference/tyler-agent) - The main agent class
+- [RetryConfig](/api-reference/tyler-retryconfig) - Retry configuration for structured output
+- [StructuredOutputError](/api-reference/tyler-structuredoutputerror) - Error when validation fails
 - [ExecutionEvent](/api-reference/tyler-executionevent) - Individual execution events (for streaming mode)
