@@ -30,40 +30,82 @@ Structured output lets you define a Pydantic model as the expected response form
 
 ### Basic Usage
 
-```python
-from pydantic import BaseModel, Field
-from typing import Literal, List
-from tyler import Agent, Thread, Message
+You can set `response_type` on the agent (as a default for all runs) or pass it per-run:
 
-# 1. Define your output schema
-class SupportTicket(BaseModel):
-    priority: Literal["low", "medium", "high"]
-    category: str
-    summary: str = Field(max_length=500)
-    requires_escalation: bool
+<Tabs>
+  <Tab title="Agent-level default">
+    ```python
+    from pydantic import BaseModel, Field
+    from typing import Literal
+    from tyler import Agent, Thread, Message
 
-# 2. Create an agent
-agent = Agent(
-    name="ticket-classifier",
-    model_name="gpt-4o",
-    purpose="To classify support tickets"
-)
+    # 1. Define your output schema
+    class SupportTicket(BaseModel):
+        priority: Literal["low", "medium", "high"]
+        category: str
+        summary: str = Field(max_length=500)
+        requires_escalation: bool
 
-# 3. Run with response_type
-thread = Thread()
-thread.add_message(Message(
-    role="user",
-    content="My payment failed and I'm locked out of my account!"
-))
+    # 2. Create agent with default response_type
+    agent = Agent(
+        name="ticket-classifier",
+        model_name="gpt-4o",
+        purpose="To classify support tickets",
+        response_type=SupportTicket  # Default for all runs
+    )
 
-result = await agent.run(thread, response_type=SupportTicket)
+    # 3. Run - uses agent's default response_type
+    thread = Thread()
+    thread.add_message(Message(
+        role="user",
+        content="My payment failed and I'm locked out!"
+    ))
 
-# 4. Access the validated data
-ticket: SupportTicket = result.structured_data
-print(f"Priority: {ticket.priority}")      # "high"
-print(f"Category: {ticket.category}")      # "billing"
-print(f"Escalation: {ticket.requires_escalation}")  # True
-```
+    result = await agent.run(thread)  # No need to pass response_type
+
+    # 4. Access the validated data
+    ticket: SupportTicket = result.structured_data
+    print(f"Priority: {ticket.priority}")  # "high"
+    ```
+  </Tab>
+  <Tab title="Per-run override">
+    ```python
+    from pydantic import BaseModel, Field
+    from typing import Literal, List
+    from tyler import Agent, Thread, Message
+
+    class SupportTicket(BaseModel):
+        priority: Literal["low", "medium", "high"]
+        category: str
+        summary: str = Field(max_length=500)
+        requires_escalation: bool
+
+    class Invoice(BaseModel):
+        invoice_id: str
+        total: float
+        items: List[str]
+
+    # Agent without default - flexible for multiple schemas
+    agent = Agent(
+        name="data-extractor",
+        model_name="gpt-4o",
+        purpose="To extract structured data"
+    )
+
+    # Extract a support ticket
+    result1 = await agent.run(thread1, response_type=SupportTicket)
+    ticket = result1.structured_data
+
+    # Same agent, different schema
+    result2 = await agent.run(thread2, response_type=Invoice)
+    invoice = result2.structured_data
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+  Per-run `response_type` always overrides the agent's default. This lets you have a sensible default while retaining flexibility.
+</Note>
 
 ### How It Works
 

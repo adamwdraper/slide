@@ -1,10 +1,11 @@
 """Example: Structured Output with Pydantic Models
 
-This example demonstrates how to use the response_type parameter
-to get validated, type-safe structured outputs from your agent.
+This example demonstrates how to use response_type to get validated,
+type-safe structured outputs from your agent.
 
 Features shown:
-- Basic structured output with a Pydantic model
+- Agent-level default response_type (set once, used for all runs)
+- Per-run response_type override
 - Automatic validation of LLM responses
 - Retry on validation failure with retry_config
 - Accessing the validated structured_data
@@ -43,16 +44,18 @@ class SupportTicket(BaseModel):
     suggested_actions: List[str]
 
 
-async def basic_structured_output():
-    """Basic example: Get a movie review in structured format."""
+async def agent_level_response_type():
+    """Example: Set response_type on the agent for all runs."""
     print("=" * 60)
-    print("Basic Structured Output Example")
+    print("Agent-Level Response Type (Default for All Runs)")
     print("=" * 60)
     
+    # Set response_type on the agent - all runs will use this schema
     agent = Agent(
         name="movie-reviewer",
         model_name="gpt-4.1",
-        purpose="To provide detailed movie reviews"
+        purpose="To provide detailed movie reviews",
+        response_type=MovieReview  # Default for all runs
     )
     
     thread = Thread()
@@ -61,8 +64,8 @@ async def basic_structured_output():
         content="Give me a review of The Matrix (1999)"
     ))
     
-    # Use response_type to get structured output
-    result = await agent.run(thread, response_type=MovieReview)
+    # No need to pass response_type - uses agent's default
+    result = await agent.run(thread)
     
     # Access the validated Pydantic model
     review: MovieReview = result.structured_data
@@ -79,6 +82,40 @@ async def basic_structured_output():
         print(f"  ✗ {con}")
     
     return review
+
+
+async def per_run_response_type():
+    """Example: Override response_type per-run for flexibility."""
+    print("\n" + "=" * 60)
+    print("Per-Run Response Type Override")
+    print("=" * 60)
+    
+    # Agent with no default response_type
+    agent = Agent(
+        name="flexible-analyzer",
+        model_name="gpt-4.1",
+        purpose="To analyze and extract structured data"
+    )
+    
+    # First run: extract a movie review
+    thread1 = Thread()
+    thread1.add_message(Message(
+        role="user",
+        content="Give me a review of Inception (2010)"
+    ))
+    result1 = await agent.run(thread1, response_type=MovieReview)
+    print(f"\nExtracted MovieReview: {result1.structured_data.title}")
+    
+    # Second run: same agent, different schema
+    thread2 = Thread()
+    thread2.add_message(Message(
+        role="user",
+        content="User says: I can't log in and my subscription expired yesterday!"
+    ))
+    result2 = await agent.run(thread2, response_type=SupportTicket)
+    print(f"Extracted SupportTicket: Priority={result2.structured_data.priority}")
+    
+    return result1.structured_data, result2.structured_data
 
 
 async def structured_output_with_retry():
@@ -154,8 +191,11 @@ async def handling_validation_errors():
 
 async def main():
     """Run all examples."""
-    # Basic structured output
-    await basic_structured_output()
+    # Agent-level default response_type
+    await agent_level_response_type()
+    
+    # Per-run override for flexibility
+    await per_run_response_type()
     
     # With retry for reliability
     await structured_output_with_retry()

@@ -179,6 +179,10 @@ class Agent(BaseModel):
         default=None, 
         description="Configuration for structured output validation retry. When set, the agent will retry on validation failures up to max_retries times."
     )
+    response_type: Optional[Type[BaseModel]] = Field(
+        default=None,
+        description="Default Pydantic model for structured output. When set, agent.run() will return validated structured data. Can be overridden per-run via agent.run(response_type=...)."
+    )
     
     # Helper objects excluded from serialization (recreated on deserialization)
     message_factory: Optional[MessageFactory] = Field(default=None, exclude=True, description="Factory for creating standardized messages (excluded from serialization)")
@@ -639,9 +643,10 @@ class Agent(BaseModel):
             thread_or_id: Thread object or thread ID to process. The thread will be
                          modified in-place with new messages.
             response_type: Optional Pydantic model class for structured output.
-                          When provided, the agent will instruct the LLM to respond
-                          in JSON matching this schema, and the response will be
-                          validated and returned in result.structured_data.
+                          When provided, overrides the agent's default response_type.
+                          The agent will instruct the LLM to respond in JSON matching
+                          this schema, and the response will be validated and returned
+                          in result.structured_data. If None, uses the agent's default.
             tool_context: Optional dictionary of dependencies to inject into tools.
                          Tools that have 'ctx' or 'context' as their first parameter
                          will receive this context. Enables dependency injection for
@@ -684,9 +689,12 @@ class Agent(BaseModel):
         # Store tool context for use by _handle_tool_execution
         self._tool_context = tool_context
         
+        # Use provided response_type, or fall back to agent's default
+        effective_response_type = response_type if response_type is not None else self.response_type
+        
         try:
-            if response_type is not None:
-                return await self._run_with_structured_output(thread_or_id, response_type)
+            if effective_response_type is not None:
+                return await self._run_with_structured_output(thread_or_id, effective_response_type)
             else:
                 return await self._run_complete(thread_or_id)
         finally:

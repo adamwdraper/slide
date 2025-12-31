@@ -100,6 +100,72 @@ class TestStructuredOutputBasic:
             assert result.structured_data is None
     
     @pytest.mark.asyncio
+    async def test_agent_level_response_type(self, thread):
+        """Test that response_type on Agent is used as default for all runs."""
+        # Create agent with default response_type
+        agent_with_default = Agent(
+            name="test-agent",
+            model_name="gpt-4.1",
+            purpose="Test structured output",
+            response_type=Invoice  # Agent-level default
+        )
+        
+        valid_response = {
+            "invoice_id": "INV-002",
+            "total": 250.00,
+            "items": ["Service A"],
+            "paid": True
+        }
+        
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = json.dumps(valid_response)
+        
+        with patch('tyler.models.agent.acompletion', new_callable=AsyncMock) as mock_completion:
+            mock_completion.return_value = mock_response
+            
+            # No response_type passed - should use agent's default
+            result = await agent_with_default.run(thread)
+            
+            assert result.structured_data is not None
+            assert isinstance(result.structured_data, Invoice)
+            assert result.structured_data.invoice_id == "INV-002"
+    
+    @pytest.mark.asyncio
+    async def test_per_run_response_type_overrides_agent_default(self, thread):
+        """Test that per-run response_type overrides agent's default."""
+        # Create agent with Invoice as default
+        agent_with_default = Agent(
+            name="test-agent",
+            model_name="gpt-4.1",
+            purpose="Test structured output",
+            response_type=Invoice
+        )
+        
+        # Response that matches SupportTicket, not Invoice
+        support_response = {
+            "priority": "high",
+            "category": "billing",
+            "summary": "Payment issue",
+            "requires_escalation": True
+        }
+        
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = json.dumps(support_response)
+        
+        with patch('tyler.models.agent.acompletion', new_callable=AsyncMock) as mock_completion:
+            mock_completion.return_value = mock_response
+            
+            # Override with SupportTicket for this run
+            result = await agent_with_default.run(thread, response_type=SupportTicket)
+            
+            # Should be SupportTicket, not Invoice
+            assert result.structured_data is not None
+            assert isinstance(result.structured_data, SupportTicket)
+            assert result.structured_data.priority == "high"
+    
+    @pytest.mark.asyncio
     async def test_validation_failure_raises_without_retry(self, agent, thread):
         """Test that validation failure raises StructuredOutputError when no retry config."""
         # Invalid response - missing required fields

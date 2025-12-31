@@ -156,6 +156,34 @@ agent = Agent(
   See [RetryConfig](/api-reference/tyler-retryconfig) for all options.
 </ParamField>
 
+<ParamField path="response_type" type="Type[BaseModel] | None" default="None">
+  Default Pydantic model for structured output. When set, all `run()` calls will return
+  validated structured data in `result.structured_data`. Can be overridden per-run by
+  passing `response_type` to `run()`.
+  
+  ```python
+  from pydantic import BaseModel
+  from tyler import Agent
+  
+  class Invoice(BaseModel):
+      invoice_id: str
+      total: float
+  
+  # Agent with default response_type
+  agent = Agent(
+      name="invoice-extractor",
+      model_name="gpt-4o",
+      response_type=Invoice  # Default for all runs
+  )
+  
+  # No need to pass response_type - uses agent's default
+  result = await agent.run(thread)
+  invoice = result.structured_data  # Invoice instance
+  ```
+  
+  See [Structured Output Guide](/guides/structured-output) for more examples.
+</ParamField>
+
 ## Creating from Config Files
 
 <ParamField path="Agent.from_config" type="classmethod">
