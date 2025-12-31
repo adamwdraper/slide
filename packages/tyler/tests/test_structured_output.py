@@ -432,7 +432,7 @@ class TestStructuredOutputWithTools:
     
     @pytest.mark.asyncio
     async def test_output_tool_passed_to_step(self, thread):
-        """Test that the output tool is passed to step() as a parameter."""
+        """Test that the output tool and tool_choice are passed to step()."""
         agent = Agent(
             name="test-agent",
             model_name="gpt-4.1",
@@ -444,13 +444,16 @@ class TestStructuredOutputWithTools:
         
         captured_tools = []
         captured_system_prompt = []
+        captured_tool_choice = []
         
-        async def capture_step(thread_arg, stream=False, tools=None, system_prompt=None):
-            # Capture the tools passed to step
+        async def capture_step(thread_arg, stream=False, tools=None, system_prompt=None, tool_choice=None):
+            # Capture the parameters passed to step
             if tools:
                 captured_tools.extend(tools)
             if system_prompt:
                 captured_system_prompt.append(system_prompt)
+            if tool_choice:
+                captured_tool_choice.append(tool_choice)
             return (output_response, {"usage": {}})
         
         with patch.object(agent, 'step', side_effect=capture_step):
@@ -463,6 +466,10 @@ class TestStructuredOutputWithTools:
             # Check that system prompt includes output instruction
             assert len(captured_system_prompt) > 0
             assert "structured_output_instruction" in captured_system_prompt[0]
+            
+            # Check that tool_choice="required" was passed (like Pydantic AI)
+            assert len(captured_tool_choice) > 0
+            assert captured_tool_choice[0] == "required"
 
 
 class TestStructuredOutputValidation:
@@ -506,14 +513,18 @@ class TestStructuredOutputValidation:
     
     @pytest.mark.asyncio
     async def test_plain_text_response_triggers_reminder(self, thread):
-        """Test that plain text response adds a reminder message."""
+        """Test that plain text response adds a reminder message.
+        
+        Note: With tool_choice="required", models should always call a tool.
+        This test verifies fallback behavior if a model doesn't comply.
+        """
         agent = Agent(
             name="test-agent",
             model_name="gpt-4.1",
             purpose="Test reminder"
         )
         
-        # First response: plain text (no tool calls)
+        # First response: plain text (no tool calls) - edge case fallback
         plain_text_response = create_plain_response("Here is my answer...")
         
         # Second response: proper output tool call
@@ -522,7 +533,7 @@ class TestStructuredOutputValidation:
         
         call_count = [0]
         
-        async def mock_step(thread_arg, stream=False, tools=None, system_prompt=None):
+        async def mock_step(thread_arg, stream=False, tools=None, system_prompt=None, tool_choice=None):
             call_count[0] += 1
             if call_count[0] == 1:
                 return (plain_text_response, {"usage": {}})

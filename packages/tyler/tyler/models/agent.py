@@ -428,7 +428,8 @@ class Agent(BaseModel):
         thread: Thread, 
         stream: bool = False,
         tools: Optional[List[Dict]] = None,
-        system_prompt: Optional[str] = None
+        system_prompt: Optional[str] = None,
+        tool_choice: Optional[str] = None
     ) -> Tuple[Any, Dict]:
         """Execute a single step of the agent's processing.
         
@@ -442,6 +443,8 @@ class Agent(BaseModel):
             stream: Whether to stream the response. Defaults to False.
             tools: Optional tools override. If None, uses self._processed_tools.
             system_prompt: Optional system prompt override. If None, uses self._system_prompt.
+            tool_choice: Optional tool_choice parameter for LLM. Use "required" to force
+                tool calls (used for structured output), "auto" for default behavior.
             
         Returns:
             Tuple[Any, Dict]: The completion response and metrics.
@@ -464,6 +467,10 @@ class Agent(BaseModel):
         # Add response_format if set (for simple JSON mode)
         if self._response_format == "json":
             completion_params["response_format"] = {"type": "json_object"}
+        
+        # Add tool_choice if specified (used for structured output to force tool calls)
+        if tool_choice is not None and effective_tools:
+            completion_params["tool_choice"] = tool_choice
         
         # Track API call time
         api_start_time = datetime.now(timezone.utc)
@@ -839,11 +846,13 @@ class Agent(BaseModel):
             self._iteration_count = 0
             
             while self._iteration_count < self.max_tool_iterations:
-                # Get completion with tools and system prompt overrides
+                # Get completion with tools, system prompt, and tool_choice overrides
+                # tool_choice="required" forces the model to call a tool (like Pydantic AI does)
                 response, metrics = await self.step(
                     thread, 
                     tools=tools_with_output,
-                    system_prompt=system_prompt_with_output
+                    system_prompt=system_prompt_with_output,
+                    tool_choice="required"
                 )
                 
                 if not response or not hasattr(response, 'choices') or not response.choices:
