@@ -26,20 +26,53 @@ def mock_openai():
     We patch at multiple locations because modules use different import styles:
     - litellm.completion / litellm.acompletion (direct module access)
     - tyler.models.agent.acompletion (from litellm import acompletion)
+    
+    The mock detects if response_format is requested (structured output) and
+    returns valid JSON that can be parsed, otherwise returns plain text.
     """
     from unittest.mock import AsyncMock
+    import json
     
-    mock_response = MagicMock(
-        choices=[MagicMock(message=MagicMock(content="Test response", tool_calls=None))],
-        usage=MagicMock(prompt_tokens=10, completion_tokens=20, total_tokens=30)
-    )
+    def create_mock_response(content):
+        return MagicMock(
+            choices=[MagicMock(message=MagicMock(content=content, tool_calls=None))],
+            usage=MagicMock(prompt_tokens=10, completion_tokens=20, total_tokens=30)
+        )
     
-    async_mock = AsyncMock(return_value=mock_response)
+    # Default response for non-structured output
+    default_response = create_mock_response("Test response")
     
-    with patch('litellm.completion') as mock_sync, \
+    # JSON response for structured output - a generic object that can be parsed
+    # Real validation will fail but at least JSON parsing succeeds
+    json_response = create_mock_response(json.dumps({
+        "title": "Test Movie",
+        "rating": 8.5,
+        "genre": "drama",
+        "pros": ["Great acting", "Good plot"],
+        "cons": ["Too long"],
+        "recommended": True,
+        "priority": "medium",
+        "category": "general",
+        "summary": "Test summary",
+        "requires_escalation": False,
+        "suggested_actions": ["Review", "Follow up"]
+    }))
+    
+    def smart_response(*args, **kwargs):
+        """Return JSON for structured output requests, plain text otherwise."""
+        if kwargs.get('response_format'):
+            return json_response
+        return default_response
+    
+    async def async_smart_response(*args, **kwargs):
+        """Async version of smart_response."""
+        return smart_response(*args, **kwargs)
+    
+    async_mock = AsyncMock(side_effect=async_smart_response)
+    
+    with patch('litellm.completion', side_effect=smart_response) as mock_sync, \
          patch('litellm.acompletion', async_mock), \
          patch('tyler.models.agent.acompletion', async_mock):
-        mock_sync.return_value = mock_response
         yield mock_sync, async_mock
 
 @pytest.fixture(autouse=True)
