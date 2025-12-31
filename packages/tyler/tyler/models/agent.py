@@ -745,6 +745,7 @@ class Agent(BaseModel):
         retry_count = 0
         last_validation_errors = []
         last_response = None
+        retry_history = []  # Collect retry attempt details for debugging
         
         # Schema instruction to append to system prompt
         schema_instruction = f"\n\nYou MUST respond with valid JSON matching this schema:\n```json\n{json.dumps(schema, indent=2)}\n```"
@@ -814,6 +815,14 @@ class Agent(BaseModel):
                     last_validation_errors = [{"type": "json_error", "msg": str(e)}]
                     retry_count += 1
                     
+                    # Record retry attempt for debugging
+                    retry_history.append({
+                        "attempt": retry_count,
+                        "error_type": "json_parse_error",
+                        "errors": last_validation_errors,
+                        "response_preview": content[:500] if len(content) > 500 else content
+                    })
+                    
                     if retry_count > max_retries:
                         raise StructuredOutputError(
                             f"Failed to parse JSON after {retry_count} attempts: {e}",
@@ -831,11 +840,20 @@ class Agent(BaseModel):
                     validated_data = response_type.model_validate(raw_json)
                     
                     # Success! Create the result
+                    # Build metrics with retry info if any retries occurred
+                    metrics = {}
+                    if retry_count > 0:
+                        metrics["structured_output"] = {
+                            "validation_retries": retry_count,
+                            "retry_history": retry_history
+                        }
+                    
                     # Create assistant message
                     message = Message(
                         role="assistant",
                         content=content,
-                        source=self._create_assistant_source(include_version=True)
+                        source=self._create_assistant_source(include_version=True),
+                        metrics=metrics if metrics else {}
                     )
                     thread.add_message(message)
                     
@@ -848,13 +866,23 @@ class Agent(BaseModel):
                         new_messages=[message],
                         content=content,
                         structured_data=validated_data,
-                        validation_retries=retry_count
+                        validation_retries=retry_count,
+                        retry_history=retry_history if retry_history else None
                     )
                     
                 except ValidationError as e:
                     # Pydantic validation failed
                     last_validation_errors = e.errors()
                     retry_count += 1
+                    
+                    # Record retry attempt for debugging
+                    response_str = json.dumps(raw_json) if isinstance(raw_json, dict) else str(raw_json)
+                    retry_history.append({
+                        "attempt": retry_count,
+                        "error_type": "validation_error",
+                        "errors": last_validation_errors,
+                        "response_preview": response_str[:500] if len(response_str) > 500 else response_str
+                    })
                     
                     logging.getLogger(__name__).warning(
                         f"Structured output validation failed (attempt {retry_count}/{max_retries + 1}): {e}"

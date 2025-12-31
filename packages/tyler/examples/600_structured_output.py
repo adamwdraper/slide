@@ -9,6 +9,7 @@ Features shown:
 - Automatic validation of LLM responses
 - Retry on validation failure with retry_config
 - Accessing the validated structured_data
+- Debugging with retry_history (available on AgentResult and Message.metrics)
 
 Prerequisites:
     pip install slide-tyler
@@ -156,6 +157,17 @@ async def structured_output_with_retry():
     
     if result.validation_retries > 0:
         print(f"\n(Note: Required {result.validation_retries} retry attempts)")
+        
+        # Access detailed retry history for debugging (also persisted in Message.metrics)
+        if result.retry_history:
+            print("\nRetry History (for debugging):")
+            for attempt in result.retry_history:
+                print(f"  Attempt {attempt['attempt']}: {attempt['error_type']}")
+                print(f"    Errors: {attempt['errors']}")
+        
+        # Retry history is also stored in the message for post-hoc debugging:
+        # assistant_msg = result.new_messages[-1]
+        # assistant_msg.metrics.get("structured_output", {}).get("retry_history")
     
     return ticket
 

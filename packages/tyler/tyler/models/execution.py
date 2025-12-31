@@ -57,12 +57,16 @@ class AgentResult:
             Only populated when agent.run() is called with a response_type parameter.
         validation_retries: Number of validation retry attempts needed.
             Only relevant when using structured output with retry_config.
+        retry_history: Detailed history of validation retry attempts.
+            Each entry contains: attempt number, validation errors, and response preview.
+            Only populated when validation retries occur during structured output.
     """
     thread: Thread
     new_messages: List[Message]
     content: Optional[str]
     structured_data: Optional[Any] = None  # Optional[BaseModel] at runtime
     validation_retries: int = 0
+    retry_history: Optional[List[Dict[str, Any]]] = None
 
 
 class StructuredOutputError(Exception):
