@@ -27,24 +27,32 @@ def mock_openai():
     - litellm.completion / litellm.acompletion (direct module access)
     - tyler.models.agent.acompletion (from litellm import acompletion)
     
-    The mock detects if response_format is requested (structured output) and
-    returns valid JSON that can be parsed, otherwise returns plain text.
+    The mock detects:
+    1. If an output tool (e.g., __MovieReview_output__) is in tools, return a tool call
+    2. If response_format is requested, return valid JSON
+    3. Otherwise return plain text
     """
     from unittest.mock import AsyncMock
     import json
     
-    def create_mock_response(content):
+    def create_mock_response(content, tool_calls=None):
         return MagicMock(
-            choices=[MagicMock(message=MagicMock(content=content, tool_calls=None))],
+            choices=[MagicMock(message=MagicMock(content=content, tool_calls=tool_calls))],
             usage=MagicMock(prompt_tokens=10, completion_tokens=20, total_tokens=30)
         )
     
-    # Default response for non-structured output
-    default_response = create_mock_response("Test response")
+    def create_tool_call_response(tool_name, arguments):
+        """Create a response with a tool call."""
+        tool_call = MagicMock()
+        tool_call.id = "call_test123"
+        tool_call.type = "function"
+        tool_call.function = MagicMock()
+        tool_call.function.name = tool_name
+        tool_call.function.arguments = json.dumps(arguments)
+        return create_mock_response(None, tool_calls=[tool_call])
     
-    # JSON response for structured output - a generic object that can be parsed
-    # Real validation will fail but at least JSON parsing succeeds
-    json_response = create_mock_response(json.dumps({
+    # Generic structured output data that matches common test schemas
+    structured_data = {
         "title": "Test Movie",
         "rating": 8.5,
         "genre": "drama",
@@ -56,12 +64,31 @@ def mock_openai():
         "summary": "Test summary",
         "requires_escalation": False,
         "suggested_actions": ["Review", "Follow up"]
-    }))
+    }
+    
+    # Default response for non-structured output
+    default_response = create_mock_response("Test response")
+    
+    # JSON response for simple JSON mode (response_format="json")
+    json_response = create_mock_response(json.dumps(structured_data))
     
     def smart_response(*args, **kwargs):
-        """Return JSON for structured output requests, plain text otherwise."""
+        """Return appropriate response based on request type."""
+        tools = kwargs.get('tools', [])
+        
+        # Check for output tool pattern (structured output via tool calls)
+        for tool in tools:
+            if tool.get('type') == 'function':
+                func = tool.get('function', {})
+                name = func.get('name', '')
+                if name.startswith('__') and name.endswith('_output__'):
+                    # Return a tool call to the output tool with valid data
+                    return create_tool_call_response(name, structured_data)
+        
+        # Check for simple JSON mode
         if kwargs.get('response_format'):
             return json_response
+        
         return default_response
     
     async def async_smart_response(*args, **kwargs):
