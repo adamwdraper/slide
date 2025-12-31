@@ -128,9 +128,12 @@ agent = Agent(
 </ParamField>
 
 <ParamField path="response_type" type="Type[BaseModel] | None" default="None">
-  Optional Pydantic model to enforce structured output from the LLM. When provided, the agent
-  will instruct the LLM to return JSON conforming to this schema and validate the response.
-  The validated model instance is available in `AgentResult.structured_data`.
+  Optional Pydantic model to enforce structured output from the LLM. Uses the **output-tool pattern**:
+  your Pydantic schema is registered as a special tool, and `tool_choice="required"` forces the
+  model to call it. The validated model instance is available in `AgentResult.structured_data`.
+  
+  This approach allows regular tools to work alongside structured output. LiteLLM automatically
+  translates `tool_choice` for different providers (OpenAI, Anthropic, Gemini, Bedrock, etc.).
   
   Can be set at the agent level (default for all runs) or overridden per `run()` call.
   See the [Structured Output Guide](/guides/structured-output) for details.
@@ -156,32 +159,20 @@ agent = Agent(
   See [RetryConfig](/api-reference/tyler-retryconfig) for all options.
 </ParamField>
 
-<ParamField path="response_type" type="Type[BaseModel] | None" default="None">
-  Default Pydantic model for structured output. When set, all `run()` calls will return
-  validated structured data in `result.structured_data`. Can be overridden per-run by
-  passing `response_type` to `run()`.
+<ParamField path="response_format" type="Literal['json'] | None" default="None">
+  Simple JSON mode for when you want any valid JSON without schema validation.
+  Pass `response_format="json"` to `run()` to force JSON output.
   
   ```python
-  from pydantic import BaseModel
-  from tyler import Agent
-  
-  class Invoice(BaseModel):
-      invoice_id: str
-      total: float
-  
-  # Agent with default response_type
-  agent = Agent(
-      name="invoice-extractor",
-      model_name="gpt-4o",
-      response_type=Invoice  # Default for all runs
-  )
-  
-  # No need to pass response_type - uses agent's default
-  result = await agent.run(thread)
-  invoice = result.structured_data  # Invoice instance
+  # Get any valid JSON (no schema validation)
+  result = await agent.run(thread, response_format="json")
+  data = json.loads(result.content)  # Parse yourself
   ```
   
-  See [Structured Output Guide](/guides/structured-output) for more examples.
+  <Warning>
+    Cannot be used with `response_type`. Use `response_type` for schema validation,
+    or `response_format="json"` for simple JSON without validation.
+  </Warning>
 </ParamField>
 
 ## Creating from Config Files

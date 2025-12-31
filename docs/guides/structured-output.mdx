@@ -109,12 +109,22 @@ You can set `response_type` on the agent (as a default for all runs) or pass it 
 
 ### How It Works
 
-When you provide a `response_type`:
+When you provide a `response_type`, Slide uses the **output-tool pattern** (the same approach as [Pydantic AI](https://ai.pydantic.dev/output/)):
 
-1. Slide generates a JSON schema from your Pydantic model
-2. The LLM is instructed to return JSON matching that schema
-3. The response is parsed and validated against your model
-4. You get a fully typed Python object in `result.structured_data`
+1. **Schema as Tool**: Your Pydantic model is registered as a special "output tool"
+2. **Forced Tool Call**: The LLM is called with `tool_choice="required"`, ensuring it must call a tool
+3. **Validation**: When the LLM calls the output tool, its arguments are validated against your schema
+4. **Retry on Failure**: If validation fails, an error message is added and the LLM retries
+
+This approach has key advantages over simple JSON mode:
+- **Tools + Structured Output**: Regular tools work alongside structured output in the same conversation
+- **Reliable Output**: `tool_choice="required"` forces the model to respond with structured data
+- **Cross-Provider Support**: LiteLLM translates `tool_choice` for each provider (OpenAI, Anthropic, Gemini, Bedrock, etc.)
+
+<Note>
+  **Azure OpenAI Limitation**: Azure does not currently support `tool_choice="required"`. 
+  If using Azure, set `drop_params=True` on your agent to gracefully fall back.
+</Note>
 
 ### Complex Schemas
 
@@ -210,11 +220,11 @@ except StructuredOutputError as e:
 
 When validation fails and retry is enabled:
 
-1. Slide catches the `ValidationError` or `JSONDecodeError`
-2. An error message is added to the thread explaining what went wrong
-3. The LLM is called again with the feedback
+1. Slide catches the `ValidationError` or `JSONDecodeError` from the output tool arguments
+2. A tool result message with the error details is added to the thread
+3. The LLM is called again with `tool_choice="required"` to try again
 4. This repeats until validation succeeds or `max_retries` is exhausted
-5. If all retries fail, `StructuredOutputError` is raised
+5. If all retries fail, `StructuredOutputError` is raised with the validation history
 
 ### RetryConfig Options
 

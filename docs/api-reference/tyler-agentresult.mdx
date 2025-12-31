@@ -34,7 +34,8 @@ class AgentResult:
 
 <ParamField path="structured_data" type="Optional[BaseModel]">
   When `response_type` is provided to `agent.run()`, this field contains a validated instance
-  of the Pydantic model. The LLM's JSON response is parsed and validated against the schema.
+  of the Pydantic model. Internally, the agent uses the **output-tool pattern**: your schema
+  becomes a special tool, and when the LLM calls it, the arguments are validated against your model.
   
   ```python
   from pydantic import BaseModel
