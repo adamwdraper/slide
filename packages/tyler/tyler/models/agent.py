@@ -873,20 +873,20 @@ class Agent(BaseModel):
                 
                 if has_tool_calls:
                     # Separate output tool call from regular tool calls
+                    # Store (tool_call, tool_name) tuples to avoid re-extracting names
                     output_tool_call = None
-                    regular_tool_calls = []
+                    regular_tool_calls = []  # List of (tool_call, tool_name) tuples
                     
                     for tool_call in tool_calls:
                         tool_name = tool_call.function.name if hasattr(tool_call, 'function') else tool_call['function']['name']
                         if tool_name == output_tool_name:
                             output_tool_call = tool_call
                         else:
-                            regular_tool_calls.append(tool_call)
+                            regular_tool_calls.append((tool_call, tool_name))
                     
                     # Process regular tool calls first
                     should_break = False
-                    for tool_call in regular_tool_calls:
-                        tool_name = tool_call.function.name if hasattr(tool_call, 'function') else tool_call['function']['name']
+                    for tool_call, tool_name in regular_tool_calls:
                         result = await self._handle_tool_execution(tool_call)
                         tool_message, break_iteration = self._process_tool_result(result, tool_call, tool_name)
                         thread.add_message(tool_message)
@@ -1025,14 +1025,19 @@ class Agent(BaseModel):
                         await self.thread_store.save(thread)
                 else:
                     # No tool calls - model responded with plain text instead of using output tool
-                    # Add a reminder message to prompt the model to use the output tool
+                    # Add a system reminder message to prompt the model to use the output tool
                     reminder = Message(
-                        role="user",
+                        role="system",
                         content=(
-                            f"You must provide your response by calling the `{output_tool_name}` tool. "
+                            f"REMINDER: You must provide your response by calling the `{output_tool_name}` tool. "
                             f"Do not respond with plain text. Use the output tool with arguments "
                             f"matching the {schema_name} schema."
-                        )
+                        ),
+                        source={
+                            "type": "agent",
+                            "id": self.name,
+                            "name": "structured_output_reminder"
+                        }
                     )
                     thread.add_message(reminder)
                     new_messages.append(reminder)

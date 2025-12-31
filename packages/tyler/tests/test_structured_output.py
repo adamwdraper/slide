@@ -534,10 +534,14 @@ class TestStructuredOutputValidation:
             # Should succeed on second attempt
             assert result.structured_data is not None
             
-            # Check that a reminder message was added
-            reminder_messages = [m for m in thread.messages if m.role == "user" and "must provide your response" in m.content]
+            # Check that a system reminder message was added
+            reminder_messages = [m for m in thread.messages if m.role == "system" and "must provide your response" in m.content]
             assert len(reminder_messages) == 1
             assert "__Invoice_output__" in reminder_messages[0].content
+            # Verify the source identifies it as an agent-generated reminder
+            assert reminder_messages[0].source["type"] == "agent"
+            assert reminder_messages[0].source["name"] == "structured_output_reminder"
+            assert reminder_messages[0].source["id"] == "test-agent"
     
     @pytest.mark.asyncio
     async def test_regular_tools_processed_before_output_tool(self, thread):
