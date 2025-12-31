@@ -190,7 +190,7 @@ class TestAgentToolContext:
         
         original_handle = agent._handle_tool_execution
         
-        async def mock_handle(tool_call):
+        async def mock_handle(tool_call, context=None):
             captured_context['ctx'] = agent._tool_context
             return "Tool result"
         

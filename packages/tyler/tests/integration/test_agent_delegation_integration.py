@@ -172,7 +172,7 @@ async def test_parallel_agent_delegation(mock_thread_store):
     execution_times = []
     
     # Mock tool execution to track timing
-    async def timed_tool_execution(tool_call):
+    async def timed_tool_execution(tool_call, context=None):
         """Wrapper to time tool execution"""
         start_time = datetime.now(UTC)
         
@@ -300,7 +300,7 @@ async def test_agent_delegation_error_handling(mock_thread_store):
     mock_weave_call.ui_url = "https://weave.com/123"
     
     # Mock tool execution to simulate a failure for the failing agent
-    async def mock_tool_execution(tool_call):
+    async def mock_tool_execution(tool_call, context=None):
         """Mock that simulates a failing agent"""
         if "FailingAgent" in tool_call.function.name:
             raise Exception("Simulated agent failure")
