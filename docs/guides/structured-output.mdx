@@ -109,7 +109,7 @@ You can set `response_type` on the agent (as a default for all runs) or pass it 
 
 ### How It Works
 
-When you provide a `response_type`, Slide uses the **output-tool pattern** (the same approach as [Pydantic AI](https://ai.pydantic.dev/output/)):
+When you provide a `response_type`, Slide uses the **output-tool pattern**:
 
 1. **Schema as Tool**: Your Pydantic model is registered as a special "output tool"
 2. **Forced Tool Call**: The LLM is called with `tool_choice="required"`, ensuring it must call a tool
