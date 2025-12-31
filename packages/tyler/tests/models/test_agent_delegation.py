@@ -35,8 +35,15 @@ def mock_thread_store():
 
 @pytest.fixture
 def mock_litellm():
-    """Mock litellm to prevent real API calls"""
-    with patch('litellm.acompletion', autospec=True) as mock:
+    """Mock litellm to prevent real API calls
+    
+    Note: conftest.py already provides autouse mock for litellm.acompletion,
+    but tests can use this fixture to get a reference to configure return values.
+    We don't use autospec=True to avoid conflicts with the global mock.
+    """
+    from unittest.mock import AsyncMock
+    with patch('litellm.acompletion', new_callable=AsyncMock) as mock, \
+         patch('tyler.models.agent.acompletion', mock):
         yield mock
 
 @pytest.fixture
@@ -188,7 +195,7 @@ async def test_agent_delegation_tool_call(mock_litellm, mock_thread_store):
         ]
         
         # Mock the tool execution
-        async def mock_tool_execution(tool_call):
+        async def mock_tool_execution(tool_call, context=None):
             """Mock the execution of the delegation tool"""
             return "Specialized task completed successfully"
         
@@ -292,7 +299,7 @@ async def test_delegation_with_context(mock_litellm, mock_thread_store):
         ]
         
         # Mock the tool execution
-        async def mock_tool_execution(tool_call):
+        async def mock_tool_execution(tool_call, context=None):
             """Mock the execution of the delegation tool"""
             return "Data processed with context successfully"
         
@@ -409,7 +416,7 @@ async def test_nested_agent_delegation(mock_litellm, mock_thread_store):
         ]
         
         # Mock the tool execution
-        async def mock_tool_execution(tool_call):
+        async def mock_tool_execution(tool_call, context=None):
             """Mock the execution of the delegation tool"""
             return "Task completed successfully"
         

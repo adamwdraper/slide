@@ -127,6 +127,54 @@ agent = Agent(
   This parameter is excluded from serialization (recreated on deserialization).
 </ParamField>
 
+<ParamField path="response_type" type="Type[BaseModel] | None" default="None">
+  Optional Pydantic model to enforce structured output from the LLM. Uses the **output-tool pattern**:
+  your Pydantic schema is registered as a special tool, and `tool_choice="required"` forces the
+  model to call it. The validated model instance is available in `AgentResult.structured_data`.
+  
+  This approach allows regular tools to work alongside structured output. LiteLLM automatically
+  translates `tool_choice` for different providers (OpenAI, Anthropic, Gemini, Bedrock, etc.).
+  
+  Can be set at the agent level (default for all runs) or overridden per `run()` call.
+  See the [Structured Output Guide](/guides/structured-output) for details.
+</ParamField>
+
+<ParamField path="retry_config" type="RetryConfig | None" default="None">
+  Configuration for automatic retry behavior. When enabled with structured output, the agent
+  will automatically retry LLM calls if validation fails, providing error feedback to help
+  the LLM correct its output.
+  
+  ```python
+  from tyler import RetryConfig
+  
+  agent = Agent(
+      retry_config=RetryConfig(
+          max_retries=3,
+          retry_on_validation_error=True,
+          backoff_base_seconds=1.0
+      )
+  )
+  ```
+  
+  See [RetryConfig](/api-reference/tyler-retryconfig) for all options.
+</ParamField>
+
+<ParamField path="response_format" type="Literal['json'] | None" default="None">
+  Simple JSON mode for when you want any valid JSON without schema validation.
+  Pass `response_format="json"` to `run()` to force JSON output.
+  
+  ```python
+  # Get any valid JSON (no schema validation)
+  result = await agent.run(thread, response_format="json")
+  data = json.loads(result.content)  # Parse yourself
+  ```
+  
+  <Warning>
+    Cannot be used with `response_type`. Use `response_type` for schema validation,
+    or `response_format="json"` for simple JSON without validation.
+  </Warning>
+</ParamField>
+
 ## Creating from Config Files
 
 <ParamField path="Agent.from_config" type="classmethod">
@@ -244,6 +292,61 @@ print(result.thread)  # Updated thread with all messages
 print(result.new_messages)  # New messages added in this turn
 ```
 
+### With Structured Output
+
+Get type-safe, validated responses using Pydantic models:
+
+```python
+from pydantic import BaseModel
+from tyler import Agent, Thread, Message, RetryConfig
+
+class SupportTicket(BaseModel):
+    priority: str
+    category: str
+    summary: str
+
+agent = Agent(
+    name="classifier",
+    model_name="gpt-4o",
+    retry_config=RetryConfig(max_retries=2)  # Retry on validation failure
+)
+
+thread = Thread()
+thread.add_message(Message(role="user", content="My payment failed!"))
+
+# Get structured output
+result = await agent.run(thread, response_type=SupportTicket)
+
+# Access the validated Pydantic model
+ticket: SupportTicket = result.structured_data
+print(f"Priority: {ticket.priority}")
+print(f"Category: {ticket.category}")
+```
+
+### With Tool Context (Dependency Injection)
+
+Inject runtime dependencies into your tools:
+
+```python
+# Define a tool that uses context
+async def get_user_orders(ctx: ToolContext, limit: int = 10) -> str:
+    db = ctx["db"]  # Injected database
+    user_id = ctx["user_id"]  # Injected user ID
+    orders = await db.get_orders(user_id, limit)
+    return f"Found {len(orders)} orders"
+
+# Run with context
+result = await agent.run(
+    thread,
+    tool_context={
+        "db": database,
+        "user_id": current_user.id
+    }
+)
+```
+
+See the [Structured Output Guide](/guides/structured-output) for complete examples.
+
 ### Event Streaming Mode (stream=True or stream="events")
 
 Stream responses as high-level ExecutionEvent objects with full observability:
@@ -326,7 +429,11 @@ class AgentResult:
     thread: Thread  # Updated thread with all messages
     new_messages: List[Message]  # New messages from this execution
     content: Optional[str]  # The final assistant response
+    structured_data: Optional[BaseModel]  # Validated Pydantic model (if response_type used)
 ```
+
+When using `response_type`, the `structured_data` field contains the validated Pydantic model instance.
+See [AgentResult](/api-reference/tyler-agentresult) for full documentation.
 
 ### ExecutionEvent (Streaming)
 

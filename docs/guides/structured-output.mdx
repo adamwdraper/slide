@@ -1,0 +1,598 @@
+---
+title: 'Structured output & dependency injection'
+description: 'Get type-safe, validated data from your agents and inject runtime dependencies into tools'
+---
+
+This guide covers two powerful features that enhance agent reliability and code organization: structured output for type-safe LLM responses, and tool context for dependency injection.
+
+**💻 Code Examples**
+
+<CardGroup cols={2}>
+  <Card
+    title="Structured Output"
+    icon="code"
+    href="https://github.com/adamwdraper/slide/blob/main/packages/tyler/examples/600_structured_output.py"
+  >
+    Type-safe agent responses with Pydantic
+  </Card>
+  <Card
+    title="Tool Context"
+    icon="plug"
+    href="https://github.com/adamwdraper/slide/blob/main/packages/tyler/examples/601_tool_context.py"
+  >
+    Inject dependencies into tools
+  </Card>
+</CardGroup>
+
+## Structured Output
+
+Structured output lets you define a Pydantic model as the expected response format from your agent. The LLM will return data that exactly matches your schema, giving you type-safe, validated data directly.
+
+### Basic Usage
+
+You can set `response_type` on the agent (as a default for all runs) or pass it per-run:
+
+<Tabs>
+  <Tab title="Agent-level default">
+    ```python
+    from pydantic import BaseModel, Field
+    from typing import Literal
+    from tyler import Agent, Thread, Message
+
+    # 1. Define your output schema
+    class SupportTicket(BaseModel):
+        priority: Literal["low", "medium", "high"]
+        category: str
+        summary: str = Field(max_length=500)
+        requires_escalation: bool
+
+    # 2. Create agent with default response_type
+    agent = Agent(
+        name="ticket-classifier",
+        model_name="gpt-4o",
+        purpose="To classify support tickets",
+        response_type=SupportTicket  # Default for all runs
+    )
+
+    # 3. Run - uses agent's default response_type
+    thread = Thread()
+    thread.add_message(Message(
+        role="user",
+        content="My payment failed and I'm locked out!"
+    ))
+
+    result = await agent.run(thread)  # No need to pass response_type
+
+    # 4. Access the validated data
+    ticket: SupportTicket = result.structured_data
+    print(f"Priority: {ticket.priority}")  # "high"
+    ```
+  </Tab>
+  <Tab title="Per-run override">
+    ```python
+    from pydantic import BaseModel, Field
+    from typing import Literal, List
+    from tyler import Agent, Thread, Message
+
+    class SupportTicket(BaseModel):
+        priority: Literal["low", "medium", "high"]
+        category: str
+        summary: str = Field(max_length=500)
+        requires_escalation: bool
+
+    class Invoice(BaseModel):
+        invoice_id: str
+        total: float
+        items: List[str]
+
+    # Agent without default - flexible for multiple schemas
+    agent = Agent(
+        name="data-extractor",
+        model_name="gpt-4o",
+        purpose="To extract structured data"
+    )
+
+    # Extract a support ticket
+    result1 = await agent.run(thread1, response_type=SupportTicket)
+    ticket = result1.structured_data
+
+    # Same agent, different schema
+    result2 = await agent.run(thread2, response_type=Invoice)
+    invoice = result2.structured_data
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+  Per-run `response_type` always overrides the agent's default. This lets you have a sensible default while retaining flexibility.
+</Note>
+
+### How It Works
+
+When you provide a `response_type`, Slide uses the **output-tool pattern**:
+
+1. **Schema as Tool**: Your Pydantic model is registered as a special "output tool"
+2. **Forced Tool Call**: The LLM is called with `tool_choice="required"`, ensuring it must call a tool
+3. **Validation**: When the LLM calls the output tool, its arguments are validated against your schema
+4. **Retry on Failure**: If validation fails, an error message is added and the LLM retries
+
+This approach has key advantages over simple JSON mode:
+- **Tools + Structured Output**: Regular tools work alongside structured output in the same conversation
+- **Reliable Output**: `tool_choice="required"` forces the model to respond with structured data
+- **Cross-Provider Support**: LiteLLM translates `tool_choice` for each provider (OpenAI, Anthropic, Gemini, Bedrock, etc.)
+
+<Note>
+  **Azure OpenAI Limitation**: Azure does not currently support `tool_choice="required"`. 
+  If using Azure, set `drop_params=True` on your agent to gracefully fall back.
+</Note>
+
+### Complex Schemas
+
+Structured output supports all Pydantic features:
+
+```python
+from pydantic import BaseModel, Field
+from typing import List, Optional, Literal
+from datetime import date
+
+class LineItem(BaseModel):
+    """A single item in an invoice"""
+    description: str
+    quantity: int = Field(ge=1)
+    unit_price: float = Field(ge=0)
+    
+    @property
+    def total(self) -> float:
+        return self.quantity * self.unit_price
+
+class Invoice(BaseModel):
+    """Extracted invoice data"""
+    vendor_name: str
+    invoice_number: str
+    invoice_date: date
+    due_date: Optional[date] = None
+    items: List[LineItem]
+    currency: Literal["USD", "EUR", "GBP"] = "USD"
+    notes: Optional[str] = None
+    
+    @property
+    def subtotal(self) -> float:
+        return sum(item.total for item in self.items)
+
+# Use it
+result = await agent.run(thread, response_type=Invoice)
+invoice = result.structured_data
+
+print(f"Invoice #{invoice.invoice_number}")
+print(f"Subtotal: {invoice.currency} {invoice.subtotal:.2f}")
+for item in invoice.items:
+    print(f"  - {item.description}: {item.quantity} x {item.unit_price}")
+```
+
+### Default Response Type
+
+You can set a default `response_type` on the agent itself:
+
+```python
+# Agent-level default
+agent = Agent(
+    name="extractor",
+    model_name="gpt-4o",
+    purpose="To extract structured data",
+    response_type=Invoice  # Default for all runs
+)
+
+# Uses agent's default response_type
+result = await agent.run(thread)
+
+# Override for specific run
+result = await agent.run(thread, response_type=SupportTicket)
+```
+
+## Automatic Retry on Validation Failure
+
+Sometimes the LLM might return invalid JSON or data that doesn't match your schema. Use `RetryConfig` to automatically retry with feedback:
+
+```python
+from tyler import Agent, RetryConfig, StructuredOutputError
+
+agent = Agent(
+    name="extractor",
+    model_name="gpt-4o",
+    purpose="To extract structured data",
+    retry_config=RetryConfig(
+        max_retries=3,
+        retry_on_validation_error=True,
+        backoff_base_seconds=1.0
+    )
+)
+
+try:
+    result = await agent.run(thread, response_type=Invoice)
+    invoice = result.structured_data
+except StructuredOutputError as e:
+    print(f"Failed after {e.message}")
+    print(f"Validation errors: {e.validation_errors}")
+    print(f"Last response: {e.last_response}")
+```
+
+### How Retry Works
+
+When validation fails and retry is enabled:
+
+1. Slide catches the `ValidationError` or `JSONDecodeError` from the output tool arguments
+2. A tool result message with the error details is added to the thread
+3. The LLM is called again with `tool_choice="required"` to try again
+4. This repeats until validation succeeds or `max_retries` is exhausted
+5. If all retries fail, `StructuredOutputError` is raised with the validation history
+
+### RetryConfig Options
+
+```python
+class RetryConfig(BaseModel):
+    max_retries: int = 3          # Number of retry attempts (0 = no retries)
+    retry_on_validation_error: bool = True  # Retry on schema validation failure
+    retry_on_tool_error: bool = False       # Retry on tool execution failure
+    backoff_base_seconds: float = 1.0       # Delay between retries (exponential)
+```
+
+<Tip>
+  The backoff is exponential: 1s → 2s → 4s. This prevents overwhelming the API during transient issues.
+</Tip>
+
+## Tool Context (Dependency Injection)
+
+Tool context lets you inject runtime dependencies (databases, API clients, user info) into your tools without hardcoding them.
+
+### Basic Usage
+
+```python
+from tyler import Agent, Thread, Message, ToolContext
+from typing import Dict, Any
+
+# 1. Define a tool that accepts context
+async def get_user_orders(ctx: ToolContext, limit: int = 10) -> str:
+    """Get orders for the current user."""
+    db = ctx["db"]           # Injected database
+    user_id = ctx["user_id"] # Injected user ID
+    
+    orders = await db.get_orders(user_id, limit)
+    return f"Found {len(orders)} orders"
+
+# 2. Register the tool
+from tyler.utils.tool_runner import tool_runner
+
+tool_runner.register_tool(
+    name="get_user_orders",
+    implementation=get_user_orders,
+    definition={
+        "type": "function",
+        "function": {
+            "name": "get_user_orders",
+            "description": "Get orders for the current user",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "limit": {"type": "integer", "default": 10}
+                }
+            }
+        }
+    }
+)
+
+# 3. Create agent with the tool
+agent = Agent(
+    name="order-assistant",
+    model_name="gpt-4o",
+    purpose="To help users with their orders",
+    tools=[tool_runner.get_tool_definition("get_user_orders")]
+)
+
+# 4. Run with tool_context
+result = await agent.run(
+    thread,
+    tool_context={
+        "db": database_connection,
+        "user_id": current_user.id,
+        "config": app_config
+    }
+)
+```
+
+### Context Parameter Convention
+
+Tools receive context through a special first parameter. Use either:
+
+- `ctx: ToolContext` (recommended)
+- `ctx: Dict[str, Any]`
+- `context: ToolContext`
+- `context: Dict[str, Any]`
+
+```python
+# Both work identically
+async def my_tool(ctx: ToolContext, param: str) -> str:
+    ...
+
+async def my_tool(context: Dict[str, Any], param: str) -> str:
+    ...
+```
+
+<Warning>
+  The context parameter MUST be the first parameter in your tool function signature. If it's not first, the tool won't receive the context.
+</Warning>
+
+### Backward Compatibility
+
+Tools without a context parameter continue to work normally:
+
+```python
+# This tool doesn't use context - still works!
+async def simple_tool(query: str) -> str:
+    return f"Searched for: {query}"
+
+# Context is passed but ignored for tools that don't need it
+result = await agent.run(
+    thread,
+    tool_context={"db": database}  # simple_tool won't receive this
+)
+```
+
+### Error Handling
+
+If a tool expects context but none is provided:
+
+```python
+async def requires_db(ctx: ToolContext, user_id: str) -> str:
+    db = ctx["db"]  # Will raise if 'db' not in context
+    ...
+
+# This will raise ToolContextError
+result = await agent.run(thread)  # No tool_context provided!
+
+# Proper usage
+result = await agent.run(thread, tool_context={"db": my_database})
+```
+
+### Use Cases for Tool Context
+
+<AccordionGroup>
+  <Accordion title="Database Access">
+    ```python
+    async def query_database(ctx: ToolContext, sql: str) -> str:
+        db = ctx["db"]
+        results = await db.execute(sql)
+        return json.dumps(results)
+    ```
+  </Accordion>
+  
+  <Accordion title="User Context">
+    ```python
+    async def get_user_preferences(ctx: ToolContext) -> str:
+        user = ctx["current_user"]
+        return json.dumps({
+            "name": user.name,
+            "timezone": user.timezone,
+            "language": user.language
+        })
+    ```
+  </Accordion>
+  
+  <Accordion title="API Clients">
+    ```python
+    async def send_slack_message(ctx: ToolContext, channel: str, text: str) -> str:
+        slack = ctx["slack_client"]
+        await slack.chat_postMessage(channel=channel, text=text)
+        return f"Message sent to {channel}"
+    ```
+  </Accordion>
+  
+  <Accordion title="Feature Flags">
+    ```python
+    async def process_order(ctx: ToolContext, order_id: str) -> str:
+        config = ctx["config"]
+        if config.get("new_checkout_enabled"):
+            return await new_checkout_flow(order_id)
+        return await legacy_checkout_flow(order_id)
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Combining Features
+
+Structured output and tool context work together seamlessly:
+
+```python
+from pydantic import BaseModel
+from typing import List
+from tyler import Agent, Thread, Message, RetryConfig, ToolContext
+
+class OrderSummary(BaseModel):
+    total_orders: int
+    total_value: float
+    recent_orders: List[str]
+
+async def get_order_stats(ctx: ToolContext, user_id: str) -> str:
+    db = ctx["db"]
+    stats = await db.get_user_order_stats(user_id)
+    return json.dumps(stats)
+
+agent = Agent(
+    name="order-analyst",
+    model_name="gpt-4o",
+    purpose="To analyze user orders",
+    tools=[order_stats_tool],
+    retry_config=RetryConfig(max_retries=2)
+)
+
+result = await agent.run(
+    thread,
+    response_type=OrderSummary,       # Structured output
+    tool_context={"db": database}      # Dependency injection
+)
+
+summary: OrderSummary = result.structured_data
+print(f"User has {summary.total_orders} orders worth ${summary.total_value}")
+```
+
+## Streaming with Structured Output
+
+<Warning>
+  Structured output is currently a non-streaming feature. When you use `response_type`, the agent will collect the full response before validating and returning.
+</Warning>
+
+If you need streaming with structured output, you can:
+
+1. Stream for real-time feedback, then parse the final response:
+
+```python
+full_content = ""
+async for event in agent.stream(thread):
+    if event.type == EventType.LLM_STREAM_CHUNK:
+        chunk = event.data.get("content_chunk", "")
+        full_content += chunk
+        print(chunk, end="", flush=True)
+    elif event.type == EventType.EXECUTION_COMPLETE:
+        # Parse after streaming completes
+        data = MyModel.model_validate_json(full_content)
+```
+
+2. Or use non-streaming mode for structured data:
+
+```python
+# For structured data, use non-streaming
+result = await agent.run(thread, response_type=MyModel)
+```
+
+## Best Practices
+
+### Schema Design
+
+<Steps>
+  <Step title="Keep schemas focused">
+    Define schemas for specific use cases rather than trying to capture everything:
+    
+    ```python
+    # ✅ Focused schema
+    class SentimentResult(BaseModel):
+        sentiment: Literal["positive", "negative", "neutral"]
+        confidence: float = Field(ge=0, le=1)
+    
+    # ❌ Too broad
+    class AnalysisResult(BaseModel):
+        sentiment: str
+        entities: List[str]
+        summary: str
+        keywords: List[str]
+        language: str
+        # ... many more fields
+    ```
+  </Step>
+  
+  <Step title="Use Field constraints">
+    Pydantic validators help the LLM produce correct output:
+    
+    ```python
+    class Rating(BaseModel):
+        score: int = Field(ge=1, le=5)  # LLM knows the valid range
+        reason: str = Field(max_length=200)
+    ```
+  </Step>
+  
+  <Step title="Provide descriptions">
+    Field descriptions help the LLM understand what you want:
+    
+    ```python
+    class ContactInfo(BaseModel):
+        email: str = Field(description="Primary email address")
+        phone: Optional[str] = Field(
+            default=None,
+            description="Phone number in E.164 format, e.g., +1234567890"
+        )
+    ```
+  </Step>
+</Steps>
+
+### Tool Context
+
+<Steps>
+  <Step title="Use type hints">
+    Even though context is a dict, document expected keys:
+    
+    ```python
+    async def my_tool(ctx: ToolContext, param: str) -> str:
+        """
+        Args:
+            ctx: Must contain 'db' (Database) and 'user' (User)
+            param: The search query
+        """
+        db: Database = ctx["db"]
+        user: User = ctx["user"]
+    ```
+  </Step>
+  
+  <Step title="Validate early">
+    Check for required keys at the start of your tool:
+    
+    ```python
+    async def my_tool(ctx: ToolContext, param: str) -> str:
+        if "db" not in ctx:
+            raise ValueError("Tool requires 'db' in context")
+        ...
+    ```
+  </Step>
+  
+  <Step title="Keep context minimal">
+    Only pass what's needed:
+    
+    ```python
+    # ✅ Minimal context
+    tool_context={"db": db, "user_id": user.id}
+    
+    # ❌ Passing entire app state
+    tool_context={"app": entire_application_instance}
+    ```
+  </Step>
+</Steps>
+
+## Error Reference
+
+| Error | Cause | Solution |
+|-------|-------|----------|
+| `StructuredOutputError` | LLM failed to produce valid structured output after retries | Check your schema complexity, add more retry attempts, or simplify the prompt |
+| `ToolContextError` | Tool expected context but none provided | Pass `tool_context` to `agent.run()` |
+| `KeyError` in tool | Required key missing from context | Ensure all required keys are in your `tool_context` dict |
+| `ValidationError` | LLM output doesn't match Pydantic schema | The retry mechanism will attempt to fix this; if it persists, simplify your schema |
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Testing Agents"
+    icon="vial"
+    href="/guides/testing-agents"
+  >
+    Test structured output and tool context
+  </Card>
+  <Card
+    title="Agent API Reference"
+    icon="book"
+    href="/api-reference/tyler-agent"
+  >
+    Complete Agent documentation
+  </Card>
+  <Card
+    title="RetryConfig API"
+    icon="rotate"
+    href="/api-reference/tyler-retryconfig"
+  >
+    Retry configuration options
+  </Card>
+  <Card
+    title="Advanced Patterns"
+    icon="diagram-project"
+    href="/guides/patterns"
+  >
+    More advanced usage patterns
+  </Card>
+</CardGroup>
+

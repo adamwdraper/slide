@@ -1094,7 +1094,7 @@ async def test_stream_multiple_tool_calls():
         
         # Mock tool execution
         call_count = 0
-        async def mock_execute(tool_call):
+        async def mock_execute(tool_call, context=None):
             nonlocal call_count
             call_count += 1
             return f"Result {call_count}"
