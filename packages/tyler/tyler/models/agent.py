@@ -196,6 +196,8 @@ class Agent(BaseModel):
     _mcp_connected: bool = PrivateAttr(default=False)
     _mcp_disconnect: Optional[Callable[[], Awaitable[None]]] = PrivateAttr(default=None)
     _tool_context: Optional[Dict[str, Any]] = PrivateAttr(default=None)
+    _response_format: Optional[str] = PrivateAttr(default=None)
+    _pending_output_type: Optional[Type[BaseModel]] = PrivateAttr(default=None)
     step_errors_raise: bool = Field(default=False, description="If True, step() will raise exceptions instead of returning an error message tuple for backward compatibility.")
 
     model_config = {
@@ -421,7 +423,13 @@ class Agent(BaseModel):
         return response
     
     @weave.op()
-    async def step(self, thread: Thread, stream: bool = False) -> Tuple[Any, Dict]:
+    async def step(
+        self, 
+        thread: Thread, 
+        stream: bool = False,
+        tools: Optional[List[Dict]] = None,
+        system_prompt: Optional[str] = None
+    ) -> Tuple[Any, Dict]:
         """Execute a single step of the agent's processing.
         
         A step consists of:
@@ -432,6 +440,8 @@ class Agent(BaseModel):
         Args:
             thread: The thread to process
             stream: Whether to stream the response. Defaults to False.
+            tools: Optional tools override. If None, uses self._processed_tools.
+            system_prompt: Optional system prompt override. If None, uses self._system_prompt.
             
         Returns:
             Tuple[Any, Dict]: The completion response and metrics.
@@ -439,13 +449,21 @@ class Agent(BaseModel):
         # Get thread messages (these won't include system messages as they're filtered out)
         thread_messages = await thread.get_messages_for_chat_completion(file_store=self.file_store)
         
+        # Use provided overrides or defaults
+        effective_tools = tools if tools is not None else self._processed_tools
+        effective_system_prompt = system_prompt if system_prompt is not None else self._system_prompt
+        
         # Use CompletionHandler to build parameters
-        completion_messages = [{"role": "system", "content": self._system_prompt}] + thread_messages
+        completion_messages = [{"role": "system", "content": effective_system_prompt}] + thread_messages
         completion_params = self.completion_handler._build_completion_params(
             messages=completion_messages,
-            tools=self._processed_tools,
+            tools=effective_tools,
             stream=stream
         )
+        
+        # Add response_format if set (for simple JSON mode)
+        if self._response_format == "json":
+            completion_params["response_format"] = {"type": "json_object"}
         
         # Track API call time
         api_start_time = datetime.now(timezone.utc)
@@ -630,6 +648,7 @@ class Agent(BaseModel):
         self, 
         thread_or_id: Union[Thread, str],
         response_type: Optional[Type[BaseModel]] = None,
+        response_format: Optional[Literal["json"]] = None,
         tool_context: Optional[Dict[str, Any]] = None
     ) -> AgentResult:
         """
@@ -647,6 +666,10 @@ class Agent(BaseModel):
                           The agent will instruct the LLM to respond in JSON matching
                           this schema, and the response will be validated and returned
                           in result.structured_data. If None, uses the agent's default.
+            response_format: Optional format for the response. Currently supports:
+                            - "json": Forces the LLM to respond with valid JSON (any structure).
+                              Unlike response_type, this doesn't validate against a schema.
+                              Tools still work in this mode.
             tool_context: Optional dictionary of dependencies to inject into tools.
                          Tools that have 'ctx' or 'context' as their first parameter
                          will receive this context. Enables dependency injection for
@@ -678,6 +701,10 @@ class Agent(BaseModel):
             result = await agent.run(thread, response_type=Invoice)
             invoice = result.structured_data  # Validated Invoice instance
             
+            # Simple JSON mode (any valid JSON, tools still work)
+            result = await agent.run(thread, response_format="json")
+            data = json.loads(result.content)  # Parse the JSON yourself
+            
             # With tool context
             result = await agent.run(
                 thread, 
@@ -686,11 +713,22 @@ class Agent(BaseModel):
         """
         logging.getLogger(__name__).debug("Agent.run() called (non-streaming mode)")
         
+        # Use provided response_type, or fall back to agent's default
+        effective_response_type = response_type if response_type is not None else self.response_type
+        
+        # Validate that response_type and response_format are not both specified
+        if effective_response_type is not None and response_format is not None:
+            raise ValueError(
+                "Cannot specify both response_type and response_format. "
+                "Use response_type for Pydantic-validated structured output, "
+                "or response_format='json' for simple JSON mode without validation."
+            )
+        
         # Store tool context for use by _handle_tool_execution
         self._tool_context = tool_context
         
-        # Use provided response_type, or fall back to agent's default
-        effective_response_type = response_type if response_type is not None else self.response_type
+        # Store response_format for use by step()
+        self._response_format = response_format
         
         try:
             if effective_response_type is not None:
@@ -698,11 +736,42 @@ class Agent(BaseModel):
             else:
                 return await self._run_complete(thread_or_id)
         finally:
-            # Clear tool context after execution
+            # Clear tool context and response_format after execution
             self._tool_context = None
+            self._response_format = None
     
     # Backwards compatibility alias
     go = run
+    
+    def _create_output_tool(self, response_type: Type[BaseModel]) -> Dict[str, Any]:
+        """Create an output tool definition from a Pydantic model.
+        
+        This tool is used internally to get structured output while still
+        allowing other tools to work. The model calls this tool when it's
+        ready to provide its final answer.
+        
+        Args:
+            response_type: Pydantic model class defining the output schema
+            
+        Returns:
+            Tool definition dict in OpenAI format
+        """
+        schema = response_type.model_json_schema()
+        schema_name = response_type.__name__
+        
+        return {
+            "type": "function",
+            "function": {
+                "name": f"__{schema_name}_output__",
+                "description": (
+                    f"Submit your final {schema_name} response. "
+                    f"Call this tool ONLY when you have gathered all necessary information "
+                    f"and are ready to provide your structured answer. "
+                    f"The arguments must match the {schema_name} schema exactly."
+                ),
+                "parameters": schema
+            }
+        }
     
     @weave.op()
     async def _run_with_structured_output(
@@ -712,11 +781,13 @@ class Agent(BaseModel):
     ) -> AgentResult:
         """Run agent expecting structured output matching response_type schema.
         
-        This method:
-        1. Instructs the LLM to respond in JSON matching the Pydantic schema
-        2. Validates the response against the schema
-        3. Retries on validation failure if retry_config is set
-        4. Returns AgentResult with structured_data populated
+        This method uses the output-tool pattern:
+        1. Creates an output tool from the Pydantic schema
+        2. Runs the normal tool loop (agent can use all tools)
+        3. When the model calls the output tool, validates and returns
+        4. Retries on validation failure if retry_config is set
+        
+        This approach allows tools and structured output to work together.
         
         Args:
             thread_or_id: Thread object or thread ID to process
@@ -733,9 +804,24 @@ class Agent(BaseModel):
         # Get the thread
         thread = await self._get_thread(thread_or_id)
         
-        # Generate JSON schema from Pydantic model
-        schema = response_type.model_json_schema()
+        # Create output tool
+        output_tool = self._create_output_tool(response_type)
+        output_tool_name = output_tool["function"]["name"]
         schema_name = response_type.__name__
+        
+        # Create tools list with output tool added (don't mutate instance state)
+        tools_with_output = self._processed_tools + [output_tool]
+        
+        # Create system prompt with output tool instruction (don't mutate instance state)
+        output_instruction = (
+            f"\n\n<structured_output_instruction>\n"
+            f"IMPORTANT: When you have gathered all necessary information and are ready to "
+            f"provide your final answer, you MUST call the `{output_tool_name}` tool with "
+            f"your response matching the {schema_name} schema. Do NOT respond with plain text "
+            f"for your final answer - use the output tool instead.\n"
+            f"</structured_output_instruction>"
+        )
+        system_prompt_with_output = self._system_prompt + output_instruction
         
         # Determine max retries
         max_retries = 0
@@ -745,176 +831,237 @@ class Agent(BaseModel):
         retry_count = 0
         last_validation_errors = []
         last_response = None
-        retry_history = []  # Collect retry attempt details for debugging
+        retry_history = []
+        new_messages = []
         
-        # Schema instruction to append to system prompt
-        schema_instruction = f"\n\nYou MUST respond with valid JSON matching this schema:\n```json\n{json.dumps(schema, indent=2)}\n```"
-        
-        while retry_count <= max_retries:
-            # Build messages for completion using thread's method (same as step())
-            thread_messages = await thread.get_messages_for_chat_completion(file_store=self.file_store)
+        try:
+            # Reset iteration count
+            self._iteration_count = 0
             
-            # Build system message with schema instruction
-            system_content = self._system_prompt + schema_instruction
-            messages = [{"role": "system", "content": system_content}] + thread_messages
-            
-            # If this is a retry, add correction message
-            if retry_count > 0 and last_validation_errors:
-                correction_msg = (
-                    f"Your previous response did not match the required schema.\n\n"
-                    f"Validation errors:\n{json.dumps(last_validation_errors, indent=2)}\n\n"
-                    f"Please correct your response to match the {schema_name} schema exactly. "
-                    f"Return only valid JSON."
+            while self._iteration_count < self.max_tool_iterations:
+                # Get completion with tools and system prompt overrides
+                response, metrics = await self.step(
+                    thread, 
+                    tools=tools_with_output,
+                    system_prompt=system_prompt_with_output
                 )
-                messages.append({"role": "user", "content": correction_msg})
-            
-            # Build completion params
-            completion_params = {
-                "model": self.model_name,
-                "messages": messages,
-                "temperature": self.temperature,
-                "response_format": {
-                    "type": "json_schema",
-                    "json_schema": {
-                        "name": schema_name,
-                        "schema": schema,
-                        "strict": True
-                    }
-                }
-            }
-            
-            # Add optional params
-            if self.api_base:
-                completion_params["api_base"] = self.api_base
-            if self.api_key:
-                completion_params["api_key"] = self.api_key
-            if self.extra_headers:
-                completion_params["extra_headers"] = self.extra_headers
-            if self.drop_params:
-                completion_params["drop_params"] = self.drop_params
-            
-            try:
-                # Get completion
-                response = await acompletion(**completion_params)
                 
-                if not response or not response.choices:
+                if not response or not hasattr(response, 'choices') or not response.choices:
                     raise StructuredOutputError(
                         "No response received from LLM",
                         validation_errors=[],
                         last_response=None
                     )
                 
-                content = response.choices[0].message.content or ""
-                last_response = content
+                # Process response
+                assistant_message = response.choices[0].message
+                content = assistant_message.content or ""
+                tool_calls = getattr(assistant_message, 'tool_calls', None)
+                has_tool_calls = tool_calls is not None and len(tool_calls) > 0
                 
-                # Parse and validate JSON
-                try:
-                    raw_json = json.loads(content)
-                except json.JSONDecodeError as e:
-                    # JSON parsing failed - treat as validation error
-                    last_validation_errors = [{"type": "json_error", "msg": str(e)}]
-                    retry_count += 1
-                    
-                    # Record retry attempt for debugging
-                    retry_history.append({
-                        "attempt": retry_count,
-                        "error_type": "json_parse_error",
-                        "errors": last_validation_errors,
-                        "response_preview": content[:500] if len(content) > 500 else content
-                    })
-                    
-                    if retry_count > max_retries:
-                        raise StructuredOutputError(
-                            f"Failed to parse JSON after {retry_count} attempts: {e}",
-                            validation_errors=last_validation_errors,
-                            last_response=content
-                        )
-                    
-                    # Wait before retry
-                    if self.retry_config:
-                        await asyncio.sleep(self.retry_config.backoff_base_seconds * retry_count)
-                    continue
-                
-                # Validate against Pydantic model
-                try:
-                    validated_data = response_type.model_validate(raw_json)
-                    
-                    # Success! Create the result
-                    # Build metrics with retry info if any retries occurred
-                    metrics = {}
-                    if retry_count > 0:
-                        metrics["structured_output"] = {
-                            "validation_retries": retry_count,
-                            "retry_history": retry_history
-                        }
-                    
-                    # Create assistant message
+                # Create and add assistant message if there's content or tool calls
+                if content or has_tool_calls:
                     message = Message(
                         role="assistant",
                         content=content,
+                        tool_calls=self._serialize_tool_calls(tool_calls) if has_tool_calls else None,
                         source=self._create_assistant_source(include_version=True),
-                        metrics=metrics if metrics else {}
+                        metrics=metrics
                     )
                     thread.add_message(message)
+                    new_messages.append(message)
+                
+                if has_tool_calls:
+                    # Separate output tool call from regular tool calls
+                    output_tool_call = None
+                    regular_tool_calls = []
                     
-                    # Save thread if store is configured
+                    for tool_call in tool_calls:
+                        tool_name = tool_call.function.name if hasattr(tool_call, 'function') else tool_call['function']['name']
+                        if tool_name == output_tool_name:
+                            output_tool_call = tool_call
+                        else:
+                            regular_tool_calls.append(tool_call)
+                    
+                    # Process regular tool calls first
+                    should_break = False
+                    for tool_call in regular_tool_calls:
+                        tool_name = tool_call.function.name if hasattr(tool_call, 'function') else tool_call['function']['name']
+                        result = await self._handle_tool_execution(tool_call)
+                        tool_message, break_iteration = self._process_tool_result(result, tool_call, tool_name)
+                        thread.add_message(tool_message)
+                        new_messages.append(tool_message)
+                        if break_iteration:
+                            should_break = True
+                    
+                    # If an interrupt tool was called, save and continue to next iteration
+                    if should_break and not output_tool_call:
+                        if self.thread_store:
+                            await self.thread_store.save(thread)
+                        self._iteration_count += 1
+                        continue
+                    
+                    # Now process the output tool call if present
+                    if output_tool_call:
+                        tool_id = output_tool_call.id if hasattr(output_tool_call, 'id') else output_tool_call.get('id')
+                        args_str = output_tool_call.function.arguments if hasattr(output_tool_call, 'function') else output_tool_call['function']['arguments']
+                        
+                        # Parse and validate the output
+                        try:
+                            raw_json = json.loads(args_str) if isinstance(args_str, str) else args_str
+                            last_response = raw_json
+                            
+                            validated_data = response_type.model_validate(raw_json)
+                            
+                            # Success! Create the tool response message
+                            tool_message = Message(
+                                role="tool",
+                                name=output_tool_name,
+                                content=json.dumps({"status": "success", "message": "Output accepted"}),
+                                tool_call_id=tool_id,
+                                source=self._create_tool_source(output_tool_name)
+                            )
+                            thread.add_message(tool_message)
+                            new_messages.append(tool_message)
+                            
+                            # Build result metrics
+                            result_metrics = {}
+                            if retry_count > 0:
+                                result_metrics["structured_output"] = {
+                                    "validation_retries": retry_count,
+                                    "retry_history": retry_history
+                                }
+                            
+                            # Save thread if store is configured
+                            if self.thread_store:
+                                await self.thread_store.save(thread)
+                            
+                            return AgentResult(
+                                thread=thread,
+                                new_messages=new_messages,
+                                content=json.dumps(raw_json),
+                                structured_data=validated_data,
+                                validation_retries=retry_count,
+                                retry_history=retry_history if retry_history else None
+                            )
+                            
+                        except json.JSONDecodeError as e:
+                            last_validation_errors = [{"type": "json_error", "msg": str(e)}]
+                            retry_count += 1
+                            retry_history.append({
+                                "attempt": retry_count,
+                                "error_type": "json_parse_error",
+                                "errors": last_validation_errors,
+                                "response_preview": str(args_str)[:500]
+                            })
+                            
+                            if retry_count > max_retries:
+                                raise StructuredOutputError(
+                                    f"Failed to parse output tool arguments after {retry_count} attempts: {e}",
+                                    validation_errors=last_validation_errors,
+                                    last_response=args_str
+                                )
+                            
+                            # Add error message to prompt retry
+                            error_msg = Message(
+                                role="tool",
+                                name=output_tool_name,
+                                content=json.dumps({
+                                    "status": "error",
+                                    "message": f"Invalid JSON: {e}. Please try again with valid JSON."
+                                }),
+                                tool_call_id=tool_id,
+                                source=self._create_tool_source(output_tool_name)
+                            )
+                            thread.add_message(error_msg)
+                            new_messages.append(error_msg)
+                            
+                            if self.retry_config:
+                                await asyncio.sleep(self.retry_config.backoff_base_seconds * retry_count)
+                                
+                        except ValidationError as e:
+                            last_validation_errors = e.errors()
+                            retry_count += 1
+                            
+                            response_str = json.dumps(raw_json) if isinstance(raw_json, dict) else str(raw_json)
+                            retry_history.append({
+                                "attempt": retry_count,
+                                "error_type": "validation_error",
+                                "errors": last_validation_errors,
+                                "response_preview": response_str[:500]
+                            })
+                            
+                            logging.getLogger(__name__).warning(
+                                f"Structured output validation failed (attempt {retry_count}/{max_retries + 1}): {e}"
+                            )
+                            
+                            if retry_count > max_retries:
+                                raise StructuredOutputError(
+                                    f"Validation failed after {retry_count} attempts",
+                                    validation_errors=last_validation_errors,
+                                    last_response=raw_json
+                                )
+                            
+                            # Add validation error message to prompt retry
+                            error_msg = Message(
+                                role="tool",
+                                name=output_tool_name,
+                                content=json.dumps({
+                                    "status": "error",
+                                    "message": f"Validation failed: {e}. Please correct and try again.",
+                                    "errors": [{"loc": list(err.get("loc", [])), "msg": err.get("msg", "")} for err in last_validation_errors[:5]]
+                                }),
+                                tool_call_id=tool_id,
+                                source=self._create_tool_source(output_tool_name)
+                            )
+                            thread.add_message(error_msg)
+                            new_messages.append(error_msg)
+                            
+                            if self.retry_config:
+                                await asyncio.sleep(self.retry_config.backoff_base_seconds * retry_count)
+                    
+                    # Save after processing tool calls
+                    if self.thread_store:
+                        await self.thread_store.save(thread)
+                else:
+                    # No tool calls - model responded with plain text instead of using output tool
+                    # Add a reminder message to prompt the model to use the output tool
+                    reminder = Message(
+                        role="user",
+                        content=(
+                            f"You must provide your response by calling the `{output_tool_name}` tool. "
+                            f"Do not respond with plain text. Use the output tool with arguments "
+                            f"matching the {schema_name} schema."
+                        )
+                    )
+                    thread.add_message(reminder)
+                    new_messages.append(reminder)
+                    
                     if self.thread_store:
                         await self.thread_store.save(thread)
                     
-                    return AgentResult(
-                        thread=thread,
-                        new_messages=[message],
-                        content=content,
-                        structured_data=validated_data,
-                        validation_retries=retry_count,
-                        retry_history=retry_history if retry_history else None
-                    )
-                    
-                except ValidationError as e:
-                    # Pydantic validation failed
-                    last_validation_errors = e.errors()
-                    retry_count += 1
-                    
-                    # Record retry attempt for debugging
-                    response_str = json.dumps(raw_json) if isinstance(raw_json, dict) else str(raw_json)
-                    retry_history.append({
-                        "attempt": retry_count,
-                        "error_type": "validation_error",
-                        "errors": last_validation_errors,
-                        "response_preview": response_str[:500] if len(response_str) > 500 else response_str
-                    })
-                    
-                    logging.getLogger(__name__).warning(
-                        f"Structured output validation failed (attempt {retry_count}/{max_retries + 1}): {e}"
-                    )
-                    
-                    if retry_count > max_retries:
-                        raise StructuredOutputError(
-                            f"Validation failed after {retry_count} attempts",
-                            validation_errors=last_validation_errors,
-                            last_response=raw_json
-                        )
-                    
-                    # Wait before retry
-                    if self.retry_config:
-                        await asyncio.sleep(self.retry_config.backoff_base_seconds * retry_count)
-                        
-            except StructuredOutputError:
-                raise  # Re-raise our own errors
-            except Exception as e:
-                # Unexpected error
-                raise StructuredOutputError(
-                    f"Unexpected error during structured output: {e}",
-                    validation_errors=[{"type": "unexpected_error", "msg": str(e)}],
-                    last_response=last_response
-                )
-        
-        # Should not reach here, but just in case
-        raise StructuredOutputError(
-            f"Validation failed after {retry_count} attempts",
-            validation_errors=last_validation_errors,
-            last_response=last_response
-        )
+                    # If this is the last iteration, we'll fall through and raise an error
+                    if self._iteration_count >= self.max_tool_iterations - 1:
+                        break
+                
+                self._iteration_count += 1
+            
+            # Max iterations reached without output tool being called
+            raise StructuredOutputError(
+                f"Model did not call output tool within {self.max_tool_iterations} iterations. "
+                f"Ensure the model understands it must use the {output_tool_name} tool to provide structured output.",
+                validation_errors=[{"type": "no_output_tool_call", "msg": "Output tool was never called"}],
+                last_response=last_response
+            )
+            
+        except StructuredOutputError:
+            raise
+        except Exception as e:
+            raise StructuredOutputError(
+                f"Unexpected error during structured output: {e}",
+                validation_errors=[{"type": "unexpected_error", "msg": str(e)}],
+                last_response=last_response
+            )
     
     @weave.op()
     async def stream(

@@ -10,6 +10,15 @@ Features shown:
 - Retry on validation failure with retry_config
 - Accessing the validated structured_data
 - Debugging with retry_history (available on AgentResult and Message.metrics)
+- Simple JSON mode with response_format="json"
+
+Implementation Details:
+    Structured output uses an "output-tool" pattern internally:
+    - Your Pydantic schema is registered as a special output tool
+    - The model calls this tool when ready to provide its final answer
+    - This allows regular tools to work alongside structured output!
+    
+    For simple JSON without validation, use response_format="json" instead.
 
 Prerequisites:
     pip install slide-tyler
@@ -201,6 +210,43 @@ async def handling_validation_errors():
         print(f"Last response: {e.last_response}")
 
 
+async def simple_json_mode():
+    """Example: Simple JSON mode without schema validation."""
+    import json
+    
+    print("\n" + "=" * 60)
+    print("Simple JSON Mode (response_format='json')")
+    print("=" * 60)
+    
+    # Use response_format="json" when you want JSON but don't need
+    # a specific schema. The model will return valid JSON (any structure).
+    # Tools still work in this mode!
+    
+    agent = Agent(
+        name="json-responder",
+        model_name="gpt-4.1",
+        purpose="To provide JSON responses"
+    )
+    
+    thread = Thread()
+    thread.add_message(Message(
+        role="user",
+        content="List 3 programming languages with their main use cases"
+    ))
+    
+    # response_format="json" forces valid JSON without schema validation
+    result = await agent.run(thread, response_format="json")
+    
+    # Parse the JSON yourself
+    data = json.loads(result.content)
+    print(f"\nReceived JSON: {json.dumps(data, indent=2)}")
+    
+    # Note: structured_data is None in this mode (no Pydantic validation)
+    assert result.structured_data is None
+    
+    return data
+
+
 async def main():
     """Run all examples."""
     # Agent-level default response_type
@@ -214,6 +260,9 @@ async def main():
     
     # Error handling
     await handling_validation_errors()
+    
+    # Simple JSON mode
+    await simple_json_mode()
     
     print("\n" + "=" * 60)
     print("All examples complete!")
