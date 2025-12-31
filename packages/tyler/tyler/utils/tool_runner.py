@@ -134,32 +134,17 @@ class ToolRunner:
             raise ValueError(f"Implementation for tool '{tool_name}' not found")
         
         implementation = tool['implementation']
+        is_async = tool.get('is_async', False)
         
-        # Check if tool expects context injection
-        expects_context = self._tool_expects_context(implementation)
-        
-        # Execute the tool
+        # Execute the tool using shared implementation
         try:
-            if expects_context:
-                if context is None:
-                    raise ToolContextError(
-                        f"Tool '{tool_name}' requires context (has 'ctx' or 'context' parameter) "
-                        f"but no tool_context was provided to agent.run()"
-                    )
-                # Inject context as first argument
-                if tool.get('is_async', False):
-                    return await implementation(context, **parameters)
-                else:
-                    return await asyncio.to_thread(
-                        lambda: implementation(context, **parameters)
-                    )
-            else:
-                # Standard execution without context
-                if tool.get('is_async', False):
-                    return await implementation(**parameters)
-                else:
-                    # Run sync tools in a thread pool
-                    return await asyncio.to_thread(implementation, **parameters)
+            return await self._execute_implementation(
+                tool_name=tool_name,
+                implementation=implementation,
+                arguments=parameters,
+                is_async=is_async,
+                context=context
+            )
         except ToolContextError:
             raise  # Re-raise context errors as-is
         except Exception as e:
@@ -188,6 +173,54 @@ class ToolRunner:
         except (ValueError, TypeError):
             # If we can't inspect the signature, assume no context
             return False
+
+    async def _execute_implementation(
+        self,
+        tool_name: str,
+        implementation: Callable,
+        arguments: Dict[str, Any],
+        is_async: bool,
+        context: Optional[ToolContext] = None
+    ) -> Any:
+        """Execute a tool implementation with optional context injection.
+        
+        This is the shared execution logic used by both run_tool_async and
+        execute_tool_call to avoid duplication.
+        
+        Args:
+            tool_name: Name of the tool (for error messages)
+            implementation: The tool function/coroutine
+            arguments: Arguments to pass to the tool
+            is_async: Whether the implementation is async
+            context: Optional context to inject
+            
+        Returns:
+            The result of the tool execution
+            
+        Raises:
+            ToolContextError: If tool expects context but none was provided
+        """
+        expects_context = self._tool_expects_context(implementation)
+        
+        if expects_context:
+            if context is None:
+                raise ToolContextError(
+                    f"Tool '{tool_name}' requires context (has 'ctx' or 'context' parameter) "
+                    f"but no tool_context was provided to agent.run()"
+                )
+            # Inject context as first argument
+            if is_async:
+                return await implementation(context, **arguments)
+            else:
+                return await asyncio.to_thread(
+                    lambda: implementation(context, **arguments)
+                )
+        else:
+            # Standard execution without context
+            if is_async:
+                return await implementation(**arguments)
+            else:
+                return await asyncio.to_thread(implementation, **arguments)
 
     def load_tool_module(self, module_spec: str) -> List[dict]:
         """
@@ -406,29 +439,16 @@ class ToolRunner:
             raise ValueError(f"Invalid JSON in tool arguments: {e}")
         
         implementation = tool['implementation']
-        expects_context = self._tool_expects_context(implementation)
+        is_async = tool['is_async']
             
         try:
-            if expects_context:
-                if context is None:
-                    raise ToolContextError(
-                        f"Tool '{tool_name}' requires context (has 'ctx' or 'context' parameter) "
-                        f"but no tool_context was provided to agent.run()"
-                    )
-                # Inject context as first argument
-                if tool['is_async']:
-                    result = await implementation(context, **arguments)
-                else:
-                    result = await asyncio.to_thread(
-                        lambda: implementation(context, **arguments)
-                    )
-            else:
-                # Standard execution without context
-                if tool['is_async']:
-                    result = await implementation(**arguments)
-                else:
-                    result = await asyncio.to_thread(implementation, **arguments)
-                
+            result = await self._execute_implementation(
+                tool_name=tool_name,
+                implementation=implementation,
+                arguments=arguments,
+                is_async=is_async,
+                context=context
+            )
             logger.debug(f"Tool execution result: {result}")
             return result
 
