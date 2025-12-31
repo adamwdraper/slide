@@ -50,13 +50,14 @@ Slide gives you everything you need to build, test, and deploy intelligent AI ag
 
 - **Extensible and open source**: Built on a foundation you can inspect, customize, and contribute to
 - **Flexible with model support**: Compatible with any LLM provider supported by LiteLLM (100+ providers including OpenAI, Anthropic, etc.)
+- **Real-time streaming enabled**: Designed to build interactive applications with streaming responses from both agents and tools
 - **MCP and A2A compatible**: Seamlessly integrated with Model Context Protocol (MCP) servers and Agent-to-Agent (A2A) protocol for multi-agent interoperability
 - **Agent delegation built-in**: Create multi-agent systems where specialized agents collaborate to solve complex tasks
 - **Multimodal by design**: Capable of processing and understanding images, audio, PDFs, and more out of the box
 - **Persistent with conversations**: Equipped with built-in support for threads, messages, and attachments with flexible storage options (in-memory, SQLite, or PostgreSQL)
-- **Ready-to-use with tools**: Packed with built-in tools for web interaction, file handling, and browser automation with support for custom tools
-- **Real-time streaming enabled**: Designed to build interactive applications with streaming responses from both agents and tools
-- **Transparent reasoning**: Access model thinking tokens from OpenAI o1 and Anthropic Claude to see how agents arrive at decisions
+- **Type-safe structured outputs**: Get validated Pydantic models from your agents with automatic retry on validation failure—no more manual JSON parsing
+- **Ready-to-use with tools**: Packed with built-in tools for web interaction, file handling, and browser automation—plus dependency injection via `tool_context` for custom tools
+- **Transparent reasoning**: Access model thinking tokens to see how agents arrive at decisions
 - **Interactive CLI included**: Chat with your agents instantly using the built-in `tyler chat` command, or scaffold new projects with `tyler init`
 - **Evaluation-ready**: Equipped with a framework to test agents safely with mock tools, prebuilt LLM judges, and multi-turn conversation scenarios
 - **Debuggable**: Integrated with W&B Weave for powerful tracing and debugging capabilities
@@ -110,6 +111,13 @@ Slide gives you everything you need to build, test, and deploy intelligent AI ag
     href="/examples/research-assistant"
   >
     Agents that can search, analyze, and synthesize information
+  </Card>
+  <Card
+    title="Data Extraction Pipelines"
+    icon="database"
+    href="/guides/structured-output"
+  >
+    Extract validated, type-safe structured data from documents and conversations
   </Card>
 </CardGroup>
 
