@@ -21,12 +21,19 @@ def mock_env_vars():
 
 @pytest.fixture(autouse=True)
 def mock_openai():
-    """Mock OpenAI/litellm calls for testing"""
-    with patch('litellm.completion') as mock:
-        mock.return_value = MagicMock(
-            choices=[MagicMock(message=MagicMock(content="Test response"))]
-        )
-        yield mock
+    """Mock OpenAI/litellm calls for testing (both sync and async)"""
+    from unittest.mock import AsyncMock
+    
+    mock_response = MagicMock(
+        choices=[MagicMock(message=MagicMock(content="Test response", tool_calls=None))],
+        usage=MagicMock(prompt_tokens=10, completion_tokens=20, total_tokens=30)
+    )
+    
+    with patch('litellm.completion') as mock_sync, \
+         patch('litellm.acompletion', new_callable=AsyncMock) as mock_async:
+        mock_sync.return_value = mock_response
+        mock_async.return_value = mock_response
+        yield mock_sync, mock_async
 
 @pytest.fixture(autouse=True)
 def mock_wandb():
