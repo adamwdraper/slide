@@ -274,6 +274,70 @@ scraper_agent = Agent(
 )
 ```
 
+## Tool Timeouts
+
+For tools that might take a long time (API calls, database queries), you can set a timeout using the low-level tool runner:
+
+```python
+from tyler.utils.tool_runner import tool_runner
+
+async def slow_api_call(query: str) -> str:
+    """Call an external API that might be slow."""
+    # ... implementation
+    pass
+
+# Register with a 30-second timeout
+tool_runner.register_tool(
+    name="slow_api_call",
+    implementation=slow_api_call,
+    definition={
+        "name": "slow_api_call",
+        "description": "Call external API",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string"}
+            },
+            "required": ["query"]
+        }
+    },
+    timeout=30.0  # Timeout in seconds
+)
+```
+
+### Timeout Behavior
+
+When a tool exceeds its timeout:
+
+1. A `TimeoutError` is raised with the message: `Tool 'tool_name' timed out after X seconds`
+2. The error is returned to the LLM as the tool result
+3. The LLM can then decide how to proceed (retry, try a different approach, or inform the user)
+
+<Note>
+Timeouts work for both async and synchronous tools. For sync tools, the operation runs in a thread pool with the timeout applied to the entire operation.
+</Note>
+
+<Warning>
+For synchronous tools, the underlying thread cannot be forcibly stopped after a timeout—it will continue running in the background. For truly cancellable long-running operations, implement your tools as async functions.
+</Warning>
+
+You can also specify timeouts in the lye tool format:
+
+```python
+my_tool = {
+    "definition": {
+        "type": "function",
+        "function": {
+            "name": "my_slow_tool",
+            "description": "A tool that might take a while",
+            "parameters": {...}
+        }
+    },
+    "implementation": my_slow_function,
+    "timeout": 60.0  # 60 second timeout
+}
+```
+
 ## Best practices
 
 ### 1. Tool Selection

@@ -31,9 +31,17 @@ Each Lye tool is a dictionary with the following structure:
         }
     },
     "implementation": tool_function,
-    "type": "standard"  # Optional metadata
+    "type": "standard",  # Optional metadata
+    "timeout": 30.0      # Optional: max execution time in seconds
 }
 ```
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `definition` | Yes | OpenAI function calling format definition |
+| `implementation` | Yes | The Python function to execute |
+| `type` | No | Optional metadata (e.g., "standard") |
+| `timeout` | No | Maximum execution time in seconds. If exceeded, raises `TimeoutError` |
 
 ## Tool Implementation
 
@@ -297,6 +305,36 @@ files = [{
 return f"Generated PDF report with {page_count} pages", files
 ```
 
+## Tool Timeout
+
+For tools that may take a long time (external API calls, file processing), set a `timeout` value:
+
+```python
+SLOW_API_TOOL = {
+    "definition": {
+        "type": "function",
+        "function": {
+            "name": "slow_api_call",
+            "description": "Call an external API that may be slow",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "API query"}
+                },
+                "required": ["query"]
+            }
+        }
+    },
+    "implementation": slow_api_call,
+    "timeout": 60.0  # 60 second timeout
+}
+```
+
+When a tool exceeds its timeout:
+1. A `TimeoutError` is raised with the message: `Tool 'tool_name' timed out after X seconds`
+2. The error is returned to the LLM as the tool result
+3. The LLM can then decide how to proceed
+
 ## Example: Complete Tool
 
 ```python
@@ -330,7 +368,8 @@ WEB_DOWNLOAD_TOOL = {
         }
     },
     "implementation": download_file,
-    "type": "standard"
+    "type": "standard",
+    "timeout": 120.0  # Tool-level timeout (2 minutes max)
 }
 
 # Tool implementation

@@ -304,3 +304,179 @@ class TestExecuteToolCallContext:
         with pytest.raises(ToolContextError):
             await tool_runner.execute_tool_call(mock_tool_call, context=None)
 
+
+class TestToolContextDataclass:
+    """Tests for the ToolContext dataclass."""
+    
+    def test_toolcontext_creation_with_defaults(self):
+        """Test ToolContext can be created with defaults."""
+        ctx = ToolContext()
+        
+        assert ctx.tool_name is None
+        assert ctx.tool_call_id is None
+        assert ctx.deps == {}
+    
+    def test_toolcontext_creation_with_values(self):
+        """Test ToolContext can be created with all values."""
+        deps = {"db": "mock_db", "user_id": "123"}
+        ctx = ToolContext(
+            tool_name="my_tool",
+            tool_call_id="call_abc123",
+            deps=deps
+        )
+        
+        assert ctx.tool_name == "my_tool"
+        assert ctx.tool_call_id == "call_abc123"
+        assert ctx.deps == deps
+    
+    def test_toolcontext_dict_style_getitem(self):
+        """Test dict-style access with __getitem__."""
+        ctx = ToolContext(deps={"key": "value", "number": 42})
+        
+        assert ctx["key"] == "value"
+        assert ctx["number"] == 42
+    
+    def test_toolcontext_dict_style_getitem_keyerror(self):
+        """Test __getitem__ raises KeyError for missing key."""
+        ctx = ToolContext(deps={"key": "value"})
+        
+        with pytest.raises(KeyError):
+            _ = ctx["missing_key"]
+    
+    def test_toolcontext_dict_style_setitem(self):
+        """Test dict-style assignment with __setitem__."""
+        ctx = ToolContext()
+        ctx["new_key"] = "new_value"
+        
+        assert ctx["new_key"] == "new_value"
+        assert ctx.deps["new_key"] == "new_value"
+    
+    def test_toolcontext_get_method(self):
+        """Test get() method with default value."""
+        ctx = ToolContext(deps={"key": "value"})
+        
+        assert ctx.get("key") == "value"
+        assert ctx.get("missing") is None
+        assert ctx.get("missing", "default") == "default"
+    
+    def test_toolcontext_contains(self):
+        """Test 'in' operator via __contains__."""
+        ctx = ToolContext(deps={"key": "value"})
+        
+        assert "key" in ctx
+        assert "missing" not in ctx
+    
+    def test_toolcontext_keys(self):
+        """Test keys() method."""
+        ctx = ToolContext(deps={"a": 1, "b": 2})
+        
+        assert set(ctx.keys()) == {"a", "b"}
+    
+    def test_toolcontext_items(self):
+        """Test items() method."""
+        ctx = ToolContext(deps={"a": 1, "b": 2})
+        
+        assert dict(ctx.items()) == {"a": 1, "b": 2}
+    
+    def test_toolcontext_values(self):
+        """Test values() method."""
+        ctx = ToolContext(deps={"a": 1, "b": 2})
+        
+        assert set(ctx.values()) == {1, 2}
+    
+    def test_toolcontext_iteration(self):
+        """Test iteration via __iter__."""
+        ctx = ToolContext(deps={"a": 1, "b": 2, "c": 3})
+        
+        keys = list(ctx)
+        assert set(keys) == {"a", "b", "c"}
+    
+    def test_toolcontext_len(self):
+        """Test len() via __len__."""
+        ctx = ToolContext(deps={"a": 1, "b": 2})
+        
+        assert len(ctx) == 2
+    
+    def test_toolcontext_empty_len(self):
+        """Test len() for empty context."""
+        ctx = ToolContext()
+        
+        assert len(ctx) == 0
+    
+    def test_toolcontext_update_with_dict(self):
+        """Test update() with a dictionary."""
+        ctx = ToolContext(deps={"a": 1, "b": 2})
+        
+        ctx.update({"b": 20, "c": 3})
+        
+        assert ctx["a"] == 1
+        assert ctx["b"] == 20
+        assert ctx["c"] == 3
+    
+    def test_toolcontext_update_with_kwargs(self):
+        """Test update() with keyword arguments."""
+        ctx = ToolContext(deps={"a": 1})
+        
+        ctx.update(b=2, c=3)
+        
+        assert ctx["a"] == 1
+        assert ctx["b"] == 2
+        assert ctx["c"] == 3
+    
+    def test_toolcontext_update_with_toolcontext(self):
+        """Test update() with another ToolContext."""
+        ctx1 = ToolContext(deps={"a": 1})
+        ctx2 = ToolContext(deps={"b": 2, "c": 3})
+        
+        ctx1.update(ctx2)
+        
+        assert ctx1["a"] == 1
+        assert ctx1["b"] == 2
+        assert ctx1["c"] == 3
+    
+    def test_toolcontext_update_combined(self):
+        """Test update() with dict and kwargs combined."""
+        ctx = ToolContext(deps={"a": 1})
+        
+        ctx.update({"b": 2}, c=3)
+        
+        assert ctx["a"] == 1
+        assert ctx["b"] == 2
+        assert ctx["c"] == 3
+    
+    @pytest.mark.asyncio
+    async def test_tool_receives_rich_context(self):
+        """Test that tools receive ToolContext with metadata fields."""
+        received_ctx = None
+        
+        async def tool_checking_context(ctx: ToolContext, value: str) -> str:
+            nonlocal received_ctx
+            received_ctx = ctx
+            return f"Value: {value}"
+        
+        runner = ToolRunner()
+        runner.register_tool(
+            name="check_ctx",
+            implementation=tool_checking_context,
+            definition={"name": "check_ctx", "parameters": {"type": "object"}}
+        )
+        
+        # Create a rich context with metadata
+        ctx = ToolContext(
+            tool_name="check_ctx",
+            tool_call_id="call_123",
+            deps={"user_id": "test_user"}
+        )
+        
+        result = await runner.run_tool_async(
+            "check_ctx",
+            {"value": "hello"},
+            context=ctx
+        )
+        
+        assert result == "Value: hello"
+        assert received_ctx is not None
+        assert received_ctx.tool_name == "check_ctx"
+        assert received_ctx.tool_call_id == "call_123"
+        assert received_ctx["user_id"] == "test_user"
+

@@ -407,7 +407,26 @@ class Agent(BaseModel):
             dict: Formatted tool result message
         """
         normalized_tool_call = self._normalize_tool_call(tool_call)
-        return await tool_runner.execute_tool_call(normalized_tool_call, context=self._tool_context)
+        
+        # Build rich ToolContext with metadata if user provided tool_context
+        if self._tool_context is not None:
+            # Extract tool_name and tool_call_id from the normalized tool_call
+            tool_name = getattr(normalized_tool_call.function, 'name', None)
+            tool_call_id = getattr(normalized_tool_call, 'id', None)
+            
+            # Shallow copy deps to prevent direct mutations from affecting other tool calls.
+            # Note: Nested mutable objects (dicts within dicts) are still shared references.
+            # We intentionally avoid deepcopy as it would fail for non-picklable objects
+            # like database connections and API clients which are common deps.
+            rich_context = ToolContext(
+                tool_name=tool_name,
+                tool_call_id=tool_call_id,
+                deps=dict(self._tool_context)
+            )
+        else:
+            rich_context = None
+        
+        return await tool_runner.execute_tool_call(normalized_tool_call, context=rich_context)
     
     @weave.op()
     async def _get_completion(self, **completion_params) -> Any:

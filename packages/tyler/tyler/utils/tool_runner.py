@@ -1,6 +1,6 @@
 import importlib
 import inspect
-from typing import Dict, Any, List, Optional, Callable, Union, Coroutine
+from typing import Dict, Any, List, Optional, Callable, Union, Coroutine, Iterator, KeysView, ItemsView, ValuesView, Mapping
 import os
 import glob
 from pathlib import Path
@@ -8,6 +8,7 @@ import weave
 import json
 import asyncio
 from functools import wraps
+from dataclasses import dataclass, field
 from tyler.utils.logging import get_logger
 from tyler.models.execution import ToolContextError
 # Direct import
@@ -17,8 +18,81 @@ import base64
 # Get configured logger
 logger = get_logger(__name__)
 
-# Type alias for tool context
-ToolContext = Dict[str, Any]
+
+@dataclass
+class ToolContext:
+    """Context passed to tools during execution.
+    
+    Provides typed fields for tool metadata while supporting dict-style access
+    for backward compatibility with existing tools that use `ctx["key"]` syntax.
+    
+    Attributes:
+        tool_name: Name of the tool being executed
+        tool_call_id: Unique identifier for the tool call
+        deps: User-provided dependencies (database connections, API clients, etc.)
+    
+    Example:
+        ```python
+        # Tools can access both typed fields and user deps:
+        async def my_tool(ctx: ToolContext, query: str) -> str:
+            # Typed field access
+            print(f"Running tool: {ctx.tool_name}")
+            
+            # Dict-style access for user deps (backward compatible)
+            db = ctx["db"]
+            user_id = ctx["user_id"]
+            return await db.query(query, user_id)
+        ```
+    """
+    tool_name: Optional[str] = None
+    tool_call_id: Optional[str] = None
+    deps: Dict[str, Any] = field(default_factory=dict)
+    
+    # Dict-style access for backward compatibility
+    def __getitem__(self, key: str) -> Any:
+        """Get a value from deps using dict-style access: ctx['key']"""
+        return self.deps[key]
+    
+    def __setitem__(self, key: str, value: Any) -> None:
+        """Set a value in deps using dict-style access: ctx['key'] = value"""
+        self.deps[key] = value
+    
+    def get(self, key: str, default: Any = None) -> Any:
+        """Get a value from deps with optional default: ctx.get('key', default)"""
+        return self.deps.get(key, default)
+    
+    def __contains__(self, key: str) -> bool:
+        """Check if key exists in deps: 'key' in ctx"""
+        return key in self.deps
+    
+    def keys(self) -> KeysView[str]:
+        """Return deps keys: ctx.keys()"""
+        return self.deps.keys()
+    
+    def items(self) -> ItemsView[str, Any]:
+        """Return deps items: ctx.items()"""
+        return self.deps.items()
+    
+    def values(self) -> ValuesView[Any]:
+        """Return deps values: ctx.values()"""
+        return self.deps.values()
+    
+    def __iter__(self) -> Iterator[str]:
+        """Iterate over deps keys: for key in ctx"""
+        return iter(self.deps)
+    
+    def __len__(self) -> int:
+        """Return number of deps: len(ctx)"""
+        return len(self.deps)
+    
+    def update(self, other: Union[Mapping[str, Any], "ToolContext", None] = None, **kwargs: Any) -> None:
+        """Update deps with key/value pairs: ctx.update({"key": "value"})"""
+        if other is not None:
+            if isinstance(other, ToolContext):
+                self.deps.update(other.deps)
+            else:
+                self.deps.update(other)
+        self.deps.update(kwargs)
 
 class ToolRunner:
     def __init__(self):
@@ -26,7 +100,13 @@ class ToolRunner:
         self.tool_attributes = {}  # name -> tool attributes
         self._module_cache = {}  # module_spec -> loaded tools
 
-    def register_tool(self, name: str, implementation: Union[Callable, Coroutine], definition: Optional[Dict] = None) -> None:
+    def register_tool(
+        self, 
+        name: str, 
+        implementation: Union[Callable, Coroutine], 
+        definition: Optional[Dict] = None,
+        timeout: Optional[float] = None
+    ) -> None:
         """
         Register a new tool implementation.
         
@@ -34,13 +114,35 @@ class ToolRunner:
             name: The name of the tool
             implementation: The function or coroutine that implements the tool
             definition: Optional OpenAI function definition
+            timeout: Optional timeout in seconds for tool execution.
+                If the tool takes longer than this, a TimeoutError is raised.
+                Must be a positive number if provided.
+        
+        Raises:
+            ValueError: If timeout is not a positive number
         """
+        self._validate_timeout(timeout, name)
+        
         self.tools[name] = {
             'implementation': implementation,
             'is_async': inspect.iscoroutinefunction(implementation),
-            'definition': definition
+            'definition': definition,
+            'timeout': timeout
         }
         
+    def _validate_timeout(self, timeout: Optional[float], tool_name: str) -> None:
+        """Validate that timeout is positive if provided.
+        
+        Args:
+            timeout: The timeout value to validate
+            tool_name: Tool name for error messages
+            
+        Raises:
+            ValueError: If timeout is not a positive number
+        """
+        if timeout is not None and timeout <= 0:
+            raise ValueError(f"timeout for tool '{tool_name}' must be a positive number, got {timeout}")
+    
     def register_tool_attributes(self, name: str, attributes: Dict[str, Any]) -> None:
         """
         Register optional tool-specific attributes.
@@ -135,6 +237,7 @@ class ToolRunner:
         
         implementation = tool['implementation']
         is_async = tool.get('is_async', False)
+        timeout = tool.get('timeout')
         
         # Execute the tool using shared implementation
         try:
@@ -143,10 +246,13 @@ class ToolRunner:
                 implementation=implementation,
                 arguments=parameters,
                 is_async=is_async,
-                context=context
+                context=context,
+                timeout=timeout
             )
         except ToolContextError:
             raise  # Re-raise context errors as-is
+        except TimeoutError:
+            raise  # Re-raise timeout errors as-is
         except Exception as e:
             raise ValueError(f"Error executing tool '{tool_name}': {str(e)}")
     
@@ -174,15 +280,42 @@ class ToolRunner:
             # If we can't inspect the signature, assume no context
             return False
 
+    async def _execute_with_timeout(
+        self,
+        tool_name: str,
+        coro: Coroutine,
+        timeout: Optional[float]
+    ) -> Any:
+        """Execute a coroutine with optional timeout.
+        
+        Args:
+            tool_name: Name of the tool (for error messages)
+            coro: The coroutine to execute
+            timeout: Timeout in seconds, or None for no timeout
+            
+        Returns:
+            The result of the coroutine
+            
+        Raises:
+            TimeoutError: If execution exceeds the timeout
+        """
+        if timeout is None:
+            return await coro
+        try:
+            return await asyncio.wait_for(coro, timeout=timeout)
+        except asyncio.TimeoutError:
+            raise TimeoutError(f"Tool '{tool_name}' timed out after {timeout} seconds")
+
     async def _execute_implementation(
         self,
         tool_name: str,
         implementation: Callable,
         arguments: Dict[str, Any],
         is_async: bool,
-        context: Optional[ToolContext] = None
+        context: Optional[Union[Dict[str, Any], "ToolContext"]] = None,
+        timeout: Optional[float] = None
     ) -> Any:
-        """Execute a tool implementation with optional context injection.
+        """Execute a tool implementation with optional context injection and timeout.
         
         This is the shared execution logic used by both run_tool_async and
         execute_tool_call to avoid duplication.
@@ -192,13 +325,21 @@ class ToolRunner:
             implementation: The tool function/coroutine
             arguments: Arguments to pass to the tool
             is_async: Whether the implementation is async
-            context: Optional context to inject
+            context: Optional context to inject (Dict or ToolContext for backward compatibility)
+            timeout: Optional timeout in seconds
             
         Returns:
             The result of the tool execution
             
         Raises:
             ToolContextError: If tool expects context but none was provided
+            TimeoutError: If execution exceeds the timeout
+        
+        Note:
+            For synchronous tools with timeouts, the thread executing the tool
+            will continue running even after TimeoutError is raised. This is a
+            known limitation of thread-based timeouts in Python. For truly
+            cancellable timeouts, implement tools as async functions.
         """
         expects_context = self._tool_expects_context(implementation)
         
@@ -210,17 +351,20 @@ class ToolRunner:
                 )
             # Inject context as first argument
             if is_async:
-                return await implementation(context, **arguments)
+                coro = implementation(context, **arguments)
             else:
-                return await asyncio.to_thread(
+                coro = asyncio.to_thread(
                     lambda: implementation(context, **arguments)
                 )
         else:
             # Standard execution without context
             if is_async:
-                return await implementation(**arguments)
+                coro = implementation(**arguments)
             else:
-                return await asyncio.to_thread(implementation, **arguments)
+                coro = asyncio.to_thread(implementation, **arguments)
+        
+        # Execute with optional timeout
+        return await self._execute_with_timeout(tool_name, coro, timeout)
 
     def load_tool_module(self, module_spec: str) -> List[dict]:
         """
@@ -283,12 +427,17 @@ class ToolRunner:
                                 continue
                                 
                             implementation = tool['implementation']
+                            timeout = tool.get('timeout')
+                            
+                            # Validate timeout if provided
+                            self._validate_timeout(timeout, func_name)
                             
                             # Register the tool with its implementation and definition
                             self.tools[func_name] = {
                                 'implementation': implementation,
                                 'is_async': inspect.iscoroutinefunction(implementation),
-                                'definition': tool['definition']['function']
+                                'definition': tool['definition']['function'],
+                                'timeout': timeout
                             }
                             
                             # Register any attributes if present at top level
@@ -335,12 +484,17 @@ class ToolRunner:
                         continue
                         
                     implementation = tool['implementation']
+                    timeout = tool.get('timeout')
+                    
+                    # Validate timeout if provided
+                    self._validate_timeout(timeout, func_name)
                     
                     # Register the tool with its implementation and definition
                     self.tools[func_name] = {
                         'implementation': implementation,
                         'is_async': inspect.iscoroutinefunction(implementation),
-                        'definition': tool['definition']['function']
+                        'definition': tool['definition']['function'],
+                        'timeout': timeout
                     }
                     
                     # Register any attributes if present at top level
@@ -440,6 +594,7 @@ class ToolRunner:
         
         implementation = tool['implementation']
         is_async = tool['is_async']
+        timeout = tool.get('timeout')
             
         try:
             result = await self._execute_implementation(
@@ -447,13 +602,16 @@ class ToolRunner:
                 implementation=implementation,
                 arguments=arguments,
                 is_async=is_async,
-                context=context
+                context=context,
+                timeout=timeout
             )
             logger.debug(f"Tool execution result: {result}")
             return result
 
         except ToolContextError:
             raise  # Re-raise context errors as-is
+        except TimeoutError:
+            raise  # Re-raise timeout errors as-is
         except Exception as e:
             logger.error(f"Error executing tool {tool_name}: {e}")
             raise
