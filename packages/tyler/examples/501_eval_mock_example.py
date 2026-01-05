@@ -26,7 +26,7 @@ from lye import web, files
 # Initialize weave
 try:
     if os.getenv("WANDB_API_KEY"):
-        weave.init("tyler-eval-mocking")
+        weave.init("slide")
 except Exception as e:
     print(f"Failed to initialize weave tracing: {e}. Continuing without weave.")
 

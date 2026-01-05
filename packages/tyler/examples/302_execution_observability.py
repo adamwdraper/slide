@@ -29,7 +29,7 @@ def calculate(expression: str) -> str:
 
 try:
     if os.getenv("WANDB_API_KEY"):
-        weave.init("tyler")
+        weave.init("slide")
         logger.debug("Weave tracing initialized successfully")
 except Exception as e:
     logger.warning(f"Failed to initialize weave tracing: {e}. Continuing without weave.")

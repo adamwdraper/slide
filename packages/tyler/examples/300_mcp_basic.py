@@ -23,7 +23,7 @@ from tyler import Agent, Thread, Message
 # Initialize weave tracing if available
 try:
     if os.getenv("WANDB_API_KEY"):
-        weave.init("tyler-mcp-example")
+        weave.init("slide")
 except Exception:
     pass
 

@@ -33,7 +33,7 @@ from lye import WANDB_TOOLS
 
 try:
     if os.getenv("WANDB_API_KEY"):
-        weave.init("tyler-wandb-example")
+        weave.init("slide")
         logger.debug("Weave tracing initialized successfully")
 except Exception as e:
     logger.warning(f"Failed to initialize weave tracing: {e}. Continuing without weave.")

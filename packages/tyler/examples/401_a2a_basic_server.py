@@ -35,7 +35,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # Initialize weave tracing if WANDB_API_KEY is set
 try:
     if os.getenv("WANDB_API_KEY"):
-        weave.init("tyler-a2a-server")
+        weave.init("slide")
         logger.debug("Weave tracing initialized successfully")
 except Exception as e:
     logger.warning(f"Failed to initialize weave tracing: {e}. Continuing without weave.")
