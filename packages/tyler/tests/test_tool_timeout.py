@@ -50,7 +50,7 @@ class TestToolTimeout:
         async def some_tool(query: str) -> str:
             return f"Result: {query}"
         
-        with pytest.raises(ValueError, match="timeout must be a positive number"):
+        with pytest.raises(ValueError, match="must be a positive number"):
             tool_runner.register_tool(
                 name="invalid",
                 implementation=some_tool,
@@ -63,7 +63,7 @@ class TestToolTimeout:
         async def some_tool(query: str) -> str:
             return f"Result: {query}"
         
-        with pytest.raises(ValueError, match="timeout must be a positive number"):
+        with pytest.raises(ValueError, match="must be a positive number"):
             tool_runner.register_tool(
                 name="invalid",
                 implementation=some_tool,

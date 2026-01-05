@@ -317,6 +317,10 @@ When a tool exceeds its timeout:
 Timeouts work for both async and synchronous tools. For sync tools, the operation runs in a thread pool with the timeout applied to the entire operation.
 </Note>
 
+<Warning>
+For synchronous tools, the underlying thread cannot be forcibly stopped after a timeout—it will continue running in the background. For truly cancellable long-running operations, implement your tools as async functions.
+</Warning>
+
 You can also specify timeouts in the lye tool format:
 
 ```python

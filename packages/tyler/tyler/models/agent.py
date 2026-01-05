@@ -414,7 +414,10 @@ class Agent(BaseModel):
             tool_name = getattr(normalized_tool_call.function, 'name', None)
             tool_call_id = getattr(normalized_tool_call, 'id', None)
             
-            # Copy deps to prevent tool mutation from affecting other tool calls
+            # Shallow copy deps to prevent direct mutations from affecting other tool calls.
+            # Note: Nested mutable objects (dicts within dicts) are still shared references.
+            # We intentionally avoid deepcopy as it would fail for non-picklable objects
+            # like database connections and API clients which are common deps.
             rich_context = ToolContext(
                 tool_name=tool_name,
                 tool_call_id=tool_call_id,

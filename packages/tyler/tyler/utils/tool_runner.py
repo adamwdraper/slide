@@ -121,8 +121,7 @@ class ToolRunner:
         Raises:
             ValueError: If timeout is not a positive number
         """
-        if timeout is not None and timeout <= 0:
-            raise ValueError(f"timeout must be a positive number, got {timeout}")
+        self._validate_timeout(timeout, name)
         
         self.tools[name] = {
             'implementation': implementation,
@@ -131,6 +130,19 @@ class ToolRunner:
             'timeout': timeout
         }
         
+    def _validate_timeout(self, timeout: Optional[float], tool_name: str) -> None:
+        """Validate that timeout is positive if provided.
+        
+        Args:
+            timeout: The timeout value to validate
+            tool_name: Tool name for error messages
+            
+        Raises:
+            ValueError: If timeout is not a positive number
+        """
+        if timeout is not None and timeout <= 0:
+            raise ValueError(f"timeout for tool '{tool_name}' must be a positive number, got {timeout}")
+    
     def register_tool_attributes(self, name: str, attributes: Dict[str, Any]) -> None:
         """
         Register optional tool-specific attributes.
@@ -300,7 +312,7 @@ class ToolRunner:
         implementation: Callable,
         arguments: Dict[str, Any],
         is_async: bool,
-        context: Optional[ToolContext] = None,
+        context: Optional[Union[Dict[str, Any], "ToolContext"]] = None,
         timeout: Optional[float] = None
     ) -> Any:
         """Execute a tool implementation with optional context injection and timeout.
@@ -313,7 +325,7 @@ class ToolRunner:
             implementation: The tool function/coroutine
             arguments: Arguments to pass to the tool
             is_async: Whether the implementation is async
-            context: Optional context to inject
+            context: Optional context to inject (Dict or ToolContext for backward compatibility)
             timeout: Optional timeout in seconds
             
         Returns:
@@ -322,6 +334,12 @@ class ToolRunner:
         Raises:
             ToolContextError: If tool expects context but none was provided
             TimeoutError: If execution exceeds the timeout
+        
+        Note:
+            For synchronous tools with timeouts, the thread executing the tool
+            will continue running even after TimeoutError is raised. This is a
+            known limitation of thread-based timeouts in Python. For truly
+            cancellable timeouts, implement tools as async functions.
         """
         expects_context = self._tool_expects_context(implementation)
         
@@ -409,13 +427,17 @@ class ToolRunner:
                                 continue
                                 
                             implementation = tool['implementation']
+                            timeout = tool.get('timeout')
+                            
+                            # Validate timeout if provided
+                            self._validate_timeout(timeout, func_name)
                             
                             # Register the tool with its implementation and definition
                             self.tools[func_name] = {
                                 'implementation': implementation,
                                 'is_async': inspect.iscoroutinefunction(implementation),
                                 'definition': tool['definition']['function'],
-                                'timeout': tool.get('timeout')
+                                'timeout': timeout
                             }
                             
                             # Register any attributes if present at top level
@@ -462,13 +484,17 @@ class ToolRunner:
                         continue
                         
                     implementation = tool['implementation']
+                    timeout = tool.get('timeout')
+                    
+                    # Validate timeout if provided
+                    self._validate_timeout(timeout, func_name)
                     
                     # Register the tool with its implementation and definition
                     self.tools[func_name] = {
                         'implementation': implementation,
                         'is_async': inspect.iscoroutinefunction(implementation),
                         'definition': tool['definition']['function'],
-                        'timeout': tool.get('timeout')
+                        'timeout': timeout
                     }
                     
                     # Register any attributes if present at top level
