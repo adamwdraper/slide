@@ -152,7 +152,13 @@ def _build_server_params(server: Dict[str, Any]):
             url=server["url"],
             headers=server.get("headers"),
         )
-    else:  # streamablehttp or websocket (websocket uses streamablehttp params)
+    elif transport == "websocket":
+        # WebSocket transport uses StreamableHttpParameters with wss:// URL
+        return StreamableHttpParameters(
+            url=server["url"],
+            headers=server.get("headers"),
+        )
+    else:  # streamablehttp
         return StreamableHttpParameters(
             url=server["url"],
             headers=server.get("headers"),
@@ -295,6 +301,7 @@ async def _load_mcp_config(
     await exit_stack.__aenter__()
     
     all_tools = []
+    seen_prefixed_names = {}  # prefixed_name -> server_name for collision detection
     
     # Connect to each server
     for server in config["servers"]:
@@ -319,7 +326,7 @@ async def _load_mcp_config(
         for attempt in range(max_retries):
             try:
                 if attempt > 0:
-                    delay = min(2 ** attempt, 10)  # Exponential backoff, max 10s
+                    delay = min(2 ** attempt, 10)  # Exponential backoff: 2s, 4s, 8s, 10s max
                     logger.debug(f"Retrying connection to '{name}' (attempt {attempt + 1}/{max_retries}) after {delay}s...")
                     await asyncio.sleep(delay)
                 
@@ -335,9 +342,9 @@ async def _load_mcp_config(
                 if attempt == max_retries - 1:
                     # Last attempt failed
                     if fail_silent:
-                        logger.warning(f"Failed to connect to MCP server '{name}' after {max_retries} attempts: {e}")
+                        logger.warning(f"Failed to connect to MCP server '{name}' after {max_retries} attempts: {last_error}")
                     else:
-                        raise ValueError(f"Failed to connect to MCP server '{name}': {e}") from e
+                        raise ValueError(f"Failed to connect to MCP server '{name}': {last_error}") from last_error
         
         if connected:
             # Get newly added tools (SDK added them with original names)
@@ -351,6 +358,18 @@ async def _load_mcp_config(
                 include_tools,
                 exclude_tools,
             )
+            
+            # Check for prefixed name collisions with tools from previous servers
+            for tool in server_tools:
+                prefixed_name = tool["definition"]["function"]["name"]
+                if prefixed_name in seen_prefixed_names:
+                    logger.warning(
+                        f"Tool name collision: '{prefixed_name}' from server '{name}' "
+                        f"conflicts with same-named tool from server '{seen_prefixed_names[prefixed_name]}'. "
+                        f"The later tool will override the earlier one. Consider using unique prefixes."
+                    )
+                seen_prefixed_names[prefixed_name] = name
+            
             all_tools.extend(server_tools)
             
             logger.info(f"Registered {len(server_tools)} tools from MCP server '{name}'")
@@ -361,6 +380,6 @@ async def _load_mcp_config(
         try:
             await exit_stack.aclose()
         except Exception as e:
-            logger.debug(f"Error during MCP disconnect: {e}")
+            logger.warning(f"Error during MCP disconnect: {e}")
     
     return all_tools, disconnect_callback
