@@ -10,7 +10,7 @@ import re
 import logging
 import asyncio
 from contextlib import AsyncExitStack
-from typing import Dict, List, Any, Callable, Awaitable, Tuple, Optional
+from typing import Dict, List, Any, Callable, Awaitable, Tuple, Optional, TYPE_CHECKING
 
 from mcp.client.session_group import (
     ClientSessionGroup,
@@ -18,6 +18,9 @@ from mcp.client.session_group import (
     SseServerParameters,
     StreamableHttpParameters,
 )
+
+if TYPE_CHECKING:
+    from tyler.utils.tool_runner import ToolContext
 
 logger = logging.getLogger(__name__)
 
@@ -170,13 +173,31 @@ def _create_tool_implementation(group: ClientSessionGroup, sdk_tool_name: str, d
         display_name: Human-readable name for logging (e.g., "search")
     
     Returns:
-        Async function that executes the MCP tool
+        Async function that executes the MCP tool.
+        The function accepts an optional 'ctx' parameter (ToolContext) to receive
+        progress callbacks for long-running operations.
     """
-    async def call_mcp_tool(**kwargs):
-        """Call the MCP tool with the provided arguments."""
+    async def call_mcp_tool(ctx: Optional["ToolContext"] = None, **kwargs):
+        """Call the MCP tool with the provided arguments.
+        
+        Args:
+            ctx: Optional ToolContext with progress_callback for progress updates
+            **kwargs: Arguments to pass to the MCP tool
+        """
         try:
             logger.debug(f"Calling MCP tool '{display_name}' (sdk: {sdk_tool_name}) with args: {kwargs}")
-            result = await group.call_tool(sdk_tool_name, kwargs)
+            
+            # Extract progress callback from context if available
+            progress_callback = None
+            if ctx is not None and hasattr(ctx, 'progress_callback') and ctx.progress_callback is not None:
+                progress_callback = ctx.progress_callback
+                logger.debug(f"MCP tool '{display_name}' will use progress callback")
+            
+            result = await group.call_tool(
+                sdk_tool_name, 
+                kwargs,
+                progress_callback=progress_callback,
+            )
             logger.debug(f"MCP tool '{display_name}' returned: {type(result)}")
             
             # Prefer structuredContent if available (new SDK feature for tools with output schemas)

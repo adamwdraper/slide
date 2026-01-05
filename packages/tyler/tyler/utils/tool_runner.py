@@ -1,6 +1,6 @@
 import importlib
 import inspect
-from typing import Dict, Any, List, Optional, Callable, Union, Coroutine, Iterator, KeysView, ItemsView, ValuesView, Mapping
+from typing import Dict, Any, List, Optional, Callable, Union, Coroutine, Iterator, KeysView, ItemsView, ValuesView, Mapping, Awaitable
 import os
 import glob
 from pathlib import Path
@@ -19,6 +19,10 @@ import base64
 logger = get_logger(__name__)
 
 
+# Type alias for progress callbacks (matches MCP SDK's ProgressFnT protocol)
+ProgressCallback = Callable[[float, Optional[float], Optional[str]], Awaitable[None]]
+
+
 @dataclass
 class ToolContext:
     """Context passed to tools during execution.
@@ -30,6 +34,9 @@ class ToolContext:
         tool_name: Name of the tool being executed
         tool_call_id: Unique identifier for the tool call
         deps: User-provided dependencies (database connections, API clients, etc.)
+        progress_callback: Optional async callback for reporting progress updates.
+            Used by MCP tools to emit progress events during long-running operations.
+            Signature: async (progress: float, total: float | None, message: str | None) -> None
     
     Example:
         ```python
@@ -47,6 +54,7 @@ class ToolContext:
     tool_name: Optional[str] = None
     tool_call_id: Optional[str] = None
     deps: Dict[str, Any] = field(default_factory=dict)
+    progress_callback: Optional[ProgressCallback] = None
     
     # Dict-style access for backward compatibility
     def __getitem__(self, key: str) -> Any:

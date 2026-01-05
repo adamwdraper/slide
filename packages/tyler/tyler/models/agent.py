@@ -396,12 +396,15 @@ class Agent(BaseModel):
             return tool_call
 
     @weave.op()
-    async def _handle_tool_execution(self, tool_call) -> dict:
+    async def _handle_tool_execution(self, tool_call, progress_callback=None) -> dict:
         """
         Execute a single tool call and format the result message
         
         Args:
             tool_call: The tool call object from the model response
+            progress_callback: Optional async callback for progress updates.
+                Signature: async (progress: float, total: float | None, message: str | None) -> None
+                Used by MCP tools to emit progress notifications during long-running operations.
         
         Returns:
             dict: Formatted tool result message
@@ -421,10 +424,21 @@ class Agent(BaseModel):
             rich_context = ToolContext(
                 tool_name=tool_name,
                 tool_call_id=tool_call_id,
-                deps=dict(self._tool_context)
+                deps=dict(self._tool_context),
+                progress_callback=progress_callback,
             )
         else:
-            rich_context = None
+            # Create minimal context just for progress callback if provided
+            if progress_callback is not None:
+                tool_name = getattr(normalized_tool_call.function, 'name', None)
+                tool_call_id = getattr(normalized_tool_call, 'id', None)
+                rich_context = ToolContext(
+                    tool_name=tool_name,
+                    tool_call_id=tool_call_id,
+                    progress_callback=progress_callback,
+                )
+            else:
+                rich_context = None
         
         return await tool_runner.execute_tool_call(normalized_tool_call, context=rich_context)
     
@@ -1732,16 +1746,40 @@ class Agent(BaseModel):
                                 }
                             )
                         
-                        # Execute tools in parallel with timing
+                        # Execute tools in parallel with timing and progress tracking
                         tool_start_times = {}
                         tool_tasks = []
+                        progress_events = []  # Collect progress events during execution
                         
                         for tool_call in current_tool_calls:
                             tool_id = tool_call['id']
+                            tool_name = tool_call['function']['name']
                             tool_start_times[tool_id] = datetime.now(timezone.utc)
-                            tool_tasks.append(self._handle_tool_execution(tool_call))
+                            
+                            # Create progress callback for this tool that captures events
+                            async def make_progress_callback(t_name, t_id):
+                                async def progress_cb(progress: float, total: Optional[float] = None, message: Optional[str] = None):
+                                    progress_events.append(ExecutionEvent(
+                                        type=EventType.TOOL_PROGRESS,
+                                        timestamp=datetime.now(timezone.utc),
+                                        data={
+                                            "tool_name": t_name,
+                                            "progress": progress,
+                                            "total": total,
+                                            "message": message,
+                                            "tool_call_id": t_id
+                                        }
+                                    ))
+                                return progress_cb
+                            
+                            progress_callback = await make_progress_callback(tool_name, tool_id)
+                            tool_tasks.append(self._handle_tool_execution(tool_call, progress_callback=progress_callback))
                         
                         tool_results = await asyncio.gather(*tool_tasks, return_exceptions=True)
+                        
+                        # Yield any progress events that were collected during execution
+                        for progress_event in progress_events:
+                            yield progress_event
                         
                         # Process results
                         should_break = False

@@ -22,6 +22,7 @@ class EventType(Enum):
     # Tool execution  
     TOOL_SELECTED = "tool_selected"      # {tool_name, arguments, tool_call_id}
     TOOL_EXECUTING = "tool_executing"    # {tool_name, tool_call_id}
+    TOOL_PROGRESS = "tool_progress"      # {tool_name, progress, total, message, tool_call_id}
     TOOL_RESULT = "tool_result"          # {tool_name, result, duration_ms, tool_call_id}
     TOOL_ERROR = "tool_error"            # {tool_name, error, tool_call_id}
     

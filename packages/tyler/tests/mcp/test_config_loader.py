@@ -376,7 +376,9 @@ class TestToolImplementation:
         
         assert result == "Result text"
         # Should call with SDK-namespaced name for correct routing
-        mock_group.call_tool.assert_called_once_with("_0_test_tool", {"arg1": "value"})
+        mock_group.call_tool.assert_called_once_with(
+            "_0_test_tool", {"arg1": "value"}, progress_callback=None
+        )
     
     @pytest.mark.asyncio
     async def test_tool_implementation_returns_structured_content(self):
@@ -408,6 +410,61 @@ class TestToolImplementation:
         result = await impl()
         
         assert result == ["Result 1", "Result 2"]
+    
+    @pytest.mark.asyncio
+    async def test_tool_implementation_passes_progress_callback(self):
+        """Test tool implementation passes progress callback from context to SDK."""
+        from tyler.utils.tool_runner import ToolContext
+        
+        mock_group = MagicMock()
+        mock_result = MagicMock()
+        mock_result.structuredContent = None
+        mock_content = MagicMock()
+        mock_content.text = "Result text"
+        mock_result.content = [mock_content]
+        mock_group.call_tool = AsyncMock(return_value=mock_result)
+        
+        # Create a progress callback
+        progress_calls = []
+        async def progress_cb(progress, total=None, message=None):
+            progress_calls.append((progress, total, message))
+        
+        # Create tool context with progress callback
+        ctx = ToolContext(
+            tool_name="test_tool",
+            tool_call_id="call_123",
+            progress_callback=progress_cb
+        )
+        
+        impl = _create_tool_implementation(mock_group, "_0_test_tool", "test_tool")
+        result = await impl(ctx=ctx, arg1="value")
+        
+        assert result == "Result text"
+        # Verify progress callback was passed to SDK
+        mock_group.call_tool.assert_called_once()
+        call_args = mock_group.call_tool.call_args
+        assert call_args.kwargs.get("progress_callback") == progress_cb
+    
+    @pytest.mark.asyncio
+    async def test_tool_implementation_works_without_context(self):
+        """Test tool implementation works when no context is provided."""
+        mock_group = MagicMock()
+        mock_result = MagicMock()
+        mock_result.structuredContent = None
+        mock_content = MagicMock()
+        mock_content.text = "Result text"
+        mock_result.content = [mock_content]
+        mock_group.call_tool = AsyncMock(return_value=mock_result)
+        
+        impl = _create_tool_implementation(mock_group, "_0_test_tool", "test_tool")
+        # No ctx passed
+        result = await impl(arg1="value")
+        
+        assert result == "Result text"
+        # Verify progress callback is None when no context
+        mock_group.call_tool.assert_called_once()
+        call_args = mock_group.call_tool.call_args
+        assert call_args.kwargs.get("progress_callback") is None
 
 
 @pytest.mark.asyncio
