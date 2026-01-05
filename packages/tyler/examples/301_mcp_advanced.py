@@ -22,12 +22,13 @@ import os
 import weave
 from tyler import Agent, Thread, Message
 
-# Initialize weave tracing if available
-try:
-    if os.getenv("WANDB_API_KEY"):
-        weave.init("slide")
-except Exception:
-    pass
+# Initialize weave tracing if WANDB_PROJECT is set
+weave_project = os.getenv("WANDB_PROJECT")
+if weave_project:
+    try:
+        weave.init(weave_project)
+    except Exception:
+        pass
 
 
 async def example_multiple_servers():

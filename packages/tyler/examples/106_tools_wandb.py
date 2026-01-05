@@ -31,12 +31,14 @@ from tyler import Agent, Thread, Message
 # Import W&B workspace tools
 from lye import WANDB_TOOLS
 
-try:
-    if os.getenv("WANDB_API_KEY"):
-        weave.init("slide")
+# Initialize weave tracing if WANDB_PROJECT is set
+weave_project = os.getenv("WANDB_PROJECT")
+if weave_project:
+    try:
+        weave.init(weave_project)
         logger.debug("Weave tracing initialized successfully")
-except Exception as e:
-    logger.warning(f"Failed to initialize weave tracing: {e}. Continuing without weave.")
+    except Exception as e:
+        logger.warning(f"Failed to initialize weave tracing: {e}. Continuing without weave.")
 
 # Initialize the agent with W&B workspace tools
 agent = Agent(
