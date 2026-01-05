@@ -1,18 +1,23 @@
 """MCP configuration loader for Tyler.
 
 This module provides internal functions for loading MCP server configurations
-and connecting to servers. It's used by Agent.connect_mcp() and the CLI.
+and connecting to servers using the official MCP SDK's ClientSessionGroup.
 
 NOT A PUBLIC API - use Agent(mcp={...}) with agent.connect_mcp() instead.
 """
 import os
 import re
 import logging
-import copy
-from typing import Dict, List, Any, Callable, Awaitable, Tuple, Optional
 import asyncio
+from contextlib import AsyncExitStack
+from typing import Dict, List, Any, Callable, Awaitable, Tuple, Optional
 
-from .adapter import MCPAdapter
+from mcp.client.session_group import (
+    ClientSessionGroup,
+    StdioServerParameters,
+    SseServerParameters,
+    StreamableHttpParameters,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -32,8 +37,8 @@ def _validate_mcp_config(config: Dict[str, Any]) -> None:
                 "servers": [
                     {
                         "name": "server_name",
-                        "transport": "sse|websocket|stdio",
-                        "url": "https://...",  # for sse/websocket
+                        "transport": "sse|websocket|stdio|streamablehttp",
+                        "url": "https://...",  # for sse/websocket/streamablehttp
                         "command": "...",      # for stdio
                         ...
                     }
@@ -124,81 +129,148 @@ def _substitute_env_vars(obj: Any) -> Any:
     return obj
 
 
-def _apply_tool_filters(tools: List[Dict], server: Dict) -> List[Dict]:
+def _build_server_params(server: Dict[str, Any]):
     """
-    Filter tools based on include/exclude lists.
-    
-    Filters match against the original MCP tool names (before namespacing).
+    Convert Tyler server config to SDK parameter types.
     
     Args:
-        tools: List of tool dicts (using original MCP names, not yet namespaced)
-        server: Server config with optional include_tools/exclude_tools
+        server: Server config dict with transport, url/command, etc.
     
     Returns:
-        Filtered list of tools
+        SDK ServerParameters (StdioServerParameters, SseServerParameters, or StreamableHttpParameters)
     """
-    include = server.get("include_tools")
-    exclude = server.get("exclude_tools", [])
+    transport = server["transport"]
     
-    filtered = tools
-    
-    # Apply include filter (whitelist)
-    if include is not None:
-        filtered = [
-            t for t in filtered
-            if t["definition"]["function"]["name"] in include
-        ]
-    
-    # Apply exclude filter (blacklist)
-    if exclude:
-        filtered = [
-            t for t in filtered
-            if t["definition"]["function"]["name"] not in exclude
-        ]
-    
-    return filtered
+    if transport == "stdio":
+        return StdioServerParameters(
+            command=server["command"],
+            args=server.get("args", []),
+            env=server.get("env"),
+        )
+    elif transport == "sse":
+        return SseServerParameters(
+            url=server["url"],
+            headers=server.get("headers"),
+        )
+    else:  # streamablehttp or websocket (websocket uses streamablehttp params)
+        return StreamableHttpParameters(
+            url=server["url"],
+            headers=server.get("headers"),
+        )
 
 
-def _namespace_tools(tools: List[Dict], prefix: str) -> List[Dict]:
+def _create_tool_implementation(group: ClientSessionGroup, tool_name: str):
     """
-    Add namespace prefix to tool names.
-    
-    Creates copies of tools with namespaced names to avoid collisions.
+    Create a closure that calls the SDK's call_tool with the original tool name.
     
     Args:
-        tools: List of tool dicts
-        prefix: Namespace prefix (server name or custom prefix)
+        group: The ClientSessionGroup managing the MCP connections
+        tool_name: The original tool name (as registered in the SDK)
     
     Returns:
-        List of tools with namespaced names (originals unchanged)
+        Async function that executes the MCP tool
+    """
+    async def call_mcp_tool(**kwargs):
+        """Call the MCP tool with the provided arguments."""
+        try:
+            logger.debug(f"Calling MCP tool '{tool_name}' with args: {kwargs}")
+            result = await group.call_tool(tool_name, kwargs)
+            logger.debug(f"MCP tool '{tool_name}' returned: {type(result)}")
+            
+            # Prefer structuredContent if available (new SDK feature for tools with output schemas)
+            if hasattr(result, 'structuredContent') and result.structuredContent is not None:
+                return result.structuredContent
+            
+            # Extract text content from the result
+            if result.content:
+                texts = []
+                for c in result.content:
+                    if hasattr(c, 'text'):
+                        texts.append(c.text)
+                    else:
+                        texts.append(str(c))
+                return texts[0] if len(texts) == 1 else texts
+            
+            return str(result)
+            
+        except Exception as e:
+            error_msg = f"Error calling MCP tool '{tool_name}': {e}"
+            logger.error(error_msg)
+            logger.debug("MCP tool error details:", exc_info=True)
+            raise ValueError(error_msg)
+    
+    # Set function metadata for better debugging
+    call_mcp_tool.__name__ = f"mcp_{tool_name}"
+    call_mcp_tool.__doc__ = f"MCP tool: {tool_name}"
+    
+    return call_mcp_tool
+
+
+def _convert_tools_for_agent(
+    group: ClientSessionGroup,
+    new_tool_names: set,
+    prefix: str,
+    include_tools: Optional[List[str]],
+    exclude_tools: List[str],
+) -> List[Dict[str, Any]]:
+    """
+    Convert SDK tools to Tyler format with prefix and filtering.
+    
+    Args:
+        group: The ClientSessionGroup with discovered tools
+        new_tool_names: Set of tool names that were just added (from this server)
+        prefix: Namespace prefix for tool names
+        include_tools: Optional whitelist of tool names to include
+        exclude_tools: List of tool names to exclude
+    
+    Returns:
+        List of Tyler tool definitions ready for Agent
     """
     # Sanitize prefix (alphanumeric + underscore only)
     clean_prefix = re.sub(r'[^a-zA-Z0-9_]', '_', prefix)
+    tyler_tools = []
     
-    namespaced = []
-    for tool in tools:
-        # Deep copy to avoid mutating original
-        tool_copy = copy.deepcopy(tool)
+    for original_name, tool in group.tools.items():
+        # Only process tools from this server
+        if original_name not in new_tool_names:
+            continue
         
-        # Get original name
-        original_name = tool_copy["definition"]["function"]["name"]
+        # Apply include filter (whitelist)
+        if include_tools is not None and original_name not in include_tools:
+            continue
         
-        # Create namespaced name (single underscore)
-        new_name = f"{clean_prefix}_{original_name}"
+        # Apply exclude filter (blacklist)
+        if original_name in exclude_tools:
+            continue
         
-        # Update name in definition
-        tool_copy["definition"]["function"]["name"] = new_name
+        # Create prefixed name for Tyler
+        prefixed_name = f"{clean_prefix}_{original_name}"
         
-        namespaced.append(tool_copy)
+        tyler_tools.append({
+            "definition": {
+                "type": "function",
+                "function": {
+                    "name": prefixed_name,
+                    "description": tool.description,
+                    "parameters": tool.inputSchema,
+                }
+            },
+            # Closure uses original_name to call SDK - SDK routes to correct server
+            "implementation": _create_tool_implementation(group, original_name),
+            "attributes": {
+                "source": "mcp",
+                "mcp_original_name": original_name,
+            },
+        })
     
-    return namespaced
+    return tyler_tools
 
 
 async def _load_mcp_config(
     config: Dict[str, Any]
 ) -> Tuple[List[Dict[str, Any]], Callable[[], Awaitable[None]]]:
     """
-    Internal helper to load MCP configuration.
+    Load MCP configuration using SDK's ClientSessionGroup directly.
     
     NOT A PUBLIC API - used by Agent.connect_mcp() and CLI.
     
@@ -214,11 +286,13 @@ async def _load_mcp_config(
     Raises:
         ValueError: If server connection fails and fail_silent=False
     """
-    # Create shared MCPAdapter instance
-    adapter = MCPAdapter()
-    
     # Substitute environment variables
     config = _substitute_env_vars(config)
+    
+    # Create SDK ClientSessionGroup (no component_name_hook - we handle prefixes ourselves)
+    exit_stack = AsyncExitStack()
+    group = ClientSessionGroup(exit_stack=exit_stack)
+    await exit_stack.__aenter__()
     
     all_tools = []
     
@@ -227,61 +301,66 @@ async def _load_mcp_config(
         name = server["name"]
         transport = server["transport"]
         fail_silent = server.get("fail_silent", True)
+        max_retries = server.get("max_retries", 3)
+        prefix = server.get("prefix", name)  # Use custom prefix or server name
+        include_tools = server.get("include_tools")
+        exclude_tools = server.get("exclude_tools", [])
         
-        # Build connection kwargs
-        kwargs = {}
-        if transport in ["sse", "websocket", "streamablehttp"]:
-            kwargs["url"] = server["url"]
-            if "headers" in server:
-                kwargs["headers"] = server["headers"]
-        elif transport == "stdio":
-            kwargs["command"] = server["command"]
-            kwargs["args"] = server.get("args", [])
-            kwargs["env"] = server.get("env", {})
+        # Build SDK server parameters
+        params = _build_server_params(server)
         
-        # Attempt connection
-        try:
-            logger.info(f"Connecting to MCP server '{name}' via {transport}...")
-            connected = await adapter.connect(name, transport, **kwargs)
+        # Track tools before connection to know what was added by this server
+        tools_before = set(group.tools.keys())
+        
+        # Retry loop with exponential backoff
+        connected = False
+        last_error = None
+        
+        for attempt in range(max_retries):
+            try:
+                if attempt > 0:
+                    delay = min(2 ** attempt, 10)  # Exponential backoff, max 10s
+                    logger.debug(f"Retrying connection to '{name}' (attempt {attempt + 1}/{max_retries}) after {delay}s...")
+                    await asyncio.sleep(delay)
+                
+                logger.info(f"Connecting to MCP server '{name}' via {transport}...")
+                await group.connect_to_server(params)
+                connected = True
+                logger.info(f"Connected to MCP server '{name}'")
+                break
+                
+            except Exception as e:
+                last_error = e
+                logger.warning(f"Connection attempt {attempt + 1} to '{name}' failed: {e}")
+                if attempt == max_retries - 1:
+                    # Last attempt failed
+                    if fail_silent:
+                        logger.warning(f"Failed to connect to MCP server '{name}' after {max_retries} attempts: {e}")
+                    else:
+                        raise ValueError(f"Failed to connect to MCP server '{name}': {e}") from e
+        
+        if connected:
+            # Get newly added tools (SDK added them with original names)
+            new_tool_names = set(group.tools.keys()) - tools_before
             
-            if not connected:
-                msg = f"Failed to connect to MCP server '{name}'"
-                if fail_silent:
-                    logger.warning(msg)
-                    continue
-                else:
-                    raise ValueError(msg)
-            
-            logger.info(f"Connected to MCP server '{name}'")
-            
-            # Get tools from this server
-            server_tools = adapter.get_tools_for_agent([name])
-            
-            # Apply filters
-            filtered_tools = _apply_tool_filters(server_tools, server)
-            
-            # Namespace tools
-            prefix = server.get("prefix", name)  # Use custom prefix or server name
-            namespaced_tools = _namespace_tools(filtered_tools, prefix)
-            
-            all_tools.extend(namespaced_tools)
-            
-            logger.info(
-                f"Registered {len(namespaced_tools)} tools from MCP server '{name}'"
+            # Convert tools with this server's prefix and filters
+            server_tools = _convert_tools_for_agent(
+                group,
+                new_tool_names,
+                prefix,
+                include_tools,
+                exclude_tools,
             )
+            all_tools.extend(server_tools)
             
-        except Exception as e:
-            msg = f"Error connecting to MCP server '{name}': {e}"
-            if fail_silent:
-                logger.warning(msg)
-                continue
-            else:
-                raise ValueError(msg) from e
+            logger.info(f"Registered {len(server_tools)} tools from MCP server '{name}'")
     
-    # Create disconnect callback
+    # Create disconnect callback that closes the exit stack
     async def disconnect_callback():
         """Disconnect from all MCP servers."""
-        await adapter.disconnect_all()
+        try:
+            await exit_stack.aclose()
+        except Exception as e:
+            logger.debug(f"Error during MCP disconnect: {e}")
     
     return all_tools, disconnect_callback
-
