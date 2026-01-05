@@ -414,10 +414,11 @@ class Agent(BaseModel):
             tool_name = getattr(normalized_tool_call.function, 'name', None)
             tool_call_id = getattr(normalized_tool_call, 'id', None)
             
+            # Copy deps to prevent tool mutation from affecting other tool calls
             rich_context = ToolContext(
                 tool_name=tool_name,
                 tool_call_id=tool_call_id,
-                deps=self._tool_context
+                deps=dict(self._tool_context)
             )
         else:
             rich_context = None

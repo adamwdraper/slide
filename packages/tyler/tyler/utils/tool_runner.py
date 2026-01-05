@@ -398,7 +398,8 @@ class ToolRunner:
                             self.tools[func_name] = {
                                 'implementation': implementation,
                                 'is_async': inspect.iscoroutinefunction(implementation),
-                                'definition': tool['definition']['function']
+                                'definition': tool['definition']['function'],
+                                'timeout': tool.get('timeout')
                             }
                             
                             # Register any attributes if present at top level
@@ -450,7 +451,8 @@ class ToolRunner:
                     self.tools[func_name] = {
                         'implementation': implementation,
                         'is_async': inspect.iscoroutinefunction(implementation),
-                        'definition': tool['definition']['function']
+                        'definition': tool['definition']['function'],
+                        'timeout': tool.get('timeout')
                     }
                     
                     # Register any attributes if present at top level

@@ -305,7 +305,34 @@ tool_runner.register_tool(
 )
 ```
 
-If the tool exceeds its timeout, a `TimeoutError` is raised and returned to the LLM, allowing it to try a different approach.
+### Timeout Behavior
+
+When a tool exceeds its timeout:
+
+1. A `TimeoutError` is raised with the message: `Tool 'tool_name' timed out after X seconds`
+2. The error is returned to the LLM as the tool result
+3. The LLM can then decide how to proceed (retry, try a different approach, or inform the user)
+
+<Note>
+Timeouts work for both async and synchronous tools. For sync tools, the operation runs in a thread pool with the timeout applied to the entire operation.
+</Note>
+
+You can also specify timeouts in the lye tool format:
+
+```python
+my_tool = {
+    "definition": {
+        "type": "function",
+        "function": {
+            "name": "my_slow_tool",
+            "description": "A tool that might take a while",
+            "parameters": {...}
+        }
+    },
+    "implementation": my_slow_function,
+    "timeout": 60.0  # 60 second timeout
+}
+```
 
 ## Best practices
 
