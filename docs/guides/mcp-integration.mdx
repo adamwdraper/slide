@@ -98,16 +98,16 @@ Each MCP server requires:
 ```python
 {
     "name": str,        # Required: Unique server identifier
-    "transport": str,   # Required: "stdio", "streamablehttp", "sse", or "websocket"
+    "transport": str,   # Required: "stdio", "streamablehttp", or "sse"
     
     # Transport-specific fields (choose based on transport):
-    "url": str,         # Required for streamablehttp/sse/websocket
+    "url": str,         # Required for streamablehttp/sse
     "command": str,     # Required for stdio
     "args": List[str],  # Optional for stdio
     "env": Dict,        # Optional for stdio
     
     # Optional fields:
-    "headers": Dict,           # Custom HTTP headers (for streamablehttp/sse/websocket)
+    "headers": Dict,           # Custom HTTP headers (for streamablehttp/sse)
     "include_tools": List[str],  # Whitelist specific tools
     "exclude_tools": List[str],  # Blacklist specific tools
     "prefix": str,             # Custom namespace (default: server name)
@@ -142,18 +142,6 @@ Each MCP server requires:
     "name": "legacy_server",
     "transport": "sse",
     "url": "https://legacy.example.com/mcp"
-}
-```
-
-**WebSocket** - For WebSocket-based servers:
-```python
-{
-    "name": "api",
-    "transport": "websocket",
-    "url": "wss://api.example.com/mcp",
-    "headers": {
-        "Authorization": "Bearer ${API_TOKEN}"  # Use env vars!
-    }
 }
 ```
 
@@ -213,8 +201,8 @@ Use environment variables for secrets (recommended!):
 mcp:
   servers:
     - name: api
-      transport: websocket
-      url: wss://api.example.com/mcp
+      transport: streamablehttp
+      url: https://api.example.com/mcp
       headers:
         Authorization: "Bearer ${API_TOKEN}"  # Substituted from env
 ```
@@ -278,7 +266,7 @@ for task in tasks:
 ```python
 async def main():
     agent = Agent(
-        mcp={"servers": [{"transport": "stdio", ...}]}  # stdio, sse, websocket
+        mcp={"servers": [{"transport": "stdio", ...}]}  # stdio, sse, streamablehttp
     )
     await agent.connect_mcp()
     result = await agent.run(thread)
@@ -302,7 +290,7 @@ asyncio.run(main())
 
 <Note>
 The `streamablehttp` transport uses asyncio task groups that require explicit cleanup,
-even in simple scripts. Other transports (stdio, sse, websocket) clean up automatically.
+even in simple scripts. Other transports (stdio, sse) clean up automatically.
 </Note>
 
 ## Security Best Practices
@@ -354,7 +342,7 @@ mcp:
 **Error:** `Server 'xyz' with transport 'sse' requires 'url' field`
 
 **Solution:** Ensure required fields are present for the transport type:
-- SSE/WebSocket: `url` required
+- SSE/Streamablehttp: `url` required
 - stdio: `command` required
 
 ### Tools not discovered

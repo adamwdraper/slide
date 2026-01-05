@@ -88,15 +88,16 @@ class TestValidation:
         with pytest.raises(ValueError, match="requires 'url' field"):
             _validate_server_config(server)
     
-    def test_validate_server_config_websocket_missing_url(self):
-        """Test WebSocket server validation fails when 'url' is missing."""
+    def test_validate_server_config_websocket_not_supported(self):
+        """Test WebSocket transport is not supported by ClientSessionGroup."""
         server = {
             "name": "test",
-            "transport": "websocket"
-            # Missing 'url'
+            "transport": "websocket",
+            "url": "wss://example.com/mcp"
         }
         
-        with pytest.raises(ValueError, match="requires 'url' field"):
+        # websocket transport is not supported - SDK's ClientSessionGroup doesn't have it
+        with pytest.raises(ValueError, match="Invalid transport"):
             _validate_server_config(server)
     
     def test_validate_server_config_stdio_missing_command(self):

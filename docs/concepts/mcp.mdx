@@ -54,7 +54,7 @@ Tyler uses the official MCP SDK's `ClientSessionGroup` to manage connections to 
 - Automatic session lifecycle management
 - Tool discovery and aggregation across servers
 - Tool execution routing to the correct server
-- Support for all transport types (stdio, SSE, WebSocket, StreamableHTTP)
+- Support for all SDK transport types (stdio, SSE, StreamableHTTP)
 
 ## Quick Start
 
@@ -162,21 +162,6 @@ mcp={
         "name": "legacy",
         "transport": "sse",
         "url": "https://legacy.example.com/mcp"
-    }]
-}
-```
-
-### 4. WebSocket Servers
-
-For WebSocket-based real-time communication:
-
-```python
-mcp={
-    "servers": [{
-        "name": "realtime",
-        "transport": "websocket",
-        "url": "wss://api.example.com/mcp",
-        "headers": {"Authorization": "Bearer ${TOKEN}"}
     }]
 }
 ```
@@ -296,8 +281,8 @@ Use environment variables for secrets (recommended!):
 mcp={
     "servers": [{
         "name": "api",
-        "transport": "websocket",
-        "url": "wss://api.example.com/mcp",
+        "transport": "streamablehttp",
+        "url": "https://api.example.com/mcp",
         "headers": {
             "Authorization": "Bearer ${API_TOKEN}",  # Substituted from env
             "X-API-Key": "${API_KEY}"

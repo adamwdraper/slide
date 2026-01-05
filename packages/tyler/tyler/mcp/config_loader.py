@@ -83,13 +83,14 @@ def _validate_server_config(server: Dict[str, Any]) -> None:
     transport = server["transport"]
     
     # Validate transport type
-    if transport not in ["stdio", "sse", "websocket", "streamablehttp"]:
+    # Note: websocket is not supported by the MCP SDK's ClientSessionGroup
+    if transport not in ["stdio", "sse", "streamablehttp"]:
         raise ValueError(
-            f"Invalid transport '{transport}'. Must be one of: stdio, sse, websocket, streamablehttp"
+            f"Invalid transport '{transport}'. Must be one of: stdio, sse, streamablehttp"
         )
     
     # Transport-specific required fields
-    if transport in ["sse", "websocket", "streamablehttp"]:
+    if transport in ["sse", "streamablehttp"]:
         if "url" not in server:
             raise ValueError(
                 f"Server '{server['name']}' with transport '{transport}' requires 'url' field"
@@ -149,12 +150,6 @@ def _build_server_params(server: Dict[str, Any]):
         )
     elif transport == "sse":
         return SseServerParameters(
-            url=server["url"],
-            headers=server.get("headers"),
-        )
-    elif transport == "websocket":
-        # WebSocket transport uses StreamableHttpParameters with wss:// URL
-        return StreamableHttpParameters(
             url=server["url"],
             headers=server.get("headers"),
         )
