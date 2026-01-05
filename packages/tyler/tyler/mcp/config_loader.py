@@ -165,13 +165,14 @@ def _build_server_params(server: Dict[str, Any]):
         )
 
 
-def _create_tool_implementation(group: ClientSessionGroup, tool_name: str):
+def _create_tool_implementation(group: ClientSessionGroup, sdk_tool_name: str, display_name: str):
     """
-    Create a closure that calls the SDK's call_tool with the original tool name.
+    Create a closure that calls the SDK's call_tool with the SDK-namespaced tool name.
     
     Args:
         group: The ClientSessionGroup managing the MCP connections
-        tool_name: The original tool name (as registered in the SDK)
+        sdk_tool_name: The SDK-namespaced tool name (e.g., "_0_search") used for routing
+        display_name: Human-readable name for logging (e.g., "search")
     
     Returns:
         Async function that executes the MCP tool
@@ -179,9 +180,9 @@ def _create_tool_implementation(group: ClientSessionGroup, tool_name: str):
     async def call_mcp_tool(**kwargs):
         """Call the MCP tool with the provided arguments."""
         try:
-            logger.debug(f"Calling MCP tool '{tool_name}' with args: {kwargs}")
-            result = await group.call_tool(tool_name, kwargs)
-            logger.debug(f"MCP tool '{tool_name}' returned: {type(result)}")
+            logger.debug(f"Calling MCP tool '{display_name}' (sdk: {sdk_tool_name}) with args: {kwargs}")
+            result = await group.call_tool(sdk_tool_name, kwargs)
+            logger.debug(f"MCP tool '{display_name}' returned: {type(result)}")
             
             # Prefer structuredContent if available (new SDK feature for tools with output schemas)
             if hasattr(result, 'structuredContent') and result.structuredContent is not None:
@@ -200,21 +201,21 @@ def _create_tool_implementation(group: ClientSessionGroup, tool_name: str):
             return str(result)
             
         except Exception as e:
-            error_msg = f"Error calling MCP tool '{tool_name}': {e}"
+            error_msg = f"Error calling MCP tool '{display_name}': {e}"
             logger.error(error_msg)
             logger.debug("MCP tool error details:", exc_info=True)
             raise ValueError(error_msg)
     
     # Set function metadata for better debugging
-    call_mcp_tool.__name__ = f"mcp_{tool_name}"
-    call_mcp_tool.__doc__ = f"MCP tool: {tool_name}"
+    call_mcp_tool.__name__ = f"mcp_{display_name}"
+    call_mcp_tool.__doc__ = f"MCP tool: {display_name}"
     
     return call_mcp_tool
 
 
 def _convert_tools_for_agent(
     group: ClientSessionGroup,
-    new_tool_names: set,
+    new_sdk_tool_names: set,
     prefix: str,
     include_tools: Optional[List[str]],
     exclude_tools: List[str],
@@ -224,10 +225,10 @@ def _convert_tools_for_agent(
     
     Args:
         group: The ClientSessionGroup with discovered tools
-        new_tool_names: Set of tool names that were just added (from this server)
-        prefix: Namespace prefix for tool names
-        include_tools: Optional whitelist of tool names to include
-        exclude_tools: List of tool names to exclude
+        new_sdk_tool_names: Set of SDK-namespaced tool names just added (e.g., {"_0_search"})
+        prefix: Namespace prefix for Tyler tool names
+        include_tools: Optional whitelist of original tool names to include
+        exclude_tools: List of original tool names to exclude
     
     Returns:
         List of Tyler tool definitions ready for Agent
@@ -236,20 +237,23 @@ def _convert_tools_for_agent(
     clean_prefix = re.sub(r'[^a-zA-Z0-9_]', '_', prefix)
     tyler_tools = []
     
-    for original_name, tool in group.tools.items():
-        # Only process tools from this server
-        if original_name not in new_tool_names:
+    for sdk_tool_name, tool in group.tools.items():
+        # Only process tools from this server (by SDK-namespaced name)
+        if sdk_tool_name not in new_sdk_tool_names:
             continue
         
-        # Apply include filter (whitelist)
+        # tool.name is the original tool name (e.g., "search")
+        original_name = tool.name
+        
+        # Apply include filter (whitelist) - uses original name
         if include_tools is not None and original_name not in include_tools:
             continue
         
-        # Apply exclude filter (blacklist)
+        # Apply exclude filter (blacklist) - uses original name
         if original_name in exclude_tools:
             continue
         
-        # Create prefixed name for Tyler
+        # Create prefixed name for Tyler (e.g., "myserver_search")
         prefixed_name = f"{clean_prefix}_{original_name}"
         
         tyler_tools.append({
@@ -261,11 +265,12 @@ def _convert_tools_for_agent(
                     "parameters": tool.inputSchema,
                 }
             },
-            # Closure uses original_name to call SDK - SDK routes to correct server
-            "implementation": _create_tool_implementation(group, original_name),
+            # Closure uses SDK-namespaced name for correct routing
+            "implementation": _create_tool_implementation(group, sdk_tool_name, original_name),
             "attributes": {
                 "source": "mcp",
                 "mcp_original_name": original_name,
+                "mcp_sdk_name": sdk_tool_name,
             },
         })
     
@@ -295,9 +300,19 @@ async def _load_mcp_config(
     # Substitute environment variables
     config = _substitute_env_vars(config)
     
-    # Create SDK ClientSessionGroup (no component_name_hook - we handle prefixes ourselves)
+    # Connection counter for SDK-level namespacing to avoid tool collisions
+    # When two servers have tools with the same name (e.g., both have "search"),
+    # without namespacing, the second server's tools would overwrite the first's
+    # in group.tools dict, causing incorrect tool routing.
+    connection_counter = [0]  # Use list to allow mutation in closure
+    
+    def component_name_hook(name: str, server_info) -> str:
+        """Prefix tool names with connection index to avoid SDK-level collisions."""
+        return f"_{connection_counter[0]}_{name}"
+    
+    # Create SDK ClientSessionGroup with component_name_hook for collision avoidance
     exit_stack = AsyncExitStack()
-    group = ClientSessionGroup(exit_stack=exit_stack)
+    group = ClientSessionGroup(exit_stack=exit_stack, component_name_hook=component_name_hook)
     await exit_stack.__aenter__()
     
     all_tools = []
@@ -317,6 +332,7 @@ async def _load_mcp_config(
         params = _build_server_params(server)
         
         # Track tools before connection to know what was added by this server
+        # (SDK namespaces tools with connection_counter via component_name_hook)
         tools_before = set(group.tools.keys())
         
         # Retry loop with exponential backoff
@@ -334,6 +350,8 @@ async def _load_mcp_config(
                 await group.connect_to_server(params)
                 connected = True
                 logger.info(f"Connected to MCP server '{name}'")
+                # Increment counter AFTER successful connection so next server gets different prefix
+                connection_counter[0] += 1
                 break
                 
             except Exception as e:
@@ -347,13 +365,13 @@ async def _load_mcp_config(
                         raise ValueError(f"Failed to connect to MCP server '{name}': {last_error}") from last_error
         
         if connected:
-            # Get newly added tools (SDK added them with original names)
-            new_tool_names = set(group.tools.keys()) - tools_before
+            # Get newly added tools (SDK-namespaced, e.g., "_0_search", "_1_search")
+            new_sdk_tool_names = set(group.tools.keys()) - tools_before
             
             # Convert tools with this server's prefix and filters
             server_tools = _convert_tools_for_agent(
                 group,
-                new_tool_names,
+                new_sdk_tool_names,
                 prefix,
                 include_tools,
                 exclude_tools,
