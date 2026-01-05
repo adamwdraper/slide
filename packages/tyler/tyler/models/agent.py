@@ -407,7 +407,22 @@ class Agent(BaseModel):
             dict: Formatted tool result message
         """
         normalized_tool_call = self._normalize_tool_call(tool_call)
-        return await tool_runner.execute_tool_call(normalized_tool_call, context=self._tool_context)
+        
+        # Build rich ToolContext with metadata if user provided tool_context
+        if self._tool_context is not None:
+            # Extract tool_name and tool_call_id from the normalized tool_call
+            tool_name = getattr(normalized_tool_call.function, 'name', None)
+            tool_call_id = getattr(normalized_tool_call, 'id', None)
+            
+            rich_context = ToolContext(
+                tool_name=tool_name,
+                tool_call_id=tool_call_id,
+                deps=self._tool_context
+            )
+        else:
+            rich_context = None
+        
+        return await tool_runner.execute_tool_call(normalized_tool_call, context=rich_context)
     
     @weave.op()
     async def _get_completion(self, **completion_params) -> Any:

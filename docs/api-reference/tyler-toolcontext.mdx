@@ -1,22 +1,66 @@
 ---
 title: 'ToolContext'
-description: 'Type alias and patterns for dependency injection in tools'
+description: 'Dataclass for dependency injection and metadata in tools'
 ---
 
 ## Overview
 
-`ToolContext` is a type alias for `Dict[str, Any]` that represents the runtime context passed to tool functions. It enables dependency injection, allowing tools to access databases, API clients, user information, and other runtime dependencies.
+`ToolContext` is a dataclass that represents the runtime context passed to tool functions. It enables dependency injection, allowing tools to access databases, API clients, user information, and other runtime dependencies. It also provides metadata about the current tool execution.
 
-## Type Definition
+## Class Definition
 
 ```python
-from typing import Dict, Any
+from dataclasses import dataclass, field
+from typing import Dict, Any, Optional
 
-# ToolContext is a type alias
-ToolContext = Dict[str, Any]
+@dataclass
+class ToolContext:
+    """Context passed to tools during execution."""
+    tool_name: Optional[str] = None      # Name of the tool being executed
+    tool_call_id: Optional[str] = None   # Unique ID for this tool call
+    deps: Dict[str, Any] = field(default_factory=dict)  # User dependencies
 ```
 
+## Features
+
+- **Typed metadata fields**: Access `tool_name` and `tool_call_id` directly
+- **Dict-style access**: Full backward compatibility with `ctx["key"]` syntax
+- **Dependency injection**: Pass databases, API clients, user info to tools
+
 ## Using ToolContext
+
+### Accessing Dependencies (Dict-Style)
+
+Tools access user-provided dependencies using dict-style syntax:
+
+```python
+from tyler import ToolContext
+
+async def get_user_data(ctx: ToolContext, user_id: str) -> str:
+    """Get user data from the database."""
+    db = ctx["db"]           # Access deps with []
+    user = await db.get_user(user_id)
+    return f"User: {user.name}, Email: {user.email}"
+```
+
+### Accessing Metadata Fields
+
+Tools can also access typed metadata about the current execution:
+
+```python
+async def logged_operation(ctx: ToolContext, action: str) -> str:
+    """Perform an action with logging."""
+    # Access typed metadata fields directly
+    print(f"Tool: {ctx.tool_name}")
+    print(f"Call ID: {ctx.tool_call_id}")
+    
+    # Access user deps with dict-style
+    logger = ctx.get("logger")
+    if logger:
+        logger.info(f"Executing {action} in tool {ctx.tool_name}")
+    
+    return f"Completed: {action}"
+```
 
 ### In Tool Definitions
 
@@ -81,9 +125,45 @@ The tool runner looks for specific parameter names to identify context parameter
 The context parameter **must** be the first parameter in your function signature. If it appears elsewhere, it won't receive the injected context.
 </Warning>
 
-## Common Context Keys
+## Typed Fields
 
-While `ToolContext` is a flexible dictionary, here are common keys used in practice:
+These fields are automatically populated by the agent:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `tool_name` | `str \| None` | Name of the tool being executed |
+| `tool_call_id` | `str \| None` | Unique identifier for this tool call |
+| `deps` | `Dict[str, Any]` | User-provided dependencies |
+
+```python
+async def my_tool(ctx: ToolContext, param: str) -> str:
+    # Typed field access
+    print(f"Running: {ctx.tool_name}")       # e.g., "my_tool"
+    print(f"Call ID: {ctx.tool_call_id}")    # e.g., "call_abc123"
+    
+    # Dict access to user deps
+    db = ctx["db"]  # Accesses ctx.deps["db"]
+    return "done"
+```
+
+## Dict-Style Access Methods
+
+`ToolContext` supports full dict-style access for backward compatibility:
+
+| Method | Example | Description |
+|--------|---------|-------------|
+| `[]` | `ctx["key"]` | Get value, raises `KeyError` if missing |
+| `[]=` | `ctx["key"] = val` | Set value |
+| `get()` | `ctx.get("key", default)` | Get with default |
+| `in` | `"key" in ctx` | Check key exists |
+| `keys()` | `ctx.keys()` | Iterate over keys |
+| `items()` | `ctx.items()` | Iterate over key-value pairs |
+| `values()` | `ctx.values()` | Iterate over values |
+| `len()` | `len(ctx)` | Count of deps |
+
+## Common Dependency Keys
+
+Here are common keys used in the `deps` dictionary:
 
 | Key | Type | Description |
 |-----|------|-------------|
@@ -209,6 +289,8 @@ async def flexible_tool(ctx: ToolContext, action: str) -> str:
 
 ## Backward Compatibility
 
+### Tools Without Context
+
 Tools without a context parameter work normally:
 
 ```python
@@ -221,6 +303,20 @@ await agent.run(
     thread,
     tool_context={"db": database}  # Passed but not used
 )
+```
+
+### Existing Code Works Unchanged
+
+The `ToolContext` dataclass is fully backward compatible. Existing tools using dict-style access continue to work:
+
+```python
+# This code works the same before and after the update
+async def existing_tool(ctx: ToolContext, query: str) -> str:
+    db = ctx["db"]                    # Still works
+    user_id = ctx.get("user_id")      # Still works
+    if "config" in ctx:               # Still works
+        config = ctx["config"]
+    return "done"
 ```
 
 ## Testing with Context

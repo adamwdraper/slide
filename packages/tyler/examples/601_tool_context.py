@@ -8,6 +8,7 @@ Features shown:
 - Creating tools that accept context
 - Injecting different contexts per request
 - Multi-tenant patterns with user-specific data
+- Accessing typed metadata fields (tool_name, tool_call_id)
 
 Prerequisites:
     pip install slide-tyler
@@ -116,6 +117,28 @@ def get_current_user_info(ctx: ToolContext) -> str:
     return f"Current user: {user_name} (ID: {user_id}, Tier: {user_tier})"
 
 
+async def get_debug_info(ctx: ToolContext) -> str:
+    """Get debug information about the current tool execution.
+    
+    This tool demonstrates accessing the typed metadata fields
+    of ToolContext that are automatically populated by the agent.
+    
+    Args:
+        ctx: Injected context with both metadata and user deps
+    
+    Returns:
+        Debug information string
+    """
+    # Access typed metadata fields (automatically populated)
+    tool_name = ctx.tool_name        # "get_debug_info"
+    tool_call_id = ctx.tool_call_id  # e.g., "call_abc123"
+    
+    # Access user-provided dependencies (dict-style)
+    user_id = ctx.get("user_id", "unknown")
+    
+    return f"Debug: tool={tool_name}, call_id={tool_call_id}, user={user_id}"
+
+
 # Create tool definitions
 orders_tool = {
     "definition": {
@@ -169,6 +192,22 @@ user_info_tool = {
         }
     },
     "implementation": get_current_user_info
+}
+
+debug_tool = {
+    "definition": {
+        "type": "function",
+        "function": {
+            "name": "get_debug_info",
+            "description": "Get debug info about the current tool execution",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        }
+    },
+    "implementation": get_debug_info
 }
 
 

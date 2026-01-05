@@ -274,6 +274,39 @@ scraper_agent = Agent(
 )
 ```
 
+## Tool Timeouts
+
+For tools that might take a long time (API calls, database queries), you can set a timeout using the low-level tool runner:
+
+```python
+from tyler.utils.tool_runner import tool_runner
+
+async def slow_api_call(query: str) -> str:
+    """Call an external API that might be slow."""
+    # ... implementation
+    pass
+
+# Register with a 30-second timeout
+tool_runner.register_tool(
+    name="slow_api_call",
+    implementation=slow_api_call,
+    definition={
+        "name": "slow_api_call",
+        "description": "Call external API",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string"}
+            },
+            "required": ["query"]
+        }
+    },
+    timeout=30.0  # Timeout in seconds
+)
+```
+
+If the tool exceeds its timeout, a `TimeoutError` is raised and returned to the LLM, allowing it to try a different approach.
+
 ## Best practices
 
 ### 1. Tool Selection
