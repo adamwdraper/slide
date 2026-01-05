@@ -1,6 +1,6 @@
 import importlib
 import inspect
-from typing import Dict, Any, List, Optional, Callable, Union, Coroutine, Iterator
+from typing import Dict, Any, List, Optional, Callable, Union, Coroutine, Iterator, KeysView, ItemsView, ValuesView, Mapping
 import os
 import glob
 from pathlib import Path
@@ -65,15 +65,15 @@ class ToolContext:
         """Check if key exists in deps: 'key' in ctx"""
         return key in self.deps
     
-    def keys(self) -> Any:
+    def keys(self) -> KeysView[str]:
         """Return deps keys: ctx.keys()"""
         return self.deps.keys()
     
-    def items(self) -> Any:
+    def items(self) -> ItemsView[str, Any]:
         """Return deps items: ctx.items()"""
         return self.deps.items()
     
-    def values(self) -> Any:
+    def values(self) -> ValuesView[Any]:
         """Return deps values: ctx.values()"""
         return self.deps.values()
     
@@ -84,6 +84,15 @@ class ToolContext:
     def __len__(self) -> int:
         """Return number of deps: len(ctx)"""
         return len(self.deps)
+    
+    def update(self, other: Union[Mapping[str, Any], "ToolContext", None] = None, **kwargs: Any) -> None:
+        """Update deps with key/value pairs: ctx.update({"key": "value"})"""
+        if other is not None:
+            if isinstance(other, ToolContext):
+                self.deps.update(other.deps)
+            else:
+                self.deps.update(other)
+        self.deps.update(kwargs)
 
 class ToolRunner:
     def __init__(self):
@@ -107,7 +116,14 @@ class ToolRunner:
             definition: Optional OpenAI function definition
             timeout: Optional timeout in seconds for tool execution.
                 If the tool takes longer than this, a TimeoutError is raised.
+                Must be a positive number if provided.
+        
+        Raises:
+            ValueError: If timeout is not a positive number
         """
+        if timeout is not None and timeout <= 0:
+            raise ValueError(f"timeout must be a positive number, got {timeout}")
+        
         self.tools[name] = {
             'implementation': implementation,
             'is_async': inspect.iscoroutinefunction(implementation),

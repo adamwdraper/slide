@@ -222,7 +222,7 @@ async def basic_context_injection():
         name="account-assistant",
         model_name="gpt-4.1",
         purpose="To help users with their account and orders",
-        tools=[orders_tool, preferences_tool, user_info_tool]
+        tools=[orders_tool, preferences_tool, user_info_tool, debug_tool]
     )
     
     # Create shared database

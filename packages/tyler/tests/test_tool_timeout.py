@@ -45,6 +45,32 @@ class TestToolTimeout:
         
         assert tool_runner.tools["regular"]["timeout"] is None
     
+    def test_register_tool_with_negative_timeout_raises(self, tool_runner):
+        """Test that registering a tool with negative timeout raises ValueError."""
+        async def some_tool(query: str) -> str:
+            return f"Result: {query}"
+        
+        with pytest.raises(ValueError, match="timeout must be a positive number"):
+            tool_runner.register_tool(
+                name="invalid",
+                implementation=some_tool,
+                definition={"name": "invalid", "parameters": {"type": "object"}},
+                timeout=-5.0
+            )
+    
+    def test_register_tool_with_zero_timeout_raises(self, tool_runner):
+        """Test that registering a tool with zero timeout raises ValueError."""
+        async def some_tool(query: str) -> str:
+            return f"Result: {query}"
+        
+        with pytest.raises(ValueError, match="timeout must be a positive number"):
+            tool_runner.register_tool(
+                name="invalid",
+                implementation=some_tool,
+                definition={"name": "invalid", "parameters": {"type": "object"}},
+                timeout=0
+            )
+    
     @pytest.mark.asyncio
     async def test_tool_completes_within_timeout(self, tool_runner):
         """Test that tools completing within timeout succeed."""

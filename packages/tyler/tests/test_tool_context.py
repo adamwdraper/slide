@@ -403,6 +403,47 @@ class TestToolContextDataclass:
         
         assert len(ctx) == 0
     
+    def test_toolcontext_update_with_dict(self):
+        """Test update() with a dictionary."""
+        ctx = ToolContext(deps={"a": 1, "b": 2})
+        
+        ctx.update({"b": 20, "c": 3})
+        
+        assert ctx["a"] == 1
+        assert ctx["b"] == 20
+        assert ctx["c"] == 3
+    
+    def test_toolcontext_update_with_kwargs(self):
+        """Test update() with keyword arguments."""
+        ctx = ToolContext(deps={"a": 1})
+        
+        ctx.update(b=2, c=3)
+        
+        assert ctx["a"] == 1
+        assert ctx["b"] == 2
+        assert ctx["c"] == 3
+    
+    def test_toolcontext_update_with_toolcontext(self):
+        """Test update() with another ToolContext."""
+        ctx1 = ToolContext(deps={"a": 1})
+        ctx2 = ToolContext(deps={"b": 2, "c": 3})
+        
+        ctx1.update(ctx2)
+        
+        assert ctx1["a"] == 1
+        assert ctx1["b"] == 2
+        assert ctx1["c"] == 3
+    
+    def test_toolcontext_update_combined(self):
+        """Test update() with dict and kwargs combined."""
+        ctx = ToolContext(deps={"a": 1})
+        
+        ctx.update({"b": 2}, c=3)
+        
+        assert ctx["a"] == 1
+        assert ctx["b"] == 2
+        assert ctx["c"] == 3
+    
     @pytest.mark.asyncio
     async def test_tool_receives_rich_context(self):
         """Test that tools receive ToolContext with metadata fields."""
