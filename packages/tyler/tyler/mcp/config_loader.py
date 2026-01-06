@@ -27,6 +27,18 @@ logger = logging.getLogger(__name__)
 # Regex pattern for environment variable substitution: ${VAR_NAME}
 ENV_VAR_PATTERN = r'\$\{([^}]+)\}'
 
+# Reserved parameter names that cannot be passed to MCP tools.
+# These are filtered from kwargs to prevent TypeError collisions:
+#
+# - 'ctx': Used by our MCP tool wrapper for ToolContext injection
+# - 'context': Alternative name for ToolContext (checked by tool runner)  
+# - 'progress_callback': Used by MCP SDK's call_tool() for progress updates
+#
+# If an MCP tool happens to have a parameter with one of these names,
+# that parameter will be silently dropped. This is a known limitation.
+# MCP tool authors should avoid using these reserved names.
+RESERVED_MCP_PARAMS = frozenset({'ctx', 'context', 'progress_callback'})
+
 
 def _validate_mcp_config(config: Dict[str, Any]) -> None:
     """
@@ -40,8 +52,8 @@ def _validate_mcp_config(config: Dict[str, Any]) -> None:
                 "servers": [
                     {
                         "name": "server_name",
-                        "transport": "sse|websocket|stdio|streamablehttp",
-                        "url": "https://...",  # for sse/websocket/streamablehttp
+                        "transport": "stdio|sse|streamablehttp",
+                        "url": "https://...",  # for sse/streamablehttp
                         "command": "...",      # for stdio
                         ...
                     }
@@ -185,12 +197,8 @@ def _create_tool_implementation(group: ClientSessionGroup, sdk_tool_name: str, d
             **kwargs: Arguments to pass to the MCP tool
         """
         try:
-            # Remove reserved parameter names from kwargs to avoid collisions
-            # - 'ctx': our wrapper uses this for ToolContext injection
-            # - 'progress_callback': SDK uses this for progress updates
-            # If an MCP tool has parameters with these names, they would cause TypeError
-            reserved_params = {'ctx', 'progress_callback'}
-            tool_args = {k: v for k, v in kwargs.items() if k not in reserved_params}
+            # Filter reserved parameter names to avoid collisions (see RESERVED_MCP_PARAMS)
+            tool_args = {k: v for k, v in kwargs.items() if k not in RESERVED_MCP_PARAMS}
             
             logger.debug(f"Calling MCP tool '{display_name}' (sdk: {sdk_tool_name}) with args: {tool_args}")
             
