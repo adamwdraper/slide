@@ -11,7 +11,7 @@ description: 'Dataclass for dependency injection and metadata in tools'
 
 ```python
 from dataclasses import dataclass, field
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Callable, Awaitable
 
 @dataclass
 class ToolContext:
@@ -19,6 +19,7 @@ class ToolContext:
     tool_name: Optional[str] = None      # Name of the tool being executed
     tool_call_id: Optional[str] = None   # Unique ID for this tool call
     deps: Dict[str, Any] = field(default_factory=dict)  # User dependencies
+    progress_callback: Optional[Callable[[int, int, str], Awaitable[None]]] = None  # For progress updates
 ```
 
 ## Features
@@ -78,7 +79,11 @@ async def get_user_data(ctx: ToolContext, user_id: str) -> str:
 
 ### Passing Context to Agent
 
-When running the agent, provide the context dictionary:
+Context can be provided at two levels:
+
+#### Agent-Level Context (Static Dependencies)
+
+Set default context when creating the agent. This is ideal for static dependencies that don't change between requests:
 
 ```python
 from tyler import Agent, Thread, Message
@@ -86,17 +91,43 @@ from tyler import Agent, Thread, Message
 agent = Agent(
     name="assistant",
     model_name="gpt-4o",
-    tools=[user_data_tool]
-)
-
-result = await agent.run(
-    thread,
+    tools=[user_data_tool],
     tool_context={
         "db": database_connection,
-        "current_user": current_user,
         "config": app_config
     }
 )
+
+# All runs automatically get db and config
+result = await agent.run(thread)
+```
+
+#### Run-Level Context (Request-Scoped Dependencies)
+
+Provide or override context per-run for request-specific data:
+
+```python
+# Override db for testing, config still inherited from agent
+result = await agent.run(
+    thread,
+    tool_context={
+        "db": test_database,
+        "current_user": current_user  # Add request-scoped data
+    }
+)
+```
+
+#### Context Merging
+
+When both agent-level and run-level contexts are provided, they are merged with run-level taking precedence:
+
+```python
+agent = Agent(
+    tool_context={"db": prod_db, "config": app_config}
+)
+
+# Final context: {"db": test_db, "config": app_config, "user": current_user}
+await agent.run(thread, tool_context={"db": test_db, "user": current_user})
 ```
 
 ## Parameter Naming Convention
@@ -134,6 +165,7 @@ These fields are automatically populated by the agent:
 | `tool_name` | `str \| None` | Name of the tool being executed |
 | `tool_call_id` | `str \| None` | Unique identifier for this tool call |
 | `deps` | `Dict[str, Any]` | User-provided dependencies |
+| `progress_callback` | `Callable \| None` | Async callback for reporting progress (MCP tools) |
 
 ```python
 async def my_tool(ctx: ToolContext, param: str) -> str:
@@ -390,26 +422,31 @@ async def my_tool(ctx: ToolContext, param: str) -> str:
 
 ### Context Factory
 
-Create context consistently across your application:
+Create context consistently across your application using agent-level context for static dependencies and run-level for request-scoped data:
 
 ```python
-class ToolContextFactory:
-    def __init__(self, db, config):
-        self.db = db
-        self.config = config
-    
-    def create(self, user: User) -> ToolContext:
+# Static dependencies at agent level
+agent = Agent(
+    model_name="gpt-4o",
+    tool_context={
+        "db": database,
+        "config": app_config
+    }
+)
+
+# Request-scoped factory for user context
+class UserContextFactory:
+    def create(self, user: User) -> dict:
         return {
-            "db": self.db,
-            "config": self.config,
             "current_user": user,
             "user_id": user.id,
             "logger": logging.getLogger(f"tools.{user.id}")
         }
 
-# Usage
-factory = ToolContextFactory(database, app_config)
+# Usage - user context merged with agent's db/config
+factory = UserContextFactory()
 result = await agent.run(thread, tool_context=factory.create(current_user))
+# Tool receives: db, config, current_user, user_id, logger
 ```
 
 ## See Also

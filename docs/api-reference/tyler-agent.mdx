@@ -159,6 +159,33 @@ agent = Agent(
   See [RetryConfig](/api-reference/tyler-retryconfig) for all options.
 </ParamField>
 
+<ParamField path="tool_context" type="Dict[str, Any] | None" default="None">
+  Default tool context for dependency injection. Contains static dependencies (database clients, 
+  API clients, configuration) that are passed to tools via the `ctx` parameter.
+  
+  Can be set at the agent level (default for all runs) or extended/overridden per `run()` call.
+  When both are provided, run-level context is merged with agent-level, with run-level taking
+  precedence for conflicting keys.
+  
+  ```python
+  agent = Agent(
+      model_name="gpt-4o",
+      tool_context={
+          "db": database_client,
+          "config": app_config
+      }
+  )
+  
+  # All runs get db and config automatically
+  await agent.run(thread)
+  
+  # Override db for a specific run (config still inherited)
+  await agent.run(thread, tool_context={"db": test_db})
+  ```
+  
+  See [ToolContext](/api-reference/tyler-toolcontext) for details on accessing context in tools.
+</ParamField>
+
 <ParamField path="response_format" type="Literal['json'] | None" default="None">
   Simple JSON mode for when you want any valid JSON without schema validation.
   Pass `response_format="json"` to `run()` to force JSON output.
