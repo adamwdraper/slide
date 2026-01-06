@@ -160,30 +160,34 @@ agent = Agent(
 </ParamField>
 
 <ParamField path="tool_context" type="Dict[str, Any] | None" default="None">
-  Default tool context for dependency injection. Contains static dependencies (database clients, 
-  API clients, configuration) that are passed to tools via the `ctx` parameter.
+  Default request identity passed to tools via the `ctx` parameter. Primarily used for 
+  user/org/session identity that answers "who is making this request?"
   
-  Can be set at the agent level (default for all runs) or extended/overridden per `run()` call.
-  When both are provided, run-level context is merged with agent-level, with run-level taking
-  precedence for conflicting keys.
+  Can be set at the agent level (for system agents or default identity) or per `run()` call
+  (typical for user requests). When both are provided, run-level merges with and overrides 
+  agent-level for conflicting keys.
   
   ```python
-  agent = Agent(
+  # System agent with fixed identity
+  system_agent = Agent(
       model_name="gpt-4o",
-      tool_context={
-          "db": database_client,
-          "config": app_config
-      }
+      tool_context={"user_id": "system", "role": "admin"}
   )
   
-  # All runs get db and config automatically
-  await agent.run(thread)
-  
-  # Override db for a specific run (config still inherited)
-  await agent.run(thread, tool_context={"db": test_db})
+  # User-facing agent - identity passed per request
+  agent = Agent(model_name="gpt-4o", tools=my_tools)
+  await agent.run(thread, tool_context={
+      "user_id": request.user.id,
+      "org_id": request.user.org_id,
+      "permissions": request.user.permissions
+  })
   ```
   
-  See [ToolContext](/api-reference/tyler-toolcontext) for details on accessing context in tools.
+  <Tip>
+  Infrastructure (database clients, API clients) should be closed over at tool definition 
+  time, not passed in context. See [ToolContext](/api-reference/tyler-toolcontext) for the 
+  recommended pattern.
+  </Tip>
 </ParamField>
 
 <ParamField path="response_format" type="Literal['json'] | None" default="None">
@@ -350,29 +354,35 @@ print(f"Priority: {ticket.priority}")
 print(f"Category: {ticket.category}")
 ```
 
-### With Tool Context (Dependency Injection)
+### With Tool Context (Request Identity)
 
-Inject runtime dependencies into your tools:
+Pass request-scoped identity to your tools:
 
 ```python
-# Define a tool that uses context
-async def get_user_orders(ctx: ToolContext, limit: int = 10) -> str:
-    db = ctx["db"]  # Injected database
-    user_id = ctx["user_id"]  # Injected user ID
-    orders = await db.get_orders(user_id, limit)
-    return f"Found {len(orders)} orders"
+# Define tools with infrastructure closed over
+def create_order_tools(db):
+    async def get_user_orders(ctx: ToolContext, limit: int = 10) -> str:
+        user_id = ctx["user_id"]  # Identity from context
+        org_id = ctx["org_id"]    # Tenant isolation
+        orders = await db.get_orders(user_id, org_id, limit)
+        return f"Found {len(orders)} orders"
+    return [get_user_orders]
 
-# Run with context
+# Create agent with tools (db already closed over)
+agent = Agent(model_name="gpt-4o", tools=create_order_tools(database))
+
+# Run with identity context
 result = await agent.run(
     thread,
     tool_context={
-        "db": database,
-        "user_id": current_user.id
+        "user_id": current_user.id,
+        "org_id": current_user.org_id,
+        "permissions": current_user.permissions
     }
 )
 ```
 
-See the [Structured Output Guide](/guides/structured-output) for complete examples.
+See [ToolContext](/api-reference/tyler-toolcontext) for the recommended pattern.
 
 ### Event Streaming Mode (stream=True or stream="events")
 
