@@ -620,7 +620,6 @@ class TestAgentLevelToolContext:
         """Test that run-level context merges with agent-level context."""
         captured_context = None
         
-        original_step = agent_with_context.step
         async def capturing_step(*args, **kwargs):
             nonlocal captured_context
             # Capture the merged context during execution

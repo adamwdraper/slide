@@ -235,7 +235,7 @@ def _create_tool_implementation(group: ClientSessionGroup, sdk_tool_name: str, d
             error_msg = f"Error calling MCP tool '{display_name}': {e}"
             logger.error(error_msg)
             logger.debug("MCP tool error details:", exc_info=True)
-            raise ValueError(error_msg)
+            raise ValueError(error_msg) from e
     
     # Set function metadata for better debugging
     call_mcp_tool.__name__ = f"mcp_{display_name}"
@@ -414,13 +414,15 @@ async def _load_mcp_config(
                 )
                 
                 # Check for prefixed name collisions with tools from previous servers
+                # Note: Duplicate names in all_tools list will cause the later registration
+                # to override the earlier one when tools are registered with ToolRunner
                 for tool in server_tools:
                     prefixed_name = tool["definition"]["function"]["name"]
                     if prefixed_name in seen_prefixed_names:
                         logger.warning(
                             f"Tool name collision: '{prefixed_name}' from server '{name}' "
                             f"conflicts with same-named tool from server '{seen_prefixed_names[prefixed_name]}'. "
-                            f"The later tool will override the earlier one. Consider using unique prefixes."
+                            f"Only the later tool will be available. Consider using unique prefixes."
                         )
                     seen_prefixed_names[prefixed_name] = name
                 

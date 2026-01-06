@@ -178,7 +178,7 @@ async def example_with_real_progress():
         # Clean up temp file
         try:
             os.unlink(server_script)
-        except:
+        except OSError:
             pass
 
 

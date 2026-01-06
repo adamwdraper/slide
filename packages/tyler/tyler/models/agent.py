@@ -1769,20 +1769,23 @@ class Agent(BaseModel):
                                 }
                             )
                         
-                        # Execute tools in parallel with timing and progress tracking
+                        # Execute tools in parallel with timing and real-time progress streaming
                         tool_start_times = {}
                         tool_tasks = []
-                        progress_events = []  # Collect progress events during execution
+                        
+                        # Use a queue for real-time progress event streaming
+                        # Events are put on queue as they occur, yielded immediately
+                        progress_queue: asyncio.Queue[Optional[ExecutionEvent]] = asyncio.Queue()
                         
                         for tool_call in current_tool_calls:
                             tool_id = tool_call['id']
                             tool_name = tool_call['function']['name']
                             tool_start_times[tool_id] = datetime.now(timezone.utc)
                             
-                            # Create progress callback for this tool that captures events
-                            async def make_progress_callback(t_name, t_id):
+                            # Create progress callback that puts events on queue immediately
+                            def make_progress_callback(t_name, t_id, queue):
                                 async def progress_cb(progress: float, total: Optional[float] = None, message: Optional[str] = None):
-                                    progress_events.append(ExecutionEvent(
+                                    await queue.put(ExecutionEvent(
                                         type=EventType.TOOL_PROGRESS,
                                         timestamp=datetime.now(timezone.utc),
                                         data={
@@ -1795,14 +1798,28 @@ class Agent(BaseModel):
                                     ))
                                 return progress_cb
                             
-                            progress_callback = await make_progress_callback(tool_name, tool_id)
+                            progress_callback = make_progress_callback(tool_name, tool_id, progress_queue)
                             tool_tasks.append(self._handle_tool_execution(tool_call, progress_callback=progress_callback))
                         
-                        tool_results = await asyncio.gather(*tool_tasks, return_exceptions=True)
+                        # Run tools and stream progress events concurrently
+                        async def run_tools_and_signal_done():
+                            """Run all tools then signal completion."""
+                            results = await asyncio.gather(*tool_tasks, return_exceptions=True)
+                            await progress_queue.put(None)  # Sentinel to signal completion
+                            return results
                         
-                        # Yield any progress events that were collected during execution
-                        for progress_event in progress_events:
+                        # Start tool execution in background
+                        results_task = asyncio.create_task(run_tools_and_signal_done())
+                        
+                        # Yield progress events in real-time as they arrive
+                        while True:
+                            progress_event = await progress_queue.get()
+                            if progress_event is None:  # Sentinel - tools finished
+                                break
                             yield progress_event
+                        
+                        # Get tool results (already completed)
+                        tool_results = await results_task
                         
                         # Process results
                         should_break = False
