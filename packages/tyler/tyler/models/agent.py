@@ -426,11 +426,20 @@ class Agent(BaseModel):
             # Note: Nested mutable objects (dicts within dicts) are still shared references.
             # We intentionally avoid deepcopy as it would fail for non-picklable objects
             # like database connections and API clients which are common deps.
+            deps_copy = dict(self._tool_context)
+            
+            # Allow user to pass progress_callback via tool_context dict
+            # This enables custom progress callbacks in run() mode (non-streaming)
+            # Priority: explicit parameter > tool_context dict
+            effective_progress_callback = progress_callback
+            if effective_progress_callback is None and 'progress_callback' in deps_copy:
+                effective_progress_callback = deps_copy.pop('progress_callback')
+            
             rich_context = ToolContext(
                 tool_name=tool_name,
                 tool_call_id=tool_call_id,
-                deps=dict(self._tool_context),
-                progress_callback=progress_callback,
+                deps=deps_copy,
+                progress_callback=effective_progress_callback,
             )
         else:
             # Create minimal context just for progress callback if provided
