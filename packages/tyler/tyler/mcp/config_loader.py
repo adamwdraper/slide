@@ -27,17 +27,10 @@ logger = logging.getLogger(__name__)
 # Regex pattern for environment variable substitution: ${VAR_NAME}
 ENV_VAR_PATTERN = r'\$\{([^}]+)\}'
 
-# Reserved parameter names that cannot be passed to MCP tools.
-# These are filtered from kwargs to prevent TypeError collisions:
-#
-# - 'ctx': Used by our MCP tool wrapper for ToolContext injection
-# - 'context': Alternative name for ToolContext (checked by tool runner)  
-# - 'progress_callback': Used by MCP SDK's call_tool() for progress updates
-#
-# If an MCP tool happens to have a parameter with one of these names,
-# that parameter will be silently dropped. This is a known limitation.
-# MCP tool authors should avoid using these reserved names.
-RESERVED_MCP_PARAMS = frozenset({'ctx', 'context', 'progress_callback'})
+# Internal parameter name for ToolContext injection.
+# Uses a unique name that won't collide with real MCP tool parameters.
+# This allows MCP tools to have parameters named 'ctx', 'context', etc.
+_AGENT_CONTEXT_PARAM = '_agent_ctx'
 
 
 def _validate_mcp_config(config: Dict[str, Any]) -> None:
@@ -186,31 +179,31 @@ def _create_tool_implementation(group: ClientSessionGroup, sdk_tool_name: str, d
     
     Returns:
         Async function that executes the MCP tool.
-        The function accepts an optional 'ctx' parameter (ToolContext) to receive
-        progress callbacks for long-running operations.
+        The function accepts an optional '_agent_ctx' parameter (ToolContext) to receive
+        progress callbacks for long-running operations. Uses a unique name to avoid
+        collisions with MCP tools that have parameters named 'ctx' or 'context'.
     """
-    async def call_mcp_tool(ctx: Optional["ToolContext"] = None, **kwargs):
+    async def call_mcp_tool(_agent_ctx: Optional["ToolContext"] = None, **kwargs):
         """Call the MCP tool with the provided arguments.
         
         Args:
-            ctx: Optional ToolContext with progress_callback for progress updates
-            **kwargs: Arguments to pass to the MCP tool
+            _agent_ctx: Optional ToolContext with progress_callback for progress updates
+            **kwargs: Arguments to pass to the MCP tool (passed through unmodified)
         """
         try:
-            # Filter reserved parameter names to avoid collisions (see RESERVED_MCP_PARAMS)
-            tool_args = {k: v for k, v in kwargs.items() if k not in RESERVED_MCP_PARAMS}
-            
-            logger.debug(f"Calling MCP tool '{display_name}' (sdk: {sdk_tool_name}) with args: {tool_args}")
+            # Pass all kwargs through to the MCP tool - no filtering needed since
+            # our context parameter uses a unique name (_agent_ctx) that won't collide
+            logger.debug(f"Calling MCP tool '{display_name}' (sdk: {sdk_tool_name}) with args: {kwargs}")
             
             # Extract progress callback from context if available
             progress_callback = None
-            if ctx is not None and hasattr(ctx, 'progress_callback') and ctx.progress_callback is not None:
-                progress_callback = ctx.progress_callback
+            if _agent_ctx is not None and hasattr(_agent_ctx, 'progress_callback') and _agent_ctx.progress_callback is not None:
+                progress_callback = _agent_ctx.progress_callback
                 logger.debug(f"MCP tool '{display_name}' will use progress callback")
             
             result = await group.call_tool(
                 sdk_tool_name, 
-                tool_args,
+                kwargs,
                 progress_callback=progress_callback,
             )
             logger.debug(f"MCP tool '{display_name}' returned: {type(result)}")

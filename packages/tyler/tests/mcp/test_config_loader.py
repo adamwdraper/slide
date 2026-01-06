@@ -437,7 +437,8 @@ class TestToolImplementation:
         )
         
         impl = _create_tool_implementation(mock_group, "_0_test_tool", "test_tool")
-        result = await impl(ctx=ctx, arg1="value")
+        # Use _agent_ctx to pass context (our unique internal parameter name)
+        result = await impl(_agent_ctx=ctx, arg1="value")
         
         assert result == "Result text"
         # Verify progress callback was passed to SDK
@@ -465,6 +466,43 @@ class TestToolImplementation:
         mock_group.call_tool.assert_called_once()
         call_args = mock_group.call_tool.call_args
         assert call_args.kwargs.get("progress_callback") is None
+    
+    @pytest.mark.asyncio
+    async def test_tool_implementation_passes_through_reserved_param_names(self):
+        """Test that MCP tools can have parameters named ctx, context, progress_callback.
+        
+        This is a regression test for a bug where these parameter names were silently
+        filtered out, breaking MCP tools that legitimately used them.
+        """
+        mock_group = MagicMock()
+        mock_result = MagicMock()
+        mock_result.structuredContent = None
+        mock_content = MagicMock()
+        mock_content.text = "Result text"
+        mock_result.content = [mock_content]
+        mock_group.call_tool = AsyncMock(return_value=mock_result)
+        
+        impl = _create_tool_implementation(mock_group, "_0_test_tool", "test_tool")
+        
+        # Call with parameters that WERE previously filtered but should now pass through
+        result = await impl(
+            ctx="user_context_value",  # MCP tool might have a ctx param
+            context="some_context",     # MCP tool might have a context param
+            progress_callback="callback_arg",  # MCP tool might have this param
+            query="test_query"
+        )
+        
+        assert result == "Result text"
+        # Verify ALL parameters were passed through to the SDK
+        mock_group.call_tool.assert_called_once()
+        call_args = mock_group.call_tool.call_args
+        tool_args = call_args[0][1]  # Second positional arg is the arguments dict
+        
+        # These should all be present - NOT filtered out
+        assert tool_args["ctx"] == "user_context_value"
+        assert tool_args["context"] == "some_context"
+        assert tool_args["progress_callback"] == "callback_arg"
+        assert tool_args["query"] == "test_query"
 
 
 @pytest.mark.asyncio

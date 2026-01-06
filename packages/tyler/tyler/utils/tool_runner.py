@@ -273,11 +273,14 @@ class ToolRunner:
         except Exception as e:
             raise ValueError(f"Error executing tool '{tool_name}': {str(e)}")
     
+    # Valid parameter names for context injection
+    _CONTEXT_PARAM_NAMES = frozenset({'ctx', 'context', '_agent_ctx'})
+    
     def _tool_expects_context(self, implementation: Callable) -> bool:
         """Check if a tool implementation expects context injection.
         
-        A tool expects context if its first parameter is named 'ctx' or 'context'
-        AND the parameter does NOT have a default value (i.e., it's required).
+        A tool expects context if its first parameter is named 'ctx', 'context',
+        or '_agent_ctx' AND the parameter does NOT have a default value (i.e., it's required).
         
         Parameters with default values (like `ctx: ToolContext = None`) are treated
         as optional and will receive context if available, but won't raise an error
@@ -297,8 +300,8 @@ class ToolRunner:
                 return False
             
             first_param = params[0]
-            # Check if named 'ctx' or 'context'
-            if first_param.name not in ('ctx', 'context'):
+            # Check if named 'ctx', 'context', or '_agent_ctx'
+            if first_param.name not in self._CONTEXT_PARAM_NAMES:
                 return False
             
             # Check if the parameter has a default value (is optional)
@@ -314,11 +317,11 @@ class ToolRunner:
     def _tool_accepts_optional_context(self, implementation: Callable) -> bool:
         """Check if a tool implementation accepts an optional context parameter.
         
-        A tool accepts optional context if its first parameter is named 'ctx' or 'context'
-        AND the parameter HAS a default value (i.e., it's optional).
+        A tool accepts optional context if its first parameter is named 'ctx', 'context',
+        or '_agent_ctx' AND the parameter HAS a default value (i.e., it's optional).
         
         These tools will receive context if available, but won't raise an error if not.
-        This is used by MCP tools which declare `ctx: Optional[ToolContext] = None`.
+        This is used by MCP tools which declare `_agent_ctx: Optional[ToolContext] = None`.
         
         Args:
             implementation: The tool function/coroutine
@@ -334,8 +337,8 @@ class ToolRunner:
                 return False
             
             first_param = params[0]
-            # Check if named 'ctx' or 'context'
-            if first_param.name not in ('ctx', 'context'):
+            # Check if named 'ctx', 'context', or '_agent_ctx'
+            if first_param.name not in self._CONTEXT_PARAM_NAMES:
                 return False
             
             # Check if the parameter has a default value (is optional)
