@@ -185,7 +185,11 @@ def _create_tool_implementation(group: ClientSessionGroup, sdk_tool_name: str, d
             **kwargs: Arguments to pass to the MCP tool
         """
         try:
-            logger.debug(f"Calling MCP tool '{display_name}' (sdk: {sdk_tool_name}) with args: {kwargs}")
+            # Remove any 'progress_callback' from kwargs to avoid collision with the SDK parameter
+            # (if an MCP tool happens to have a parameter named 'progress_callback', it would cause a TypeError)
+            tool_args = {k: v for k, v in kwargs.items() if k != 'progress_callback'}
+            
+            logger.debug(f"Calling MCP tool '{display_name}' (sdk: {sdk_tool_name}) with args: {tool_args}")
             
             # Extract progress callback from context if available
             progress_callback = None
@@ -195,7 +199,7 @@ def _create_tool_implementation(group: ClientSessionGroup, sdk_tool_name: str, d
             
             result = await group.call_tool(
                 sdk_tool_name, 
-                kwargs,
+                tool_args,
                 progress_callback=progress_callback,
             )
             logger.debug(f"MCP tool '{display_name}' returned: {type(result)}")

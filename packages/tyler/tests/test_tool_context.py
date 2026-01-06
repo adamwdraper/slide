@@ -49,6 +49,83 @@ class TestToolContextInjection:
         
         assert tool_runner._tool_expects_context(no_param_tool) is False
     
+    def test_tool_with_optional_context_does_not_require_context(self, tool_runner):
+        """Test that tools with optional ctx param (has default) don't require context."""
+        from typing import Optional
+        
+        async def tool_with_optional_ctx(ctx: Optional[ToolContext] = None, query: str = "") -> str:
+            return f"Query: {query}"
+        
+        # Should not require context (has default value)
+        assert tool_runner._tool_expects_context(tool_with_optional_ctx) is False
+        # But should accept optional context
+        assert tool_runner._tool_accepts_optional_context(tool_with_optional_ctx) is True
+    
+    def test_tool_with_required_context_requires_context(self, tool_runner):
+        """Test that tools with required ctx param (no default) require context."""
+        async def tool_with_required_ctx(ctx: ToolContext, query: str) -> str:
+            return f"Query: {query}"
+        
+        # Should require context (no default value)
+        assert tool_runner._tool_expects_context(tool_with_required_ctx) is True
+        # Should not be optional
+        assert tool_runner._tool_accepts_optional_context(tool_with_required_ctx) is False
+    
+    @pytest.mark.asyncio
+    async def test_optional_context_receives_context_when_provided(self, tool_runner):
+        """Test that tools with optional context still receive context when available."""
+        received_ctx = None
+        
+        async def tool_with_optional_ctx(ctx: ToolContext = None, value: str = "") -> str:
+            nonlocal received_ctx
+            received_ctx = ctx
+            return f"Value: {value}"
+        
+        tool_runner.register_tool(
+            name="optional_ctx_tool",
+            implementation=tool_with_optional_ctx,
+            definition={"name": "optional_ctx_tool", "parameters": {"type": "object"}}
+        )
+        
+        # Call with context provided
+        ctx = ToolContext(deps={"user_id": "test_user"})
+        result = await tool_runner.run_tool_async(
+            "optional_ctx_tool",
+            {"value": "hello"},
+            context=ctx
+        )
+        
+        assert result == "Value: hello"
+        assert received_ctx is not None
+        assert received_ctx["user_id"] == "test_user"
+    
+    @pytest.mark.asyncio
+    async def test_optional_context_works_without_context(self, tool_runner):
+        """Test that tools with optional context work when no context is provided."""
+        received_ctx = "not_called"
+        
+        async def tool_with_optional_ctx(ctx: ToolContext = None, value: str = "") -> str:
+            nonlocal received_ctx
+            received_ctx = ctx
+            return f"Value: {value}"
+        
+        tool_runner.register_tool(
+            name="optional_ctx_tool2",
+            implementation=tool_with_optional_ctx,
+            definition={"name": "optional_ctx_tool2", "parameters": {"type": "object"}}
+        )
+        
+        # Call without context - should NOT raise ToolContextError
+        result = await tool_runner.run_tool_async(
+            "optional_ctx_tool2",
+            {"value": "hello"},
+            context=None
+        )
+        
+        assert result == "Value: hello"
+        # Context param should not have been passed (tool uses default)
+        # The function was called without context argument
+    
     @pytest.mark.asyncio
     async def test_context_injection_async_tool(self, tool_runner):
         """Test context is injected into async tools."""

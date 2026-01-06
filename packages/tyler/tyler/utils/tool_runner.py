@@ -267,25 +267,71 @@ class ToolRunner:
     def _tool_expects_context(self, implementation: Callable) -> bool:
         """Check if a tool implementation expects context injection.
         
-        A tool expects context if its first parameter is named 'ctx' or 'context'.
+        A tool expects context if its first parameter is named 'ctx' or 'context'
+        AND the parameter does NOT have a default value (i.e., it's required).
+        
+        Parameters with default values (like `ctx: ToolContext = None`) are treated
+        as optional and will receive context if available, but won't raise an error
+        if context is not provided.
         
         Args:
             implementation: The tool function/coroutine
             
         Returns:
-            True if the tool expects context, False otherwise
+            True if the tool REQUIRES context (no default), False otherwise
         """
         try:
             sig = inspect.signature(implementation)
-            params = list(sig.parameters.keys())
+            params = list(sig.parameters.values())
             
             if not params:
                 return False
             
             first_param = params[0]
-            return first_param in ('ctx', 'context')
+            # Check if named 'ctx' or 'context'
+            if first_param.name not in ('ctx', 'context'):
+                return False
+            
+            # Check if the parameter has a default value (is optional)
+            # If it has a default, context is optional and shouldn't raise error
+            if first_param.default is not inspect.Parameter.empty:
+                return False
+            
+            return True
         except (ValueError, TypeError):
             # If we can't inspect the signature, assume no context
+            return False
+
+    def _tool_accepts_optional_context(self, implementation: Callable) -> bool:
+        """Check if a tool implementation accepts an optional context parameter.
+        
+        A tool accepts optional context if its first parameter is named 'ctx' or 'context'
+        AND the parameter HAS a default value (i.e., it's optional).
+        
+        These tools will receive context if available, but won't raise an error if not.
+        This is used by MCP tools which declare `ctx: Optional[ToolContext] = None`.
+        
+        Args:
+            implementation: The tool function/coroutine
+            
+        Returns:
+            True if the tool accepts optional context, False otherwise
+        """
+        try:
+            sig = inspect.signature(implementation)
+            params = list(sig.parameters.values())
+            
+            if not params:
+                return False
+            
+            first_param = params[0]
+            # Check if named 'ctx' or 'context'
+            if first_param.name not in ('ctx', 'context'):
+                return False
+            
+            # Check if the parameter has a default value (is optional)
+            return first_param.default is not inspect.Parameter.empty
+        except (ValueError, TypeError):
             return False
 
     async def _execute_with_timeout(
@@ -349,15 +395,24 @@ class ToolRunner:
             known limitation of thread-based timeouts in Python. For truly
             cancellable timeouts, implement tools as async functions.
         """
-        expects_context = self._tool_expects_context(implementation)
+        requires_context = self._tool_expects_context(implementation)
+        accepts_context = self._tool_accepts_optional_context(implementation)
         
-        if expects_context:
+        if requires_context:
             if context is None:
                 raise ToolContextError(
                     f"Tool '{tool_name}' requires context (has 'ctx' or 'context' parameter) "
                     f"but no tool_context was provided to agent.run()"
                 )
             # Inject context as first argument
+            if is_async:
+                coro = implementation(context, **arguments)
+            else:
+                coro = asyncio.to_thread(
+                    lambda: implementation(context, **arguments)
+                )
+        elif accepts_context and context is not None:
+            # Tool accepts optional context and we have context available
             if is_async:
                 coro = implementation(context, **arguments)
             else:
