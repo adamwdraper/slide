@@ -183,6 +183,11 @@ class Agent(BaseModel):
         default=None,
         description="Default Pydantic model for structured output. When set, agent.run() will return validated structured data. Can be overridden per-run via agent.run(response_type=...)."
     )
+    tool_context: Optional[Dict[str, Any]] = Field(
+        default=None,
+        exclude=True,  # Non-serializable objects like DB connections
+        description="Default tool context for dependency injection. Contains static dependencies (database clients, API clients, config) that are passed to tools. Can be extended per-run via agent.run(tool_context=...) which merges with and overrides agent-level context."
+    )
     
     # Helper objects excluded from serialization (recreated on deserialization)
     message_factory: Optional[MessageFactory] = Field(default=None, exclude=True, description="Factory for creating standardized messages (excluded from serialization)")
@@ -764,8 +769,17 @@ class Agent(BaseModel):
                 "or response_format='json' for simple JSON mode without validation."
             )
         
-        # Store tool context for use by _handle_tool_execution
-        self._tool_context = tool_context
+        # Merge agent-level and run-level tool contexts
+        # Run-level context overrides agent-level context
+        if self.tool_context is not None or tool_context is not None:
+            merged_context = {}
+            if self.tool_context:
+                merged_context.update(self.tool_context)
+            if tool_context:
+                merged_context.update(tool_context)
+            self._tool_context = merged_context
+        else:
+            self._tool_context = None
         
         # Store response_format for use by step()
         self._response_format = response_format
@@ -1160,8 +1174,17 @@ class Agent(BaseModel):
                 if hasattr(chunk.choices[0].delta, 'content'):
                     print(chunk.choices[0].delta.content, end="")
         """
-        # Store tool context for use by _handle_tool_execution
-        self._tool_context = tool_context
+        # Merge agent-level and run-level tool contexts
+        # Run-level context overrides agent-level context
+        if self.tool_context is not None or tool_context is not None:
+            merged_context = {}
+            if self.tool_context:
+                merged_context.update(self.tool_context)
+            if tool_context:
+                merged_context.update(tool_context)
+            self._tool_context = merged_context
+        else:
+            self._tool_context = None
         
         try:
             if mode == "events":

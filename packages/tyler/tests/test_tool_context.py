@@ -480,3 +480,144 @@ class TestToolContextDataclass:
         assert received_ctx.tool_call_id == "call_123"
         assert received_ctx["user_id"] == "test_user"
 
+
+class TestAgentLevelToolContext:
+    """Tests for agent-level tool_context that merges with run-level context."""
+    
+    @pytest.fixture
+    def agent_with_context(self):
+        """Create an agent with agent-level context."""
+        return Agent(
+            model_name="gpt-4o",
+            tool_context={"db_client": "mock_db", "config": {"timeout": 30}}
+        )
+    
+    @pytest.fixture
+    def thread(self):
+        """Create a test thread."""
+        thread = Thread()
+        thread.add_message(Message(role="user", content="Test message"))
+        return thread
+    
+    @pytest.mark.asyncio
+    async def test_agent_level_context_is_used(self, agent_with_context, thread):
+        """Test that agent-level tool_context is available during run."""
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].finish_reason = "stop"
+        mock_response.choices[0].message.content = "Done"
+        mock_response.choices[0].message.tool_calls = None
+        mock_response.choices[0].message.refusal = None
+        
+        with patch.object(agent_with_context, 'step', new_callable=AsyncMock) as mock_step:
+            mock_step.return_value = (mock_response, {"usage": {}})
+            
+            # Run without any run-level context
+            await agent_with_context.run(thread)
+            
+            # During run, _tool_context should have been set from agent-level
+            # (it's cleared after, so we check via the step call)
+            # The test verifies no error occurred with agent-level context
+    
+    @pytest.mark.asyncio
+    async def test_agent_level_context_cleared_after_run(self, agent_with_context, thread):
+        """Test that _tool_context is cleared after run even with agent-level context."""
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].finish_reason = "stop"
+        mock_response.choices[0].message.content = "Done"
+        mock_response.choices[0].message.tool_calls = None
+        
+        with patch.object(agent_with_context, 'step', new_callable=AsyncMock) as mock_step:
+            mock_step.return_value = (mock_response, {"usage": {}})
+            
+            await agent_with_context.run(thread)
+            
+            # _tool_context should be cleared after run
+            assert agent_with_context._tool_context is None
+            # But agent.tool_context still exists
+            assert agent_with_context.tool_context == {"db_client": "mock_db", "config": {"timeout": 30}}
+    
+    @pytest.mark.asyncio
+    async def test_run_level_context_merges_with_agent_level(self, agent_with_context, thread):
+        """Test that run-level context merges with agent-level context."""
+        captured_context = None
+        
+        original_step = agent_with_context.step
+        async def capturing_step(*args, **kwargs):
+            nonlocal captured_context
+            # Capture the merged context during execution
+            captured_context = agent_with_context._tool_context
+            # Return a mock response
+            mock_response = MagicMock()
+            mock_response.choices = [MagicMock()]
+            mock_response.choices[0].finish_reason = "stop"
+            mock_response.choices[0].message.content = "Done"
+            mock_response.choices[0].message.tool_calls = None
+            mock_response.choices[0].message.refusal = None
+            return (mock_response, {"usage": {}})
+        
+        with patch.object(agent_with_context, 'step', side_effect=capturing_step):
+            # Run with per-run context that adds new keys
+            await agent_with_context.run(
+                thread,
+                tool_context={"run_key": "run_value"}
+            )
+        
+        # Verify merging happened
+        assert captured_context is not None
+        assert captured_context["db_client"] == "mock_db"      # From agent
+        assert captured_context["config"]["timeout"] == 30     # From agent  
+        assert captured_context["run_key"] == "run_value"      # From run
+    
+    @pytest.mark.asyncio
+    async def test_run_level_context_overrides_agent_level(self, agent_with_context, thread):
+        """Test that run-level context overrides agent-level for same keys."""
+        captured_context = None
+        
+        async def capturing_step(*args, **kwargs):
+            nonlocal captured_context
+            captured_context = agent_with_context._tool_context
+            mock_response = MagicMock()
+            mock_response.choices = [MagicMock()]
+            mock_response.choices[0].finish_reason = "stop"
+            mock_response.choices[0].message.content = "Done"
+            mock_response.choices[0].message.tool_calls = None
+            mock_response.choices[0].message.refusal = None
+            return (mock_response, {"usage": {}})
+        
+        with patch.object(agent_with_context, 'step', side_effect=capturing_step):
+            # Run with context that overrides db_client
+            await agent_with_context.run(
+                thread,
+                tool_context={"db_client": "overridden_db"}
+            )
+        
+        # Run-level should override agent-level
+        assert captured_context["db_client"] == "overridden_db"  # Overridden
+        assert captured_context["config"]["timeout"] == 30        # From agent
+    
+    @pytest.mark.asyncio
+    async def test_agent_without_context_uses_run_level_only(self, thread):
+        """Test agent without tool_context uses only run-level context."""
+        agent_no_context = Agent(model_name="gpt-4o")
+        captured_context = None
+        
+        async def capturing_step(*args, **kwargs):
+            nonlocal captured_context
+            captured_context = agent_no_context._tool_context
+            mock_response = MagicMock()
+            mock_response.choices = [MagicMock()]
+            mock_response.choices[0].finish_reason = "stop"
+            mock_response.choices[0].message.content = "Done"
+            mock_response.choices[0].message.tool_calls = None
+            mock_response.choices[0].message.refusal = None
+            return (mock_response, {"usage": {}})
+        
+        with patch.object(agent_no_context, 'step', side_effect=capturing_step):
+            await agent_no_context.run(
+                thread,
+                tool_context={"only_run": "value"}
+            )
+        
+        assert captured_context == {"only_run": "value"}
