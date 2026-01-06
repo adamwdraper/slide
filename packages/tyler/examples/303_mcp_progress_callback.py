@@ -183,12 +183,17 @@ async def example_with_real_progress():
 
 
 async def example_custom_callback():
-    """Example showing custom progress callback via tool_context."""
+    """Example showing custom progress callback via tool_context.
+    
+    Note: This uses stream() with tool_choice to reliably force tool calls.
+    Custom callbacks work in run() too, but the LLM must decide to call the tool.
+    """
     
     print("\n" + "=" * 70)
     print("Custom Progress Callback Example")
     print("=" * 70)
-    print("\nYou can also provide a custom callback via tool_context.\n")
+    print("\nCustom callbacks via tool_context work when tools are called.")
+    print("Using stream() with tool_choice to ensure reliable tool execution.\n")
     
     # Write the server code to a temp file
     with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
@@ -235,18 +240,26 @@ async def example_custom_callback():
         ))
         
         print("💬 User: Run demo_long_task with 3 steps")
-        print("   (Using custom progress_callback)\n")
+        print("   (Using custom progress_callback via tool_context)\n")
         
-        # Use run() with custom tool_context
-        result = await agent.run(
+        # Use stream() with tool_choice to force tool call, and custom callback via tool_context
+        # The custom callback is passed to the MCP SDK and invoked when the server reports progress
+        async for event in agent.stream(
             thread,
-            tool_context={
-                "progress_callback": my_progress_callback
-            }
-        )
+            tool_context={"progress_callback": my_progress_callback}
+        ):
+            if event.type == EventType.TOOL_SELECTED:
+                print(f"  📍 Tool selected: {event.data.get('tool_name')}")
+            elif event.type == EventType.TOOL_RESULT:
+                print(f"  ✓ Tool complete: {event.data.get('tool_name')}")
+            elif event.type == EventType.EXECUTION_COMPLETE:
+                break
         
-        print(f"\n✓ Result: {result.content[:200]}..." if len(result.content) > 200 else f"\n✓ Result: {result.content}")
         print(f"\n  Custom callback invocations: {len(progress_log)}")
+        if progress_log:
+            print("  Progress log:")
+            for entry in progress_log:
+                print(f"    - {entry['progress']}/{entry['total']} - {entry['message']}")
         
         await agent.cleanup()
         

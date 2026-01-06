@@ -428,12 +428,21 @@ class Agent(BaseModel):
             # like database connections and API clients which are common deps.
             deps_copy = dict(self._tool_context)
             
-            # Allow user to pass progress_callback via tool_context dict
-            # This enables custom progress callbacks in run() mode (non-streaming)
-            # Priority: explicit parameter > tool_context dict
-            effective_progress_callback = progress_callback
-            if effective_progress_callback is None and 'progress_callback' in deps_copy:
-                effective_progress_callback = deps_copy.pop('progress_callback')
+            # Handle progress callbacks - combine if both parameter and tool_context have one
+            # This allows streaming mode to emit TOOL_PROGRESS events while also calling
+            # a user's custom callback
+            user_callback = deps_copy.pop('progress_callback', None)
+            
+            if progress_callback is not None and user_callback is not None:
+                # Both exist - create composite that calls both
+                async def composite_callback(progress, total, message):
+                    await progress_callback(progress, total, message)
+                    await user_callback(progress, total, message)
+                effective_progress_callback = composite_callback
+            elif progress_callback is not None:
+                effective_progress_callback = progress_callback
+            else:
+                effective_progress_callback = user_callback
             
             rich_context = ToolContext(
                 tool_name=tool_name,
