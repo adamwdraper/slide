@@ -185,9 +185,12 @@ def _create_tool_implementation(group: ClientSessionGroup, sdk_tool_name: str, d
             **kwargs: Arguments to pass to the MCP tool
         """
         try:
-            # Remove any 'progress_callback' from kwargs to avoid collision with the SDK parameter
-            # (if an MCP tool happens to have a parameter named 'progress_callback', it would cause a TypeError)
-            tool_args = {k: v for k, v in kwargs.items() if k != 'progress_callback'}
+            # Remove reserved parameter names from kwargs to avoid collisions
+            # - 'ctx': our wrapper uses this for ToolContext injection
+            # - 'progress_callback': SDK uses this for progress updates
+            # If an MCP tool has parameters with these names, they would cause TypeError
+            reserved_params = {'ctx', 'progress_callback'}
+            tool_args = {k: v for k, v in kwargs.items() if k not in reserved_params}
             
             logger.debug(f"Calling MCP tool '{display_name}' (sdk: {sdk_tool_name}) with args: {tool_args}")
             
@@ -333,91 +336,106 @@ async def _load_mcp_config(
     # Create SDK ClientSessionGroup with component_name_hook for collision avoidance
     exit_stack = AsyncExitStack()
     group = ClientSessionGroup(exit_stack=exit_stack, component_name_hook=component_name_hook)
-    await exit_stack.__aenter__()
     
-    all_tools = []
-    seen_prefixed_names = {}  # prefixed_name -> server_name for collision detection
+    # Track whether we successfully return (to avoid double-cleanup)
+    returned_successfully = False
     
-    # Connect to each server
-    for server in config["servers"]:
-        name = server["name"]
-        transport = server["transport"]
-        fail_silent = server.get("fail_silent", True)
-        max_retries = server.get("max_retries", 3)
-        prefix = server.get("prefix", name)  # Use custom prefix or server name
-        include_tools = server.get("include_tools")
-        exclude_tools = server.get("exclude_tools", [])
+    try:
+        await exit_stack.__aenter__()
         
-        # Build SDK server parameters
-        params = _build_server_params(server)
+        all_tools = []
+        seen_prefixed_names = {}  # prefixed_name -> server_name for collision detection
         
-        # Track tools before connection to know what was added by this server
-        # (SDK namespaces tools with connection_counter via component_name_hook)
-        tools_before = set(group.tools.keys())
+        # Connect to each server
+        for server in config["servers"]:
+            name = server["name"]
+            transport = server["transport"]
+            fail_silent = server.get("fail_silent", True)
+            max_retries = server.get("max_retries", 3)
+            prefix = server.get("prefix", name)  # Use custom prefix or server name
+            include_tools = server.get("include_tools")
+            exclude_tools = server.get("exclude_tools", [])
+            
+            # Build SDK server parameters
+            params = _build_server_params(server)
+            
+            # Track tools before connection to know what was added by this server
+            # (SDK namespaces tools with connection_counter via component_name_hook)
+            tools_before = set(group.tools.keys())
+            
+            # Retry loop with exponential backoff
+            connected = False
+            last_error = None
+            
+            for attempt in range(max_retries):
+                try:
+                    if attempt > 0:
+                        delay = min(2 ** attempt, 10)  # Exponential backoff: 2s, 4s, 8s, 10s max
+                        logger.debug(f"Retrying connection to '{name}' (attempt {attempt + 1}/{max_retries}) after {delay}s...")
+                        await asyncio.sleep(delay)
+                    
+                    logger.info(f"Connecting to MCP server '{name}' via {transport}...")
+                    await group.connect_to_server(params)
+                    connected = True
+                    logger.info(f"Connected to MCP server '{name}'")
+                    # Increment counter AFTER successful connection so next server gets different prefix
+                    connection_counter[0] += 1
+                    break
+                    
+                except Exception as e:
+                    last_error = e
+                    logger.warning(f"Connection attempt {attempt + 1} to '{name}' failed: {e}")
+                    if attempt == max_retries - 1:
+                        # Last attempt failed
+                        if fail_silent:
+                            logger.warning(f"Failed to connect to MCP server '{name}' after {max_retries} attempts: {last_error}")
+                        else:
+                            raise ValueError(f"Failed to connect to MCP server '{name}': {last_error}") from last_error
+            
+            if connected:
+                # Get newly added tools (SDK-namespaced, e.g., "_0_search", "_1_search")
+                new_sdk_tool_names = set(group.tools.keys()) - tools_before
+                
+                # Convert tools with this server's prefix and filters
+                server_tools = _convert_tools_for_agent(
+                    group,
+                    new_sdk_tool_names,
+                    prefix,
+                    include_tools,
+                    exclude_tools,
+                )
+                
+                # Check for prefixed name collisions with tools from previous servers
+                for tool in server_tools:
+                    prefixed_name = tool["definition"]["function"]["name"]
+                    if prefixed_name in seen_prefixed_names:
+                        logger.warning(
+                            f"Tool name collision: '{prefixed_name}' from server '{name}' "
+                            f"conflicts with same-named tool from server '{seen_prefixed_names[prefixed_name]}'. "
+                            f"The later tool will override the earlier one. Consider using unique prefixes."
+                        )
+                    seen_prefixed_names[prefixed_name] = name
+                
+                all_tools.extend(server_tools)
+                
+                logger.info(f"Registered {len(server_tools)} tools from MCP server '{name}'")
         
-        # Retry loop with exponential backoff
-        connected = False
-        last_error = None
-        
-        for attempt in range(max_retries):
+        # Create disconnect callback that closes the exit stack
+        async def disconnect_callback():
+            """Disconnect from all MCP servers."""
             try:
-                if attempt > 0:
-                    delay = min(2 ** attempt, 10)  # Exponential backoff: 2s, 4s, 8s, 10s max
-                    logger.debug(f"Retrying connection to '{name}' (attempt {attempt + 1}/{max_retries}) after {delay}s...")
-                    await asyncio.sleep(delay)
-                
-                logger.info(f"Connecting to MCP server '{name}' via {transport}...")
-                await group.connect_to_server(params)
-                connected = True
-                logger.info(f"Connected to MCP server '{name}'")
-                # Increment counter AFTER successful connection so next server gets different prefix
-                connection_counter[0] += 1
-                break
-                
+                await exit_stack.aclose()
             except Exception as e:
-                last_error = e
-                logger.warning(f"Connection attempt {attempt + 1} to '{name}' failed: {e}")
-                if attempt == max_retries - 1:
-                    # Last attempt failed
-                    if fail_silent:
-                        logger.warning(f"Failed to connect to MCP server '{name}' after {max_retries} attempts: {last_error}")
-                    else:
-                        raise ValueError(f"Failed to connect to MCP server '{name}': {last_error}") from last_error
+                logger.warning(f"Error during MCP disconnect: {e}")
         
-        if connected:
-            # Get newly added tools (SDK-namespaced, e.g., "_0_search", "_1_search")
-            new_sdk_tool_names = set(group.tools.keys()) - tools_before
-            
-            # Convert tools with this server's prefix and filters
-            server_tools = _convert_tools_for_agent(
-                group,
-                new_sdk_tool_names,
-                prefix,
-                include_tools,
-                exclude_tools,
-            )
-            
-            # Check for prefixed name collisions with tools from previous servers
-            for tool in server_tools:
-                prefixed_name = tool["definition"]["function"]["name"]
-                if prefixed_name in seen_prefixed_names:
-                    logger.warning(
-                        f"Tool name collision: '{prefixed_name}' from server '{name}' "
-                        f"conflicts with same-named tool from server '{seen_prefixed_names[prefixed_name]}'. "
-                        f"The later tool will override the earlier one. Consider using unique prefixes."
-                    )
-                seen_prefixed_names[prefixed_name] = name
-            
-            all_tools.extend(server_tools)
-            
-            logger.info(f"Registered {len(server_tools)} tools from MCP server '{name}'")
+        returned_successfully = True
+        return all_tools, disconnect_callback
     
-    # Create disconnect callback that closes the exit stack
-    async def disconnect_callback():
-        """Disconnect from all MCP servers."""
-        try:
-            await exit_stack.aclose()
-        except Exception as e:
-            logger.warning(f"Error during MCP disconnect: {e}")
-    
-    return all_tools, disconnect_callback
+    finally:
+        # If we didn't return successfully, clean up the exit stack
+        # (on success, the caller is responsible for calling disconnect_callback)
+        if not returned_successfully:
+            try:
+                await exit_stack.aclose()
+            except Exception as e:
+                logger.warning(f"Error cleaning up exit stack after failure: {e}")
