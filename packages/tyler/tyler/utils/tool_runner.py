@@ -1,6 +1,6 @@
 import importlib
 import inspect
-from typing import Dict, Any, List, Optional, Callable, Union, Coroutine, Iterator, KeysView, ItemsView, ValuesView, Mapping
+from typing import Dict, Any, List, Optional, Callable, Union, Coroutine, Iterator, KeysView, ItemsView, ValuesView, Mapping, Awaitable
 import os
 import glob
 from pathlib import Path
@@ -19,6 +19,10 @@ import base64
 logger = get_logger(__name__)
 
 
+# Type alias for progress callbacks (matches MCP SDK's ProgressFnT protocol)
+ProgressCallback = Callable[[float, Optional[float], Optional[str]], Awaitable[None]]
+
+
 @dataclass
 class ToolContext:
     """Context passed to tools during execution.
@@ -30,6 +34,9 @@ class ToolContext:
         tool_name: Name of the tool being executed
         tool_call_id: Unique identifier for the tool call
         deps: User-provided dependencies (database connections, API clients, etc.)
+        progress_callback: Optional async callback for reporting progress updates.
+            Used by MCP tools to emit progress events during long-running operations.
+            Signature: async (progress: float, total: float | None, message: str | None) -> None
     
     Example:
         ```python
@@ -47,6 +54,7 @@ class ToolContext:
     tool_name: Optional[str] = None
     tool_call_id: Optional[str] = None
     deps: Dict[str, Any] = field(default_factory=dict)
+    progress_callback: Optional[ProgressCallback] = None
     
     # Dict-style access for backward compatibility
     def __getitem__(self, key: str) -> Any:
@@ -84,6 +92,15 @@ class ToolContext:
     def __len__(self) -> int:
         """Return number of deps: len(ctx)"""
         return len(self.deps)
+    
+    def __bool__(self) -> bool:
+        """ToolContext is always truthy, even when deps is empty.
+        
+        Without this method, `bool(ctx)` would return False when deps is empty
+        because Python falls back to `__len__()`. This caused a bug where
+        `if ctx and ctx.progress_callback:` failed when deps={}.
+        """
+        return True
     
     def update(self, other: Union[Mapping[str, Any], "ToolContext", None] = None, **kwargs: Any) -> None:
         """Update deps with key/value pairs: ctx.update({"key": "value"})"""
@@ -256,28 +273,77 @@ class ToolRunner:
         except Exception as e:
             raise ValueError(f"Error executing tool '{tool_name}': {str(e)}")
     
+    # Valid parameter names for context injection
+    _CONTEXT_PARAM_NAMES = frozenset({'ctx', 'context', '_agent_ctx'})
+    
     def _tool_expects_context(self, implementation: Callable) -> bool:
         """Check if a tool implementation expects context injection.
         
-        A tool expects context if its first parameter is named 'ctx' or 'context'.
+        A tool expects context if its first parameter is named 'ctx', 'context',
+        or '_agent_ctx' AND the parameter does NOT have a default value (i.e., it's required).
+        
+        Parameters with default values (like `ctx: ToolContext = None`) are treated
+        as optional and will receive context if available, but won't raise an error
+        if context is not provided.
         
         Args:
             implementation: The tool function/coroutine
             
         Returns:
-            True if the tool expects context, False otherwise
+            True if the tool REQUIRES context (no default), False otherwise
         """
         try:
             sig = inspect.signature(implementation)
-            params = list(sig.parameters.keys())
+            params = list(sig.parameters.values())
             
             if not params:
                 return False
             
             first_param = params[0]
-            return first_param in ('ctx', 'context')
+            # Check if named 'ctx', 'context', or '_agent_ctx'
+            if first_param.name not in self._CONTEXT_PARAM_NAMES:
+                return False
+            
+            # Check if the parameter has a default value (is optional)
+            # If it has a default, context is optional and shouldn't raise error
+            if first_param.default is not inspect.Parameter.empty:
+                return False
+            
+            return True
         except (ValueError, TypeError):
             # If we can't inspect the signature, assume no context
+            return False
+
+    def _tool_accepts_optional_context(self, implementation: Callable) -> bool:
+        """Check if a tool implementation accepts an optional context parameter.
+        
+        A tool accepts optional context if its first parameter is named 'ctx', 'context',
+        or '_agent_ctx' AND the parameter HAS a default value (i.e., it's optional).
+        
+        These tools will receive context if available, but won't raise an error if not.
+        This is used by MCP tools which declare `_agent_ctx: Optional[ToolContext] = None`.
+        
+        Args:
+            implementation: The tool function/coroutine
+            
+        Returns:
+            True if the tool accepts optional context, False otherwise
+        """
+        try:
+            sig = inspect.signature(implementation)
+            params = list(sig.parameters.values())
+            
+            if not params:
+                return False
+            
+            first_param = params[0]
+            # Check if named 'ctx', 'context', or '_agent_ctx'
+            if first_param.name not in self._CONTEXT_PARAM_NAMES:
+                return False
+            
+            # Check if the parameter has a default value (is optional)
+            return first_param.default is not inspect.Parameter.empty
+        except (ValueError, TypeError):
             return False
 
     async def _execute_with_timeout(
@@ -341,15 +407,24 @@ class ToolRunner:
             known limitation of thread-based timeouts in Python. For truly
             cancellable timeouts, implement tools as async functions.
         """
-        expects_context = self._tool_expects_context(implementation)
+        requires_context = self._tool_expects_context(implementation)
+        accepts_context = self._tool_accepts_optional_context(implementation)
         
-        if expects_context:
+        if requires_context:
             if context is None:
                 raise ToolContextError(
                     f"Tool '{tool_name}' requires context (has 'ctx' or 'context' parameter) "
                     f"but no tool_context was provided to agent.run()"
                 )
             # Inject context as first argument
+            if is_async:
+                coro = implementation(context, **arguments)
+            else:
+                coro = asyncio.to_thread(
+                    lambda: implementation(context, **arguments)
+                )
+        elif accepts_context and context is not None:
+            # Tool accepts optional context and we have context available
             if is_async:
                 coro = implementation(context, **arguments)
             else:

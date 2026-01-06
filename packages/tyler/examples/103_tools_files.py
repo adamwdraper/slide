@@ -23,12 +23,14 @@ import json
 from pathlib import Path
 from tyler import Agent, Thread, Message, Attachment, ThreadStore
 
-try:
-    if os.getenv("WANDB_API_KEY"):
-        weave.init("tyler")
+# Initialize weave tracing if WANDB_PROJECT is set
+weave_project = os.getenv("WANDB_PROJECT")
+if weave_project:
+    try:
+        weave.init(weave_project)
         logger.debug("Weave tracing initialized successfully")
-except Exception as e:
-    logger.warning(f"Failed to initialize weave tracing: {e}. Continuing without weave.")
+    except Exception as e:
+        logger.warning(f"Failed to initialize weave tracing: {e}. Continuing without weave.")
 
 # Create thread store (will initialize automatically when needed)
 thread_store = ThreadStore()

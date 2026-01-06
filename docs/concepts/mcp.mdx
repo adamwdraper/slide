@@ -4,8 +4,7 @@ description: 'Using MCP to extend Slide agents with external tools and services'
 ---
 
 <Note>
-**Updated API**: Tyler now supports MCP through declarative configuration with `Agent(mcp={...})`.
-See the [MCP Integration Guide](/guides/mcp-integration) for the complete, up-to-date documentation.
+**Recommended Reading**: For practical implementation details, see the [MCP Integration Guide](/guides/mcp-integration).
 </Note>
 
 **💻 Code Examples**
@@ -40,8 +39,8 @@ The Model Context Protocol (MCP) is an open standard that enables seamless commu
 
 ```mermaid
 graph LR
-    A[Slide Agent] --> B[MCP Adapter]
-    B --> C[MCP Client]
+    A[Slide Agent] --> B[MCP SDK]
+    B --> C[ClientSessionGroup]
     C --> D[MCP Server 1]
     C --> E[MCP Server 2]
     C --> F[MCP Server N]
@@ -50,43 +49,51 @@ graph LR
     F --> I[APIs]
 ```
 
+Tyler uses the official MCP SDK's `ClientSessionGroup` to manage connections to multiple MCP servers simultaneously. This provides:
+
+- Automatic session lifecycle management
+- Tool discovery and aggregation across servers
+- Tool execution routing to the correct server
+- Support for all SDK transport types (stdio, SSE, StreamableHTTP)
+
 ## Quick Start
 
 ### Python API (Recommended)
 
 ```python
+import asyncio
 from tyler import Agent, Thread, Message
 
-# Create agent with MCP config (validates schema)
-agent = Agent(
-    name="Tyler",
-    model_name="gpt-4.1",
-    tools=["web"],
-    mcp={
-        "servers": [{
-            "name": "docs",
-            "transport": "streamablehttp",  # Use for Mintlify and hosted servers
-            "url": "https://slide.mintlify.app/mcp"
-        }]
-    }
-)
-
-# Connect to MCP servers (fail fast!)
-await agent.connect_mcp()
-    
-    # List available tools
-    tools = await adapter.list_tools()
-    print(f"Available MCP tools: {[t.name for t in tools]}")
-    
-    # Use the agent
-    thread = Thread()
-    message = Message(
-        role="user",
-        content="Use the database query tool to find all users created this week"
+async def main():
+    # Create agent with MCP config (validates schema immediately)
+    agent = Agent(
+        name="Tyler",
+        model_name="gpt-4.1",
+        tools=["web"],
+        mcp={
+            "servers": [{
+                "name": "docs",
+                "transport": "streamablehttp",  # Use for Mintlify and hosted servers
+                "url": "https://slide.mintlify.app/mcp"
+            }]
+        }
     )
-    thread.add_message(message)
+
+    # Connect to MCP servers (fail fast!)
+    await agent.connect_mcp()
+    
+    # Use the agent - MCP tools are now available
+    thread = Thread()
+    thread.add_message(Message(
+        role="user",
+        content="How do I create a Tyler agent?"
+    ))
     
     result = await agent.run(thread)
+    print(result.content)
+    
+    # Cleanup MCP connections
+    await agent.cleanup()
 
 if __name__ == "__main__":
     asyncio.run(main())
@@ -94,18 +101,21 @@ if __name__ == "__main__":
 
 ### Using MCP Tools
 
-Once connected, MCP tools are automatically available to your agent:
+Once connected, MCP tools are automatically available to your agent with namespaced names:
 
 ```python
-# Create thread and message
-thread = Thread()
-message = Message(
-    role="user",
-    content="Use the database query tool to find all users created this week"
-)
-thread.add_message(message)
+# Tools from server "docs" become available as:
+# - docs_SearchSlideFramework
+# - docs_GetDocument
+# etc.
 
-# Agent can now use any tools exposed by the MCP server
+# The agent automatically selects and uses appropriate tools
+thread = Thread()
+thread.add_message(Message(
+    role="user",
+    content="Search the Slide documentation for information about streaming"
+))
+
 result = await agent.run(thread)
 ```
 
@@ -113,44 +123,47 @@ result = await agent.run(thread)
 
 ### 1. Stdio Servers
 
-Local processes that communicate via standard input/output:
+Local processes that communicate via standard input/output. Great for local tools and development:
 
 ```python
-# Connect to a Node.js MCP server
-await adapter.connect("stdio://node ./mcp-server.js")
-
-# Connect to a Python MCP server
-await adapter.connect("stdio://python mcp_server.py")
-
-# With custom arguments
-await adapter.connect("stdio://./server --config production.json")
+mcp={
+    "servers": [{
+        "name": "filesystem",
+        "transport": "stdio",
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+        "env": {"NODE_ENV": "production"}  # Optional environment
+    }]
+}
 ```
 
-### 2. WebSocket Servers
+### 2. StreamableHTTP Servers
 
-Network-accessible servers:
+HTTP-based servers using the newer streaming protocol. Recommended for hosted MCP servers:
 
 ```python
-# Basic WebSocket connection
-await adapter.connect("ws://localhost:8080")
-
-# Secure WebSocket
-await adapter.connect("wss://mcp.example.com")
-
-# With authentication
-await adapter.connect(
-    "wss://mcp.example.com",
-    headers={"Authorization": "Bearer your-token"}
-)
+mcp={
+    "servers": [{
+        "name": "docs",
+        "transport": "streamablehttp",
+        "url": "https://slide.mintlify.app/mcp",
+        "headers": {"X-API-Key": "${API_KEY}"}  # Optional auth
+    }]
+}
 ```
 
 ### 3. SSE (Server-Sent Events) Servers
 
-For streaming connections:
+Legacy HTTP transport for streaming connections:
 
 ```python
-# Connect to SSE server
-await adapter.connect("sse://localhost:3000/events")
+mcp={
+    "servers": [{
+        "name": "legacy",
+        "transport": "sse",
+        "url": "https://legacy.example.com/mcp"
+    }]
+}
 ```
 
 ## Creating MCP Servers
@@ -168,7 +181,6 @@ mcp = FastMCP()
 @mcp.tool()
 async def search_knowledge_base(query: str) -> str:
     """Search internal knowledge base."""
-    # Your implementation
     results = await db.search(query)
     return format_results(results)
 
@@ -187,30 +199,6 @@ if __name__ == "__main__":
     mcp.run()
 ```
 
-### MCP Server Configuration
-
-```json
-{
-  "name": "my-tools-server",
-  "version": "1.0.0",
-  "tools": {
-    "search_knowledge_base": {
-      "description": "Search internal knowledge base",
-      "input_schema": {
-        "type": "object",
-        "properties": {
-          "query": {
-            "type": "string",
-            "description": "Search query"
-          }
-        },
-        "required": ["query"]
-      }
-    }
-  }
-}
-```
-
 ## Advanced MCP Usage
 
 ### Multiple Server Connections
@@ -218,332 +206,198 @@ if __name__ == "__main__":
 Connect to multiple MCP servers simultaneously:
 
 ```python
-import asyncio
-from tyler import Agent, Thread, Message
-from tyler.mcp import MCPAdapter
+agent = Agent(
+    name="multi-server-agent",
+    model_name="gpt-4.1",
+    mcp={
+        "servers": [
+            {
+                "name": "docs",
+                "transport": "streamablehttp",
+                "url": "https://slide.mintlify.app/mcp",
+                "prefix": "slide"  # Custom prefix
+            },
+            {
+                "name": "github",
+                "transport": "stdio",
+                "command": "npx",
+                "args": ["-y", "@modelcontextprotocol/server-github"],
+                "env": {"GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"},
+                "prefix": "gh",
+                "fail_silent": True  # Continue if GitHub unavailable
+            },
+            {
+                "name": "filesystem",
+                "transport": "stdio",
+                "command": "npx",
+                "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+                "exclude_tools": ["write_file", "delete_file"]  # Read-only
+            }
+        ]
+    }
+)
 
-async def main():
-    # Create adapter
-    adapter = MCPAdapter()
-    
-    # Connect to multiple servers
-    await adapter.connect("stdio://./database-tools")
-    await adapter.connect("ws://localhost:8080")  # API tools
-    await adapter.connect("stdio://./ml-tools")    # ML model tools
-    
-    # Agent has access to all tools
-    agent = Agent(
-        name="multi-server-agent",
-        model_name="gpt-4",
-        purpose="To use tools from multiple MCP servers",
-        mcp_adapter=adapter
-    )
-    
-    # List all available tools
-    all_tools = await adapter.list_tools()
-    print(f"Total tools available: {len(all_tools)}")
-    
-    # Use the agent
-    thread = Thread()
-    message = Message(role="user", content="Analyze the latest data and create predictions")
-    thread.add_message(message)
-    
-    result = await agent.run(thread)
+await agent.connect_mcp()
 
-if __name__ == "__main__":
-    asyncio.run(main())
+# Agent now has tools from all servers:
+# - slide_SearchSlideFramework
+# - gh_search_repos
+# - filesystem_read_file, filesystem_list_directory
 ```
 
-### Dynamic Tool Discovery
+### Tool Filtering
+
+Control which tools are available:
 
 ```python
-# Discover tools at runtime
-async def discover_and_use_tools(adapter: MCPAdapter, task: str):
-    # List available tools
-    tools = await adapter.list_tools()
-    
-    # Filter relevant tools
-    relevant_tools = [
-        t for t in tools 
-        if any(keyword in t.description.lower() 
-               for keyword in task.lower().split())
+{
+    "name": "filesystem",
+    "transport": "stdio",
+    "command": "mcp-server-filesystem",
+    "include_tools": ["read_file", "list_directory"],  # Whitelist
+    "exclude_tools": ["delete_file"]  # Blacklist (applied after include)
+}
+```
+
+### Custom Prefixes
+
+Override the default namespace prefix for cleaner tool names:
+
+```python
+{
+    "name": "wandb_documentation_server",  # Long server name
+    "prefix": "docs",  # Short, clean prefix
+    "transport": "streamablehttp",
+    "url": "https://docs.wandb.ai/mcp"
+}
+# Tools become: docs_search, docs_query (not wandb_documentation_server_search)
+```
+
+### Environment Variable Substitution
+
+Use environment variables for secrets (recommended!):
+
+```python
+mcp={
+    "servers": [{
+        "name": "api",
+        "transport": "streamablehttp",
+        "url": "https://api.example.com/mcp",
+        "headers": {
+            "Authorization": "Bearer ${API_TOKEN}",  # Substituted from env
+            "X-API-Key": "${API_KEY}"
+        }
+    }]
+}
+```
+
+### Graceful Degradation
+
+Control failure behavior per server:
+
+```python
+{
+    "servers": [
+        {
+            "name": "critical",
+            "url": "...",
+            "fail_silent": False  # Fail startup if unavailable
+        },
+        {
+            "name": "optional",
+            "url": "...",
+            "fail_silent": True  # Continue if unavailable (default)
+        }
     ]
-    
-    print(f"Found {len(relevant_tools)} relevant tools for: {task}")
-    
-    # Create specialized agent
-    agent = Agent(
-        name="dynamic-agent",
-        model_name="gpt-4",
-        purpose=f"You have access to these tools: {relevant_tools}",
-        mcp_adapter=adapter
-    )
-    
-    # Create thread and execute task
-    thread = Thread()
-    message = Message(role="user", content=task)
-    thread.add_message(message)
-    
-    result = await agent.run(thread)
-    return result.thread
+}
 ```
 
-### Context Sharing
-
-MCP enables context sharing between different systems:
-
-```python
-# Share context with MCP server
-await adapter.set_context({
-    "user_id": "12345",
-    "session": "current-session",
-    "preferences": {"language": "en", "timezone": "UTC"}
-})
-
-# Context is now available to all MCP tools
-thread = Thread()
-message = Message(
-    role="user",
-    content="Get personalized recommendations"
-    # MCP tools can access the context
-)
-thread.add_message(message)
-
-result = await agent.run(thread)
-```
-
-## MCP Security
-
-### Authentication
-
-```python
-# API Key authentication
-await adapter.connect(
-    "wss://mcp.example.com",
-    headers={"X-API-Key": os.getenv("MCP_API_KEY")}
-)
-
-# OAuth2 authentication
-token = await get_oauth_token()
-await adapter.connect(
-    "wss://mcp.example.com",
-    headers={"Authorization": f"Bearer {token}"}
-)
-```
-
-### Permission Management
-
-```python
-# Configure allowed tools
-adapter = MCPAdapter(
-    allowed_tools=["read_file", "list_directory"],  # Whitelist
-    blocked_tools=["delete_file", "execute_command"]  # Blacklist
-)
-```
-
-## Best practices
+## Best Practices
 
 <AccordionGroup>
   <Accordion title="1. Connection Management">
-    Always properly manage MCP connections:
+    Always cleanup MCP connections in long-running applications:
     ```python
-    adapter = MCPAdapter()
+    agent = Agent(mcp={...})
     try:
-        await adapter.connect("stdio://./server")
-        # Use adapter
+        await agent.connect_mcp()
+        # Use agent
     finally:
-        await adapter.disconnect()
+        await agent.cleanup()
     ```
     
-    Or use context managers:
+    For short scripts with `streamablehttp` transport, cleanup is required:
     ```python
-    async with MCPAdapter() as adapter:
-        await adapter.connect("stdio://./server")
-        # Adapter disconnects automatically
-    ```
-  </Accordion>
-
-  <Accordion title="2. Error Handling">
-    Handle MCP-specific errors:
-    ```python
-    from tyler.mcp.exceptions import (
-        MCPConnectionError,
-        MCPToolError,
-        MCPTimeoutError
-    )
-    
-    try:
-        await adapter.connect(server_url)
-    except MCPConnectionError as e:
-        print(f"Failed to connect: {e}")
-        # Implement fallback
-    except MCPTimeoutError as e:
-        print(f"Connection timeout: {e}")
-        # Retry logic
+    async def main():
+        agent = Agent(mcp={"servers": [{"transport": "streamablehttp", ...}]})
+        await agent.connect_mcp()
+        result = await agent.run(thread)
+        await agent.cleanup()  # Required for streamablehttp
     ```
   </Accordion>
 
-  <Accordion title="3. Tool Validation">
-    Validate tools before use:
+  <Accordion title="2. Security">
+    Never hardcode secrets:
     ```python
-    # Check if required tools are available
-    required_tools = ["database_query", "file_read"]
-    available = await adapter.list_tools()
-    available_names = [t.name for t in available]
+    # Good
+    "headers": {"Authorization": "Bearer ${API_TOKEN}"}
     
-    missing = set(required_tools) - set(available_names)
-    if missing:
-        raise ValueError(f"Missing required tools: {missing}")
+    # Bad
+    "headers": {"Authorization": "Bearer sk-1234567890"}
+    ```
+    
+    Only connect to trusted MCP servers - they execute with your agent's permissions.
+  </Accordion>
+
+  <Accordion title="3. Tool Organization">
+    Use custom prefixes for cleaner tool names:
+    ```python
+    {
+        "name": "long_server_name",
+        "prefix": "short",  # Tools become short_toolname
+        ...
+    }
     ```
   </Accordion>
 
-  <Accordion title="4. Performance Optimization">
-    Optimize MCP usage:
+  <Accordion title="4. Fail-Safe Configuration">
+    Use `fail_silent: True` for optional servers:
     ```python
-    # Cache tool lists
-    @functools.lru_cache(maxsize=10)
-    async def get_cached_tools(server_url: str):
-        adapter = MCPAdapter()
-        await adapter.connect(server_url)
-        return await adapter.list_tools()
-    
-    # Reuse connections
-    class MCPPool:
-        def __init__(self):
-            self.connections = {}
-        
-        async def get_adapter(self, server_url: str):
-            if server_url not in self.connections:
-                adapter = MCPAdapter()
-                await adapter.connect(server_url)
-                self.connections[server_url] = adapter
-            return self.connections[server_url]
+    {
+        "name": "optional_feature",
+        "fail_silent": True,  # Won't break startup
+        ...
+    }
     ```
   </Accordion>
 </AccordionGroup>
-
-## MCP + Slide Patterns
-
-### 1. Tool Aggregation Pattern
-
-Combine MCP tools with native Slide tools:
-
-```python
-from tyler import Agent, Thread, Message
-from tyler.mcp import MCPAdapter
-from lye import WEB_TOOLS, FILES_TOOLS
-
-async def main():
-    # Connect to MCP server for specialized tools
-    adapter = MCPAdapter()
-    await adapter.connect("stdio://./domain-specific-tools")
-    
-    # Create agent with both MCP and native tools
-    agent = Agent(
-        name="hybrid-agent",
-        model_name="gpt-4",
-        purpose="To use both native and MCP tools",
-        tools=[*WEB_TOOLS, *FILES_TOOLS],  # Native Slide tools
-        mcp_adapter=adapter  # MCP tools
-    )
-    
-    # Agent can use both tool sets
-    thread = Thread()
-    message = Message(
-        role="user",
-        content="Search the web for data and then process it with our custom analyzer"
-    )
-    thread.add_message(message)
-    
-    result = await agent.run(thread)
-```
-
-### 2. Fallback Pattern
-
-Use MCP tools as fallbacks:
-
-```python
-from tyler.exceptions import ToolError
-
-async def execute_with_fallback(agent: Agent, task: str):
-    thread = Thread()
-    message = Message(role="user", content=task)
-    thread.add_message(message)
-    
-    try:
-        # Try with native tools first
-        return await agent.run(thread)
-    except ToolError:
-        # Fallback to MCP tools
-        if agent.mcp_adapter:
-            # Force MCP tool usage by modifying the prompt
-            fallback_message = Message(
-                role="user",
-                content=f"Use MCP tools to: {task}"
-            )
-            fallback_thread = Thread()
-            fallback_thread.add_message(fallback_message)
-            return await agent.run(fallback_thread)
-        raise
-```
-
-### 3. Federation Pattern
-
-Create a network of specialized MCP servers:
-
-```python
-async def create_federated_agent():
-    adapter = MCPAdapter()
-    
-    # Connect to specialized servers
-    await adapter.connect("stdio://./nlp-tools")      # NLP tasks
-    await adapter.connect("stdio://./vision-tools")   # Computer vision
-    await adapter.connect("stdio://./data-tools")     # Data processing
-    
-    agent = Agent(
-        name="federated-agent",
-        model_name="gpt-4",
-        purpose="To coordinate across specialized tool servers",
-        mcp_adapter=adapter
-    )
-    
-    # Agent automatically routes to appropriate tools
-    thread = Thread()
-    message = Message(
-        role="user",
-        content="Analyze this image and create a summary report with data visualizations"
-    )
-    thread.add_message(message)
-    
-    result = await agent.run(thread)
-    return result.thread
-```
 
 ## Troubleshooting
 
 <Warning>
   Common MCP issues and solutions:
   
-  - **Connection refused**: Check if MCP server is running
-  - **Tool not found**: Verify tool is exposed by server
-  - **Timeout errors**: Increase timeout or check network
+  - **Connection refused**: Check if MCP server is running and URL is correct
+  - **Tool not found**: Verify tool is exposed by server, check `include_tools`/`exclude_tools`
+  - **Timeout errors**: Increase timeout or check network connectivity
   - **Permission denied**: Verify authentication credentials
+  - **Environment variable not substituted**: Ensure variable is set before running
 </Warning>
 
-## Next steps
+## Next Steps
 
 <CardGroup cols={2}>
   <Card
-    title="Tyler MCP Adapters"
+    title="MCP Integration Guide"
     icon="plug"
-    href="/packages/tyler/mcp-adapters"
+    href="/guides/mcp-integration"
   >
-    Deep dive into MCP adapters
+    Detailed configuration reference
   </Card>
   <Card
     title="MCP Examples"
     icon="code"
-    href="/packages/tyler/examples#mcp"
+    href="https://github.com/adamwdraper/slide/tree/main/packages/tyler/examples"
   >
     See MCP integration examples
   </Card>
@@ -561,4 +415,4 @@ async def create_federated_agent():
   >
     Read the MCP specification
   </Card>
-</CardGroup> 
+</CardGroup>

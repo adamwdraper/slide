@@ -183,6 +183,11 @@ class Agent(BaseModel):
         default=None,
         description="Default Pydantic model for structured output. When set, agent.run() will return validated structured data. Can be overridden per-run via agent.run(response_type=...)."
     )
+    tool_context: Optional[Dict[str, Any]] = Field(
+        default=None,
+        exclude=True,  # Non-serializable objects like DB connections
+        description="Default tool context for dependency injection. Contains static dependencies (database clients, API clients, config) that are passed to tools. Can be extended per-run via agent.run(tool_context=...) which merges with and overrides agent-level context."
+    )
     
     # Helper objects excluded from serialization (recreated on deserialization)
     message_factory: Optional[MessageFactory] = Field(default=None, exclude=True, description="Factory for creating standardized messages (excluded from serialization)")
@@ -396,12 +401,15 @@ class Agent(BaseModel):
             return tool_call
 
     @weave.op()
-    async def _handle_tool_execution(self, tool_call) -> dict:
+    async def _handle_tool_execution(self, tool_call, progress_callback=None) -> dict:
         """
         Execute a single tool call and format the result message
         
         Args:
             tool_call: The tool call object from the model response
+            progress_callback: Optional async callback for progress updates.
+                Signature: async (progress: float, total: float | None, message: str | None) -> None
+                Used by MCP tools to emit progress notifications during long-running operations.
         
         Returns:
             dict: Formatted tool result message
@@ -418,13 +426,51 @@ class Agent(BaseModel):
             # Note: Nested mutable objects (dicts within dicts) are still shared references.
             # We intentionally avoid deepcopy as it would fail for non-picklable objects
             # like database connections and API clients which are common deps.
+            deps_copy = dict(self._tool_context)
+            
+            # Handle progress callbacks - combine if both parameter and tool_context have one
+            # This allows streaming mode to emit TOOL_PROGRESS events while also calling
+            # a user's custom callback
+            user_callback = deps_copy.pop('progress_callback', None)
+            
+            if progress_callback is not None and user_callback is not None:
+                # Both exist - create composite that calls both (best-effort)
+                async def composite_callback(progress, total, message):
+                    # Call both callbacks, continuing even if one fails
+                    # Progress callbacks are informational, so we don't want
+                    # one failure to prevent the other from being called
+                    try:
+                        await progress_callback(progress, total, message)
+                    except Exception:
+                        pass  # Progress callback failure shouldn't stop execution
+                    try:
+                        await user_callback(progress, total, message)
+                    except Exception:
+                        pass  # Progress callback failure shouldn't stop execution
+                effective_progress_callback = composite_callback
+            elif progress_callback is not None:
+                effective_progress_callback = progress_callback
+            else:
+                effective_progress_callback = user_callback
+            
             rich_context = ToolContext(
                 tool_name=tool_name,
                 tool_call_id=tool_call_id,
-                deps=dict(self._tool_context)
+                deps=deps_copy,
+                progress_callback=effective_progress_callback,
             )
         else:
-            rich_context = None
+            # Create minimal context just for progress callback if provided
+            if progress_callback is not None:
+                tool_name = getattr(normalized_tool_call.function, 'name', None)
+                tool_call_id = getattr(normalized_tool_call, 'id', None)
+                rich_context = ToolContext(
+                    tool_name=tool_name,
+                    tool_call_id=tool_call_id,
+                    progress_callback=progress_callback,
+                )
+            else:
+                rich_context = None
         
         return await tool_runner.execute_tool_call(normalized_tool_call, context=rich_context)
     
@@ -750,8 +796,17 @@ class Agent(BaseModel):
                 "or response_format='json' for simple JSON mode without validation."
             )
         
-        # Store tool context for use by _handle_tool_execution
-        self._tool_context = tool_context
+        # Merge agent-level and run-level tool contexts
+        # Run-level context overrides agent-level context
+        if self.tool_context is not None or tool_context is not None:
+            merged_context = {}
+            if self.tool_context:
+                merged_context.update(self.tool_context)
+            if tool_context:
+                merged_context.update(tool_context)
+            self._tool_context = merged_context
+        else:
+            self._tool_context = None
         
         # Store response_format for use by step()
         self._response_format = response_format
@@ -1146,8 +1201,17 @@ class Agent(BaseModel):
                 if hasattr(chunk.choices[0].delta, 'content'):
                     print(chunk.choices[0].delta.content, end="")
         """
-        # Store tool context for use by _handle_tool_execution
-        self._tool_context = tool_context
+        # Merge agent-level and run-level tool contexts
+        # Run-level context overrides agent-level context
+        if self.tool_context is not None or tool_context is not None:
+            merged_context = {}
+            if self.tool_context:
+                merged_context.update(self.tool_context)
+            if tool_context:
+                merged_context.update(tool_context)
+            self._tool_context = merged_context
+        else:
+            self._tool_context = None
         
         try:
             if mode == "events":
@@ -1732,16 +1796,57 @@ class Agent(BaseModel):
                                 }
                             )
                         
-                        # Execute tools in parallel with timing
+                        # Execute tools in parallel with timing and real-time progress streaming
                         tool_start_times = {}
                         tool_tasks = []
                         
+                        # Use a queue for real-time progress event streaming
+                        # Events are put on queue as they occur, yielded immediately
+                        progress_queue: asyncio.Queue[Optional[ExecutionEvent]] = asyncio.Queue()
+                        
                         for tool_call in current_tool_calls:
                             tool_id = tool_call['id']
+                            tool_name = tool_call['function']['name']
                             tool_start_times[tool_id] = datetime.now(timezone.utc)
-                            tool_tasks.append(self._handle_tool_execution(tool_call))
+                            
+                            # Create progress callback that puts events on queue immediately
+                            def make_progress_callback(t_name, t_id, queue):
+                                async def progress_cb(progress: float, total: Optional[float] = None, message: Optional[str] = None):
+                                    await queue.put(ExecutionEvent(
+                                        type=EventType.TOOL_PROGRESS,
+                                        timestamp=datetime.now(timezone.utc),
+                                        data={
+                                            "tool_name": t_name,
+                                            "progress": progress,
+                                            "total": total,
+                                            "message": message,
+                                            "tool_call_id": t_id
+                                        }
+                                    ))
+                                return progress_cb
+                            
+                            progress_callback = make_progress_callback(tool_name, tool_id, progress_queue)
+                            tool_tasks.append(self._handle_tool_execution(tool_call, progress_callback=progress_callback))
                         
-                        tool_results = await asyncio.gather(*tool_tasks, return_exceptions=True)
+                        # Run tools and stream progress events concurrently
+                        async def run_tools_and_signal_done():
+                            """Run all tools then signal completion."""
+                            results = await asyncio.gather(*tool_tasks, return_exceptions=True)
+                            await progress_queue.put(None)  # Sentinel to signal completion
+                            return results
+                        
+                        # Start tool execution in background
+                        results_task = asyncio.create_task(run_tools_and_signal_done())
+                        
+                        # Yield progress events in real-time as they arrive
+                        while True:
+                            progress_event = await progress_queue.get()
+                            if progress_event is None:  # Sentinel - tools finished
+                                break
+                            yield progress_event
+                        
+                        # Get tool results (already completed)
+                        tool_results = await results_task
                         
                         # Process results
                         should_break = False

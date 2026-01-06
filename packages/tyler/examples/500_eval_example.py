@@ -25,12 +25,13 @@ from tyler.eval import (
 # Namespace-based imports - avoids name collisions!
 from lye import web, files
 
-# Initialize weave
-try:
-    if os.getenv("WANDB_API_KEY"):
-        weave.init("tyler-eval-example")
-except Exception as e:
-    print(f"Failed to initialize weave tracing: {e}. Continuing without weave.")
+# Initialize weave tracing if WANDB_PROJECT is set
+weave_project = os.getenv("WANDB_PROJECT")
+if weave_project:
+    try:
+        weave.init(weave_project)
+    except Exception as e:
+        print(f"Failed to initialize weave tracing: {e}. Continuing without weave.")
 
 
 async def main():

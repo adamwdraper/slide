@@ -94,21 +94,20 @@ class TestMCPIntegration:
             ]
         }
         
-        with patch('tyler.mcp.config_loader.MCPAdapter') as mock_adapter_class:
-            mock_adapter = MagicMock()
-            mock_adapter.connect = AsyncMock(return_value=True)
-            mock_adapter.disconnect_all = AsyncMock()
-            
-            # Return different tools for each server
-            def get_tools_side_effect(server_names=None):
-                if server_names and "server1" in server_names:
-                    return [{"definition": {"function": {"name": "tool1"}}, "implementation": AsyncMock()}]
-                elif server_names and "server2" in server_names:
-                    return [{"definition": {"function": {"name": "tool2"}}, "implementation": AsyncMock()}]
-                return []
-            
-            mock_adapter.get_tools_for_agent.side_effect = get_tools_side_effect
-            mock_adapter_class.return_value = mock_adapter
+        with patch('tyler.mcp.config_loader._load_mcp_config') as mock_load:
+            mock_load.return_value = (
+                [
+                    {
+                        "definition": {"type": "function", "function": {"name": "server1_tool1", "description": "Tool 1", "parameters": {}}},
+                        "implementation": AsyncMock()
+                    },
+                    {
+                        "definition": {"type": "function", "function": {"name": "s2_tool2", "description": "Tool 2", "parameters": {}}},
+                        "implementation": AsyncMock()
+                    }
+                ],
+                AsyncMock()  # disconnect callback
+            )
             
             agent = Agent(model_name="gpt-4o-mini", mcp=mcp_config)
             await agent.connect_mcp()
@@ -132,16 +131,18 @@ class TestMCPIntegration:
             }]
         }
         
-        with patch('tyler.mcp.config_loader.MCPAdapter') as mock_adapter_class:
-            mock_adapter = MagicMock()
-            mock_adapter.connect = AsyncMock(return_value=True)
-            mock_adapter.disconnect_all = AsyncMock()
-            mock_adapter.get_tools_for_agent.return_value = [
-                {"definition": {"function": {"name": "search"}}, "implementation": AsyncMock()},
-                {"definition": {"function": {"name": "query"}}, "implementation": AsyncMock()},
-                {"definition": {"function": {"name": "delete"}}, "implementation": AsyncMock()}
-            ]
-            mock_adapter_class.return_value = mock_adapter
+        with patch('tyler.mcp.config_loader._load_mcp_config') as mock_load:
+            # The SDK returns filtered tools - filtering happens in _load_mcp_config
+            mock_load.return_value = (
+                [
+                    {
+                        "definition": {"type": "function", "function": {"name": "test_search", "description": "Search", "parameters": {}}},
+                        "implementation": AsyncMock()
+                    }
+                    # query and delete are filtered out by _load_mcp_config
+                ],
+                AsyncMock()  # disconnect callback
+            )
             
             agent = Agent(model_name="gpt-4o-mini", mcp=mcp_config)
             await agent.connect_mcp()
@@ -163,15 +164,17 @@ class TestMCPIntegration:
             ]
         }
         
-        with patch('tyler.mcp.config_loader.MCPAdapter') as mock_adapter_class:
-            mock_adapter = MagicMock()
-            # First succeeds, second fails
-            mock_adapter.connect = AsyncMock(side_effect=[True, False])
-            mock_adapter.disconnect_all = AsyncMock()
-            mock_adapter.get_tools_for_agent.return_value = [
-                {"definition": {"function": {"name": "tool1"}}, "implementation": AsyncMock()}
-            ]
-            mock_adapter_class.return_value = mock_adapter
+        with patch('tyler.mcp.config_loader._load_mcp_config') as mock_load:
+            # _load_mcp_config handles fail_silent - only returns tools from working server
+            mock_load.return_value = (
+                [
+                    {
+                        "definition": {"type": "function", "function": {"name": "working_tool1", "description": "Tool 1", "parameters": {}}},
+                        "implementation": AsyncMock()
+                    }
+                ],
+                AsyncMock()  # disconnect callback
+            )
             
             agent = Agent(model_name="gpt-4o-mini", mcp=mcp_config)
             

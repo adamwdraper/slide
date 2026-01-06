@@ -49,6 +49,83 @@ class TestToolContextInjection:
         
         assert tool_runner._tool_expects_context(no_param_tool) is False
     
+    def test_tool_with_optional_context_does_not_require_context(self, tool_runner):
+        """Test that tools with optional ctx param (has default) don't require context."""
+        from typing import Optional
+        
+        async def tool_with_optional_ctx(ctx: Optional[ToolContext] = None, query: str = "") -> str:
+            return f"Query: {query}"
+        
+        # Should not require context (has default value)
+        assert tool_runner._tool_expects_context(tool_with_optional_ctx) is False
+        # But should accept optional context
+        assert tool_runner._tool_accepts_optional_context(tool_with_optional_ctx) is True
+    
+    def test_tool_with_required_context_requires_context(self, tool_runner):
+        """Test that tools with required ctx param (no default) require context."""
+        async def tool_with_required_ctx(ctx: ToolContext, query: str) -> str:
+            return f"Query: {query}"
+        
+        # Should require context (no default value)
+        assert tool_runner._tool_expects_context(tool_with_required_ctx) is True
+        # Should not be optional
+        assert tool_runner._tool_accepts_optional_context(tool_with_required_ctx) is False
+    
+    @pytest.mark.asyncio
+    async def test_optional_context_receives_context_when_provided(self, tool_runner):
+        """Test that tools with optional context still receive context when available."""
+        received_ctx = None
+        
+        async def tool_with_optional_ctx(ctx: ToolContext = None, value: str = "") -> str:
+            nonlocal received_ctx
+            received_ctx = ctx
+            return f"Value: {value}"
+        
+        tool_runner.register_tool(
+            name="optional_ctx_tool",
+            implementation=tool_with_optional_ctx,
+            definition={"name": "optional_ctx_tool", "parameters": {"type": "object"}}
+        )
+        
+        # Call with context provided
+        ctx = ToolContext(deps={"user_id": "test_user"})
+        result = await tool_runner.run_tool_async(
+            "optional_ctx_tool",
+            {"value": "hello"},
+            context=ctx
+        )
+        
+        assert result == "Value: hello"
+        assert received_ctx is not None
+        assert received_ctx["user_id"] == "test_user"
+    
+    @pytest.mark.asyncio
+    async def test_optional_context_works_without_context(self, tool_runner):
+        """Test that tools with optional context work when no context is provided."""
+        received_ctx = "not_called"
+        
+        async def tool_with_optional_ctx(ctx: ToolContext = None, value: str = "") -> str:
+            nonlocal received_ctx
+            received_ctx = ctx
+            return f"Value: {value}"
+        
+        tool_runner.register_tool(
+            name="optional_ctx_tool2",
+            implementation=tool_with_optional_ctx,
+            definition={"name": "optional_ctx_tool2", "parameters": {"type": "object"}}
+        )
+        
+        # Call without context - should NOT raise ToolContextError
+        result = await tool_runner.run_tool_async(
+            "optional_ctx_tool2",
+            {"value": "hello"},
+            context=None
+        )
+        
+        assert result == "Value: hello"
+        # Context param should not have been passed (tool uses default)
+        # The function was called without context argument
+    
     @pytest.mark.asyncio
     async def test_context_injection_async_tool(self, tool_runner):
         """Test context is injected into async tools."""
@@ -480,3 +557,344 @@ class TestToolContextDataclass:
         assert received_ctx.tool_call_id == "call_123"
         assert received_ctx["user_id"] == "test_user"
 
+
+class TestAgentLevelToolContext:
+    """Tests for agent-level tool_context that merges with run-level context."""
+    
+    @pytest.fixture
+    def agent_with_context(self):
+        """Create an agent with agent-level context."""
+        return Agent(
+            model_name="gpt-4o",
+            tool_context={"db_client": "mock_db", "config": {"timeout": 30}}
+        )
+    
+    @pytest.fixture
+    def thread(self):
+        """Create a test thread."""
+        thread = Thread()
+        thread.add_message(Message(role="user", content="Test message"))
+        return thread
+    
+    @pytest.mark.asyncio
+    async def test_agent_level_context_is_used(self, agent_with_context, thread):
+        """Test that agent-level tool_context is available during run."""
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].finish_reason = "stop"
+        mock_response.choices[0].message.content = "Done"
+        mock_response.choices[0].message.tool_calls = None
+        mock_response.choices[0].message.refusal = None
+        
+        with patch.object(agent_with_context, 'step', new_callable=AsyncMock) as mock_step:
+            mock_step.return_value = (mock_response, {"usage": {}})
+            
+            # Run without any run-level context
+            await agent_with_context.run(thread)
+            
+            # During run, _tool_context should have been set from agent-level
+            # (it's cleared after, so we check via the step call)
+            # The test verifies no error occurred with agent-level context
+    
+    @pytest.mark.asyncio
+    async def test_agent_level_context_cleared_after_run(self, agent_with_context, thread):
+        """Test that _tool_context is cleared after run even with agent-level context."""
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].finish_reason = "stop"
+        mock_response.choices[0].message.content = "Done"
+        mock_response.choices[0].message.tool_calls = None
+        
+        with patch.object(agent_with_context, 'step', new_callable=AsyncMock) as mock_step:
+            mock_step.return_value = (mock_response, {"usage": {}})
+            
+            await agent_with_context.run(thread)
+            
+            # _tool_context should be cleared after run
+            assert agent_with_context._tool_context is None
+            # But agent.tool_context still exists
+            assert agent_with_context.tool_context == {"db_client": "mock_db", "config": {"timeout": 30}}
+    
+    @pytest.mark.asyncio
+    async def test_run_level_context_merges_with_agent_level(self, agent_with_context, thread):
+        """Test that run-level context merges with agent-level context."""
+        captured_context = None
+        
+        async def capturing_step(*args, **kwargs):
+            nonlocal captured_context
+            # Capture the merged context during execution
+            captured_context = agent_with_context._tool_context
+            # Return a mock response
+            mock_response = MagicMock()
+            mock_response.choices = [MagicMock()]
+            mock_response.choices[0].finish_reason = "stop"
+            mock_response.choices[0].message.content = "Done"
+            mock_response.choices[0].message.tool_calls = None
+            mock_response.choices[0].message.refusal = None
+            return (mock_response, {"usage": {}})
+        
+        with patch.object(agent_with_context, 'step', side_effect=capturing_step):
+            # Run with per-run context that adds new keys
+            await agent_with_context.run(
+                thread,
+                tool_context={"run_key": "run_value"}
+            )
+        
+        # Verify merging happened
+        assert captured_context is not None
+        assert captured_context["db_client"] == "mock_db"      # From agent
+        assert captured_context["config"]["timeout"] == 30     # From agent  
+        assert captured_context["run_key"] == "run_value"      # From run
+    
+    @pytest.mark.asyncio
+    async def test_run_level_context_overrides_agent_level(self, agent_with_context, thread):
+        """Test that run-level context overrides agent-level for same keys."""
+        captured_context = None
+        
+        async def capturing_step(*args, **kwargs):
+            nonlocal captured_context
+            captured_context = agent_with_context._tool_context
+            mock_response = MagicMock()
+            mock_response.choices = [MagicMock()]
+            mock_response.choices[0].finish_reason = "stop"
+            mock_response.choices[0].message.content = "Done"
+            mock_response.choices[0].message.tool_calls = None
+            mock_response.choices[0].message.refusal = None
+            return (mock_response, {"usage": {}})
+        
+        with patch.object(agent_with_context, 'step', side_effect=capturing_step):
+            # Run with context that overrides db_client
+            await agent_with_context.run(
+                thread,
+                tool_context={"db_client": "overridden_db"}
+            )
+        
+        # Run-level should override agent-level
+        assert captured_context["db_client"] == "overridden_db"  # Overridden
+        assert captured_context["config"]["timeout"] == 30        # From agent
+    
+    @pytest.mark.asyncio
+    async def test_agent_without_context_uses_run_level_only(self, thread):
+        """Test agent without tool_context uses only run-level context."""
+        agent_no_context = Agent(model_name="gpt-4o")
+        captured_context = None
+        
+        async def capturing_step(*args, **kwargs):
+            nonlocal captured_context
+            captured_context = agent_no_context._tool_context
+            mock_response = MagicMock()
+            mock_response.choices = [MagicMock()]
+            mock_response.choices[0].finish_reason = "stop"
+            mock_response.choices[0].message.content = "Done"
+            mock_response.choices[0].message.tool_calls = None
+            mock_response.choices[0].message.refusal = None
+            return (mock_response, {"usage": {}})
+        
+        with patch.object(agent_no_context, 'step', side_effect=capturing_step):
+            await agent_no_context.run(
+                thread,
+                tool_context={"only_run": "value"}
+            )
+        
+        assert captured_context == {"only_run": "value"}
+
+
+class TestProgressCallbackIntegration:
+    """Test progress_callback handling in _handle_tool_execution."""
+    
+    @pytest.fixture
+    def captured_ctx_holder(self):
+        """Mutable container for captured context."""
+        return {"ctx": None}
+    
+    @pytest.fixture
+    def agent_with_inspecting_tool(self, captured_ctx_holder):
+        """Create an agent with a tool that captures its context."""
+        async def inspecting_tool(ctx=None, message: str = "") -> str:
+            captured_ctx_holder["ctx"] = ctx
+            return f"got: {message}"
+        
+        tool_def = {
+            "definition": {
+                "type": "function",
+                "function": {
+                    "name": "inspecting_tool",
+                    "description": "A tool that captures context",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "message": {"type": "string"}
+                        }
+                    }
+                }
+            },
+            "implementation": inspecting_tool
+        }
+        
+        return Agent(
+            model_name="gpt-4o-mini",
+            tools=[tool_def]
+        )
+    
+    @pytest.mark.asyncio
+    async def test_progress_callback_from_tool_context_dict(self, agent_with_inspecting_tool, captured_ctx_holder):
+        """Test that progress_callback in tool_context dict is extracted and used."""
+        callback_invocations = []
+        
+        async def my_callback(progress, total=None, message=None):
+            callback_invocations.append((progress, total, message))
+        
+        # Create tool call
+        tool_call = MagicMock()
+        tool_call.id = "call_123"
+        tool_call.function = MagicMock()
+        tool_call.function.name = "inspecting_tool"
+        tool_call.function.arguments = '{"message": "hello"}'
+        
+        # Set tool_context with progress_callback
+        agent_with_inspecting_tool._tool_context = {"progress_callback": my_callback, "user_id": "123"}
+        
+        result = await agent_with_inspecting_tool._handle_tool_execution(tool_call)
+        
+        # Verify the tool executed (returns raw result string)
+        assert "got: hello" in str(result)
+        
+        # Verify context was passed and has progress_callback on typed field
+        ctx = captured_ctx_holder["ctx"]
+        assert ctx is not None
+        assert ctx.progress_callback == my_callback
+    
+    @pytest.mark.asyncio
+    async def test_progress_callback_not_in_deps_after_extraction(self, agent_with_inspecting_tool, captured_ctx_holder):
+        """Test that progress_callback is removed from deps after extraction."""
+        async def my_callback(progress, total=None, message=None):
+            pass
+        
+        tool_call = MagicMock()
+        tool_call.id = "call_123"
+        tool_call.function = MagicMock()
+        tool_call.function.name = "inspecting_tool"
+        tool_call.function.arguments = '{"message": "hello"}'
+        
+        # Set tool_context with progress_callback
+        agent_with_inspecting_tool._tool_context = {"progress_callback": my_callback, "user_id": "123"}
+        
+        await agent_with_inspecting_tool._handle_tool_execution(tool_call)
+        
+        # Verify progress_callback is NOT in deps (was extracted to typed field)
+        ctx = captured_ctx_holder["ctx"]
+        assert ctx is not None
+        assert "progress_callback" not in ctx.deps
+        assert ctx.get("user_id") == "123"
+        # But it should be on the typed field
+        assert ctx.progress_callback is not None
+    
+    @pytest.fixture
+    def progress_tracking(self):
+        """Mutable containers for tracking progress invocations."""
+        return {
+            "streaming": [],
+            "user": []
+        }
+    
+    @pytest.fixture
+    def agent_with_progress_tool(self, progress_tracking):
+        """Create an agent with a tool that reports progress."""
+        async def tool_with_progress(ctx=None, steps: int = 3) -> str:
+            if ctx and ctx.progress_callback:
+                for i in range(steps):
+                    await ctx.progress_callback(i + 1, steps, f"Step {i+1}")
+            return "done"
+        
+        tool_def = {
+            "definition": {
+                "type": "function",
+                "function": {
+                    "name": "progress_tool",
+                    "description": "A tool that reports progress",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "steps": {"type": "integer", "default": 3}
+                        }
+                    }
+                }
+            },
+            "implementation": tool_with_progress
+        }
+        
+        return Agent(
+            model_name="gpt-4o-mini",
+            tools=[tool_def]
+        )
+    
+    @pytest.mark.asyncio
+    async def test_composite_callback_when_both_exist(self, agent_with_progress_tool, progress_tracking):
+        """Test that BOTH streaming callback AND user callback are called.
+        
+        This tests the critical bug fix where user's custom progress_callback
+        was being silently ignored when streaming mode also provided a callback.
+        """
+        async def streaming_callback(progress, total=None, message=None):
+            progress_tracking["streaming"].append(("stream", progress, total, message))
+        
+        async def user_callback(progress, total=None, message=None):
+            progress_tracking["user"].append(("user", progress, total, message))
+        
+        tool_call = MagicMock()
+        tool_call.id = "call_123"
+        tool_call.function = MagicMock()
+        tool_call.function.name = "progress_tool"
+        tool_call.function.arguments = '{"steps": 3}'
+        
+        # Set user callback in tool_context
+        agent_with_progress_tool._tool_context = {"progress_callback": user_callback}
+        
+        # Call with streaming callback parameter (simulates stream=events mode)
+        await agent_with_progress_tool._handle_tool_execution(tool_call, progress_callback=streaming_callback)
+        
+        # BOTH should have been called (composite callback)
+        assert len(progress_tracking["streaming"]) == 3, f"Streaming callback should be called 3 times, got {len(progress_tracking['streaming'])}"
+        assert len(progress_tracking["user"]) == 3, f"User callback should be called 3 times, got {len(progress_tracking['user'])}"
+        
+        # Verify data is correct
+        assert progress_tracking["streaming"][0] == ("stream", 1, 3, "Step 1")
+        assert progress_tracking["user"][0] == ("user", 1, 3, "Step 1")
+    
+    @pytest.mark.asyncio
+    async def test_only_streaming_callback_when_no_user_callback(self, agent_with_progress_tool, progress_tracking):
+        """Test that only streaming callback is used when no user callback."""
+        async def streaming_callback(progress, total=None, message=None):
+            progress_tracking["streaming"].append(progress)
+        
+        tool_call = MagicMock()
+        tool_call.id = "call_123"
+        tool_call.function = MagicMock()
+        tool_call.function.name = "progress_tool"
+        tool_call.function.arguments = '{"steps": 2}'
+        
+        # No user callback, empty tool_context
+        agent_with_progress_tool._tool_context = {}
+        
+        await agent_with_progress_tool._handle_tool_execution(tool_call, progress_callback=streaming_callback)
+        
+        assert len(progress_tracking["streaming"]) == 2
+    
+    @pytest.mark.asyncio
+    async def test_only_user_callback_when_no_streaming_callback(self, agent_with_progress_tool, progress_tracking):
+        """Test that only user callback is used when no streaming callback (run mode)."""
+        async def user_callback(progress, total=None, message=None):
+            progress_tracking["user"].append(progress)
+        
+        tool_call = MagicMock()
+        tool_call.id = "call_123"
+        tool_call.function = MagicMock()
+        tool_call.function.name = "progress_tool"
+        tool_call.function.arguments = '{"steps": 2}'
+        
+        # User callback in tool_context, no streaming callback parameter
+        agent_with_progress_tool._tool_context = {"progress_callback": user_callback}
+        
+        await agent_with_progress_tool._handle_tool_execution(tool_call)  # No progress_callback param
+        
+        assert len(progress_tracking["user"]) == 2

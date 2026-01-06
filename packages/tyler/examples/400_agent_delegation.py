@@ -16,12 +16,14 @@ load_dotenv()
 
 logger = get_logger(__name__)
 
-try:
-    if os.getenv("WANDB_API_KEY"):
-        weave.init("tyler")
+# Initialize weave tracing if WANDB_PROJECT is set
+weave_project = os.getenv("WANDB_PROJECT")
+if weave_project:
+    try:
+        weave.init(weave_project)
         logger.debug("Weave tracing initialized successfully")
-except Exception as e:
-    logger.warning(f"Failed to initialize weave tracing: {e}. Continuing without weave.")
+    except Exception as e:
+        logger.warning(f"Failed to initialize weave tracing: {e}. Continuing without weave.")
 
 async def main():
     # Create specialized agents

@@ -1,17 +1,23 @@
 ---
 title: 'ToolContext'
-description: 'Dataclass for dependency injection and metadata in tools'
+description: 'Request-scoped identity and metadata for tool execution'
 ---
 
 ## Overview
 
-`ToolContext` is a dataclass that represents the runtime context passed to tool functions. It enables dependency injection, allowing tools to access databases, API clients, user information, and other runtime dependencies. It also provides metadata about the current tool execution.
+`ToolContext` carries **request-scoped identity** to your tools—answering the question "who is making this request?" It provides user IDs, organization IDs, session information, and auth claims that tools need to act on behalf of specific users.
+
+<Tip>
+**Design principle**: ToolContext answers "who is making this request?" not "what infrastructure does this tool need?"
+
+Infrastructure dependencies (database clients, API clients, caches) are better captured at tool definition time via closures. This keeps your tools testable and your context lightweight.
+</Tip>
 
 ## Class Definition
 
 ```python
 from dataclasses import dataclass, field
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Callable, Awaitable
 
 @dataclass
 class ToolContext:
@@ -19,28 +25,86 @@ class ToolContext:
     tool_name: Optional[str] = None      # Name of the tool being executed
     tool_call_id: Optional[str] = None   # Unique ID for this tool call
     deps: Dict[str, Any] = field(default_factory=dict)  # User dependencies
+    progress_callback: Optional[Callable[[int, int, str], Awaitable[None]]] = None  # For progress updates
 ```
 
 ## Features
 
+- **Request identity**: Carry user_id, org_id, session_id, and auth claims
 - **Typed metadata fields**: Access `tool_name` and `tool_call_id` directly
-- **Dict-style access**: Full backward compatibility with `ctx["key"]` syntax
-- **Dependency injection**: Pass databases, API clients, user info to tools
+- **Dict-style access**: Simple `ctx["key"]` syntax for accessing identity data
+- **Lightweight**: Only request-scoped data, not infrastructure
 
 ## Using ToolContext
 
-### Accessing Dependencies (Dict-Style)
+### The Recommended Pattern
 
-Tools access user-provided dependencies using dict-style syntax:
+**Close over infrastructure at tool definition time, receive identity at runtime:**
 
 ```python
 from tyler import ToolContext
 
-async def get_user_data(ctx: ToolContext, user_id: str) -> str:
-    """Get user data from the database."""
-    db = ctx["db"]           # Access deps with []
-    user = await db.get_user(user_id)
-    return f"User: {user.name}, Email: {user.email}"
+# Infrastructure is captured when the tool is defined
+def create_order_tools(db, payment_api):
+    """Create order tools with infrastructure closed over."""
+    
+    async def get_my_orders(ctx: ToolContext, status: str = "all") -> str:
+        """Get orders for the current user."""
+        # Identity from context - "who is asking?"
+        user_id = ctx["user_id"]
+        org_id = ctx.get("org_id")
+        
+        # Infrastructure from closure - captured at definition time
+        orders = await db.query(
+            "SELECT * FROM orders WHERE user_id = ? AND org_id = ?",
+            [user_id, org_id]
+        )
+        return json.dumps(orders)
+    
+    async def create_order(ctx: ToolContext, product_id: str, quantity: int) -> str:
+        """Create an order for the current user."""
+        user_id = ctx["user_id"]
+        
+        # Use closed-over infrastructure
+        order = await db.insert("orders", {
+            "user_id": user_id,
+            "product_id": product_id,
+            "quantity": quantity
+        })
+        await payment_api.authorize(user_id, order.total)
+        return f"Order {order.id} created"
+    
+    return [get_my_orders, create_order]
+
+# At startup: create tools with infrastructure
+db = Database(connection_string)
+payment = PaymentAPI(api_key)
+order_tools = create_order_tools(db, payment)
+
+agent = Agent(model_name="gpt-4o", tools=order_tools)
+
+# At request time: pass only identity
+await agent.run(thread, tool_context={
+    "user_id": current_user.id,
+    "org_id": current_user.org_id,
+    "permissions": current_user.permissions
+})
+```
+
+### Accessing Identity Data
+
+Tools access request-scoped identity using dict-style syntax:
+
+```python
+from tyler import ToolContext
+
+async def get_user_preferences(ctx: ToolContext) -> str:
+    """Get preferences for the current user."""
+    user_id = ctx["user_id"]           # Required - raises KeyError if missing
+    org_id = ctx.get("org_id")         # Optional - returns None if missing
+    session_id = ctx.get("session_id") # Optional
+    
+    # ... fetch preferences for this user
 ```
 
 ### Accessing Metadata Fields
@@ -48,55 +112,85 @@ async def get_user_data(ctx: ToolContext, user_id: str) -> str:
 Tools can also access typed metadata about the current execution:
 
 ```python
-async def logged_operation(ctx: ToolContext, action: str) -> str:
-    """Perform an action with logging."""
-    # Access typed metadata fields directly
-    print(f"Tool: {ctx.tool_name}")
-    print(f"Call ID: {ctx.tool_call_id}")
+async def audited_action(ctx: ToolContext, action: str) -> str:
+    """Perform an action with audit logging."""
+    # Request identity
+    user_id = ctx["user_id"]
     
-    # Access user deps with dict-style
-    logger = ctx.get("logger")
-    if logger:
-        logger.info(f"Executing {action} in tool {ctx.tool_name}")
+    # Execution metadata (auto-populated)
+    tool_name = ctx.tool_name      # e.g., "audited_action"
+    call_id = ctx.tool_call_id     # e.g., "call_abc123"
+    
+    # Log the audit trail
+    await audit_log.write(
+        user=user_id,
+        action=action,
+        tool=tool_name,
+        call_id=call_id
+    )
     
     return f"Completed: {action}"
 ```
 
-### In Tool Definitions
-
-Tools that need runtime dependencies declare a `ctx` or `context` parameter as their first argument:
-
-```python
-from tyler import ToolContext
-
-async def get_user_data(ctx: ToolContext, user_id: str) -> str:
-    """Get user data from the database."""
-    db = ctx["db"]
-    user = await db.get_user(user_id)
-    return f"User: {user.name}, Email: {user.email}"
-```
-
 ### Passing Context to Agent
 
-When running the agent, provide the context dictionary:
+Context is provided per-request with the identity of who is making the request:
 
 ```python
-from tyler import Agent, Thread, Message
+from tyler import Agent
 
+# Agent setup (tools have infrastructure closed over)
 agent = Agent(
-    name="assistant",
     model_name="gpt-4o",
-    tools=[user_data_tool]
+    tools=order_tools  # Already have db, api clients via closures
 )
 
+# Each request passes identity
 result = await agent.run(
     thread,
     tool_context={
-        "db": database_connection,
-        "current_user": current_user,
-        "config": app_config
+        "user_id": request.user.id,
+        "org_id": request.user.org_id,
+        "session_id": request.session_id,
+        "permissions": request.user.permissions
     }
 )
+```
+
+#### Agent-Level Context (Shared Identity Defaults)
+
+For scenarios where some identity data is constant (e.g., service accounts, system agents):
+
+```python
+# System agent that always acts as a specific service account
+system_agent = Agent(
+    model_name="gpt-4o",
+    tools=admin_tools,
+    tool_context={
+        "user_id": "system",
+        "role": "admin"
+    }
+)
+
+# No per-request context needed for system operations
+await system_agent.run(thread)
+```
+
+#### Context Merging
+
+When both agent-level and run-level contexts are provided, they merge with run-level taking precedence:
+
+```python
+agent = Agent(
+    tool_context={"org_id": "default_org", "tier": "free"}
+)
+
+# Final context: org_id overridden, tier inherited, user_id added
+await agent.run(thread, tool_context={
+    "org_id": "premium_org",  # Overrides agent default
+    "user_id": "user_123"     # Added for this request
+})
+# Result: {"org_id": "premium_org", "tier": "free", "user_id": "user_123"}
 ```
 
 ## Parameter Naming Convention
@@ -134,6 +228,7 @@ These fields are automatically populated by the agent:
 | `tool_name` | `str \| None` | Name of the tool being executed |
 | `tool_call_id` | `str \| None` | Unique identifier for this tool call |
 | `deps` | `Dict[str, Any]` | User-provided dependencies |
+| `progress_callback` | `Callable \| None` | Async callback for reporting progress (MCP tools) |
 
 ```python
 async def my_tool(ctx: ToolContext, param: str) -> str:
@@ -161,101 +256,132 @@ async def my_tool(ctx: ToolContext, param: str) -> str:
 | `values()` | `ctx.values()` | Iterate over values |
 | `len()` | `len(ctx)` | Count of deps |
 
-## Common Dependency Keys
+## Common Context Keys
 
-Here are common keys used in the `deps` dictionary:
+Here are common keys used in ToolContext—all represent **request identity**, not infrastructure:
 
 | Key | Type | Description |
 |-----|------|-------------|
-| `db` | Database | Database connection or ORM session |
-| `current_user` | User | Currently authenticated user object |
 | `user_id` | str | Current user's ID |
-| `config` | dict | Application configuration |
-| `api_client` | Any | External API client instance |
-| `cache` | Cache | Caching layer |
-| `logger` | Logger | Logging instance |
+| `org_id` | str | Organization or tenant ID |
+| `session_id` | str | Current session identifier |
+| `permissions` | list[str] | User's permissions/scopes |
+| `roles` | list[str] | User's roles |
+| `auth_claims` | dict | JWT claims or auth metadata |
+| `request_id` | str | Trace ID for logging/debugging |
+| `locale` | str | User's locale preference |
+
+<Warning>
+**Avoid passing infrastructure in context.** Database connections, API clients, caches, and loggers should be closed over when defining tools, not passed per-request.
+</Warning>
 
 ## Examples
 
-### Database Access
+### Multi-Tenant Data Access
 
 ```python
-async def query_orders(ctx: ToolContext, status: str, limit: int = 10) -> str:
-    """Query orders from the database."""
-    db = ctx["db"]
-    user_id = ctx["user_id"]
+def create_data_tools(db):
+    """Tools with database closed over, identity from context."""
     
-    orders = await db.query(
-        "SELECT * FROM orders WHERE user_id = ? AND status = ? LIMIT ?",
-        [user_id, status, limit]
-    )
+    async def query_orders(ctx: ToolContext, status: str, limit: int = 10) -> str:
+        """Query orders for the current user."""
+        user_id = ctx["user_id"]
+        org_id = ctx["org_id"]  # Tenant isolation
+        
+        orders = await db.query(
+            "SELECT * FROM orders WHERE user_id = ? AND org_id = ? AND status = ? LIMIT ?",
+            [user_id, org_id, status, limit]
+        )
+        
+        return json.dumps([dict(o) for o in orders])
     
-    return json.dumps([dict(o) for o in orders])
+    return [query_orders]
 ```
 
-### API Client
+### Permission-Gated Actions
 
 ```python
-async def send_notification(ctx: ToolContext, message: str, channel: str) -> str:
-    """Send a notification via Slack."""
-    slack = ctx["slack_client"]
+def create_admin_tools(db, notification_service):
+    """Admin tools that check permissions from context."""
     
-    response = await slack.chat_postMessage(
-        channel=channel,
-        text=message
-    )
+    async def delete_user(ctx: ToolContext, target_user_id: str) -> str:
+        """Delete a user (admin only)."""
+        permissions = ctx.get("permissions", [])
+        
+        if "admin:delete_users" not in permissions:
+            return "Error: Insufficient permissions"
+        
+        admin_id = ctx["user_id"]  # Who is performing the action
+        await db.delete("users", target_user_id)
+        await notification_service.notify_admins(
+            f"User {target_user_id} deleted by {admin_id}"
+        )
+        
+        return f"User {target_user_id} deleted"
     
-    return f"Notification sent: {response['ts']}"
+    return [delete_user]
 ```
 
-### User Context
+### Personalized Recommendations
 
 ```python
-async def get_personalized_recommendations(ctx: ToolContext, category: str) -> str:
-    """Get recommendations based on user preferences."""
-    user = ctx["current_user"]
-    recommender = ctx["recommendation_service"]
+def create_recommendation_tools(recommender_api):
+    """Recommendation tools with API client closed over."""
     
-    recs = await recommender.get_recommendations(
-        user_id=user.id,
-        preferences=user.preferences,
-        category=category
-    )
+    async def get_recommendations(ctx: ToolContext, category: str) -> str:
+        """Get personalized recommendations for the current user."""
+        user_id = ctx["user_id"]
+        locale = ctx.get("locale", "en-US")
+        
+        recs = await recommender_api.get_recommendations(
+            user_id=user_id,
+            category=category,
+            locale=locale
+        )
+        
+        return json.dumps(recs)
     
-    return json.dumps(recs)
+    return [get_recommendations]
 ```
 
-### Configuration Access
+### Audit Logging
 
 ```python
-async def fetch_external_data(ctx: ToolContext, query: str) -> str:
-    """Fetch data from external API with configured settings."""
-    config = ctx["config"]
-    http_client = ctx["http_client"]
+def create_audited_tools(db, audit_log):
+    """Tools that log who performed each action."""
     
-    api_url = config["external_api_url"]
-    api_key = config["external_api_key"]
+    async def update_settings(ctx: ToolContext, settings: dict) -> str:
+        """Update account settings with audit trail."""
+        user_id = ctx["user_id"]
+        session_id = ctx.get("session_id")
+        request_id = ctx.get("request_id")
+        
+        await db.update("settings", user_id, settings)
+        
+        await audit_log.record({
+            "action": "update_settings",
+            "user_id": user_id,
+            "session_id": session_id,
+            "request_id": request_id,
+            "changes": settings
+        })
+        
+        return "Settings updated"
     
-    response = await http_client.get(
-        f"{api_url}/search",
-        params={"q": query},
-        headers={"Authorization": f"Bearer {api_key}"}
-    )
-    
-    return response.text
+    return [update_settings]
 ```
 
 ## Error Handling
 
 ### Missing Context
 
-When a tool expects context but none is provided:
+When a tool expects identity but none is provided:
 
 ```python
 from tyler import ToolContextError
 
-async def requires_db(ctx: ToolContext, query: str) -> str:
-    db = ctx["db"]  # KeyError if 'db' not in context
+async def requires_user(ctx: ToolContext, action: str) -> str:
+    user_id = ctx["user_id"]  # KeyError if not in context
     ...
 
 # This raises ToolContextError
@@ -265,24 +391,25 @@ except ToolContextError as e:
     print(f"Missing context: {e}")
 ```
 
-### Missing Keys
+### Missing Identity Keys
 
-Handle missing keys gracefully:
+Handle optional identity gracefully:
 
 ```python
 async def flexible_tool(ctx: ToolContext, action: str) -> str:
-    # Check for required keys
-    if "db" not in ctx:
-        raise ValueError("This tool requires 'db' in context")
+    # Required identity
+    if "user_id" not in ctx:
+        raise ValueError("This tool requires user_id in context")
+    user_id = ctx["user_id"]
     
-    # Use optional keys with defaults
-    logger = ctx.get("logger", logging.getLogger(__name__))
-    cache = ctx.get("cache")
+    # Optional identity with defaults
+    org_id = ctx.get("org_id", "default")
+    locale = ctx.get("locale", "en-US")
+    permissions = ctx.get("permissions", [])
     
-    if cache:
-        cached = await cache.get(action)
-        if cached:
-            return cached
+    # Check permissions before proceeding
+    if "write" not in permissions:
+        return "Error: Write permission required"
     
     # ... rest of implementation
 ```
@@ -294,14 +421,14 @@ async def flexible_tool(ctx: ToolContext, action: str) -> str:
 Tools without a context parameter work normally:
 
 ```python
-# This tool doesn't use context
+# This tool doesn't need identity
 async def simple_math(a: int, b: int) -> str:
     return str(a + b)
 
 # Context is ignored for this tool
 await agent.run(
     thread,
-    tool_context={"db": database}  # Passed but not used
+    tool_context={"user_id": "123"}  # Passed but not used
 )
 ```
 
@@ -312,104 +439,163 @@ The `ToolContext` dataclass is fully backward compatible. Existing tools using d
 ```python
 # This code works the same before and after the update
 async def existing_tool(ctx: ToolContext, query: str) -> str:
-    db = ctx["db"]                    # Still works
-    user_id = ctx.get("user_id")      # Still works
-    if "config" in ctx:               # Still works
-        config = ctx["config"]
+    user_id = ctx["user_id"]          # Still works
+    org_id = ctx.get("org_id")        # Still works
+    if "permissions" in ctx:          # Still works
+        permissions = ctx["permissions"]
     return "done"
 ```
 
 ## Testing with Context
 
-Mock context for testing:
+Testing is clean because infrastructure is separate from identity:
 
 ```python
 import pytest
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 @pytest.mark.asyncio
 async def test_query_orders():
-    # Create mock context
+    # Mock the infrastructure (closed over at tool creation)
     mock_db = AsyncMock()
     mock_db.query.return_value = [
         {"id": 1, "status": "pending"},
         {"id": 2, "status": "pending"}
     ]
     
-    ctx = {
-        "db": mock_db,
-        "user_id": "user_123"
-    }
+    # Create tool with mock infrastructure
+    tools = create_data_tools(mock_db)
+    query_orders = tools[0]
     
-    # Call tool directly
+    # Test with identity context only
+    ctx = {"user_id": "user_123", "org_id": "org_456"}
     result = await query_orders(ctx, status="pending", limit=10)
     
     # Verify
     assert "pending" in result
     mock_db.query.assert_called_once()
+    # Verify user_id was used in query
+    call_args = mock_db.query.call_args[0]
+    assert "user_123" in call_args[1]
+    assert "org_456" in call_args[1]
+```
+
+### Testing Permission Checks
+
+```python
+@pytest.mark.asyncio
+async def test_admin_action_requires_permission():
+    mock_db = AsyncMock()
+    tools = create_admin_tools(mock_db, AsyncMock())
+    delete_user = tools[0]
+    
+    # Test without admin permission
+    ctx = {"user_id": "user_123", "permissions": ["read"]}
+    result = await delete_user(ctx, target_user_id="user_456")
+    assert "Insufficient permissions" in result
+    mock_db.delete.assert_not_called()
+    
+    # Test with admin permission
+    ctx = {"user_id": "admin_1", "permissions": ["admin:delete_users"]}
+    result = await delete_user(ctx, target_user_id="user_456")
+    assert "deleted" in result
+    mock_db.delete.assert_called_once()
 ```
 
 ## Best Practices
 
-### Type Documentation
+### Close Over Infrastructure
 
-Document expected context keys in your tool's docstring:
+Capture databases, API clients, and other infrastructure when defining tools:
 
 ```python
-async def complex_tool(ctx: ToolContext, param: str) -> str:
+# ✅ Good: Infrastructure closed over at definition time
+def create_tools(db, cache, external_api):
+    async def fetch_data(ctx: ToolContext, query: str) -> str:
+        user_id = ctx["user_id"]  # Identity from context
+        return await db.query(query, user_id)  # Infrastructure from closure
+    return [fetch_data]
+
+# ❌ Avoid: Infrastructure in context
+async def fetch_data(ctx: ToolContext, query: str) -> str:
+    db = ctx["db"]  # Infrastructure shouldn't be here
+    return await db.query(query, ctx["user_id"])
+```
+
+### Document Expected Identity
+
+Document what identity keys your tools expect:
+
+```python
+async def sensitive_action(ctx: ToolContext, action: str) -> str:
     """
-    Perform a complex operation.
+    Perform a sensitive action.
     
     Args:
-        ctx: Runtime context containing:
-            - db (Database): Required. Database connection.
-            - cache (Cache): Optional. Caching layer.
-            - config (dict): Required. Application config with 'api_url' key.
-        param: The operation parameter.
+        ctx: Request context containing:
+            - user_id (str): Required. The authenticated user's ID.
+            - org_id (str): Required. The user's organization.
+            - permissions (list[str]): Required. User's permission scopes.
+            - session_id (str): Optional. For audit logging.
+        action: The action to perform.
     
     Returns:
-        Operation result as JSON string.
+        Result of the action.
     """
 ```
 
 ### Validation Helper
 
-Create a validation helper for complex context requirements:
+Create a validation helper for required identity:
 
 ```python
-def validate_context(ctx: ToolContext, required: list[str]) -> None:
-    """Validate that context contains required keys."""
-    missing = [key for key in required if key not in ctx]
+def require_identity(ctx: ToolContext, *keys: str) -> None:
+    """Validate that context contains required identity keys."""
+    missing = [key for key in keys if key not in ctx]
     if missing:
-        raise ValueError(f"Context missing required keys: {missing}")
+        raise ValueError(f"Missing required identity: {missing}")
 
 async def my_tool(ctx: ToolContext, param: str) -> str:
-    validate_context(ctx, ["db", "user_id", "config"])
+    require_identity(ctx, "user_id", "org_id")
     ...
 ```
 
-### Context Factory
+### Identity Factory
 
-Create context consistently across your application:
+Create identity context consistently from your auth layer:
 
 ```python
-class ToolContextFactory:
-    def __init__(self, db, config):
-        self.db = db
-        self.config = config
+class IdentityContext:
+    """Build tool context from authenticated requests."""
     
-    def create(self, user: User) -> ToolContext:
+    @staticmethod
+    def from_request(request) -> dict:
+        """Extract identity from an HTTP request."""
         return {
-            "db": self.db,
-            "config": self.config,
-            "current_user": user,
-            "user_id": user.id,
-            "logger": logging.getLogger(f"tools.{user.id}")
+            "user_id": request.user.id,
+            "org_id": request.user.org_id,
+            "permissions": request.user.permissions,
+            "session_id": request.session.id,
+            "request_id": request.headers.get("X-Request-ID"),
+            "locale": request.headers.get("Accept-Language", "en-US")
+        }
+    
+    @staticmethod
+    def from_jwt(claims: dict) -> dict:
+        """Extract identity from JWT claims."""
+        return {
+            "user_id": claims["sub"],
+            "org_id": claims.get("org"),
+            "permissions": claims.get("scope", "").split(),
+            "roles": claims.get("roles", [])
         }
 
-# Usage
-factory = ToolContextFactory(database, app_config)
-result = await agent.run(thread, tool_context=factory.create(current_user))
+# Usage in a web framework
+@app.post("/chat")
+async def chat(request: Request, message: str):
+    identity = IdentityContext.from_request(request)
+    result = await agent.run(thread, tool_context=identity)
+    return result
 ```
 
 ## See Also
