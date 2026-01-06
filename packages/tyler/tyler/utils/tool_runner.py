@@ -93,6 +93,15 @@ class ToolContext:
         """Return number of deps: len(ctx)"""
         return len(self.deps)
     
+    def __bool__(self) -> bool:
+        """ToolContext is always truthy, even when deps is empty.
+        
+        Without this method, `bool(ctx)` would return False when deps is empty
+        because Python falls back to `__len__()`. This caused a bug where
+        `if ctx and ctx.progress_callback:` failed when deps={}.
+        """
+        return True
+    
     def update(self, other: Union[Mapping[str, Any], "ToolContext", None] = None, **kwargs: Any) -> None:
         """Update deps with key/value pairs: ctx.update({"key": "value"})"""
         if other is not None:
