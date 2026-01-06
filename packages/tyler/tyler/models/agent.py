@@ -434,10 +434,19 @@ class Agent(BaseModel):
             user_callback = deps_copy.pop('progress_callback', None)
             
             if progress_callback is not None and user_callback is not None:
-                # Both exist - create composite that calls both
+                # Both exist - create composite that calls both (best-effort)
                 async def composite_callback(progress, total, message):
-                    await progress_callback(progress, total, message)
-                    await user_callback(progress, total, message)
+                    # Call both callbacks, continuing even if one fails
+                    # Progress callbacks are informational, so we don't want
+                    # one failure to prevent the other from being called
+                    try:
+                        await progress_callback(progress, total, message)
+                    except Exception:
+                        pass  # Progress callback failure shouldn't stop execution
+                    try:
+                        await user_callback(progress, total, message)
+                    except Exception:
+                        pass  # Progress callback failure shouldn't stop execution
                 effective_progress_callback = composite_callback
             elif progress_callback is not None:
                 effective_progress_callback = progress_callback

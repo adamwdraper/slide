@@ -266,8 +266,8 @@ async def example_custom_callback():
     finally:
         try:
             os.unlink(server_script)
-        except OSError:
-            pass
+        except OSError as e:
+            logger.debug(f"Failed to remove temporary MCP server script {server_script}: {e}")
 
 
 async def main():
