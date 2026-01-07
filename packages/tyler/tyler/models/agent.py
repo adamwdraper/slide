@@ -668,27 +668,37 @@ class Agent(BaseModel):
                     tool_calls = None
 
                 tool_results_by_id: Dict[str, Any] = {}
+                tool_durations_ms_by_id: Dict[str, float] = {}
                 if tool_calls:
-                    for tc in tool_calls:
+                    # Execute all tools concurrently (restore pre-refactor behavior).
+                    async def _run_one_tool(tc: Any) -> Tuple[Optional[str], Any, float]:
                         try:
-                            tc_id = tc.id if hasattr(tc, "id") else tc.get("id")
+                            tc_id_local = tc.id if hasattr(tc, "id") else tc.get("id")
                         except Exception:
-                            tc_id = None
-                        if not tc_id:
-                            continue
-                        # Execute tool but do not mutate the thread here. The run loop
-                        # will add tool messages in the correct order.
+                            tc_id_local = None
+                        if not tc_id_local:
+                            return None, None, 0.0
+
+                        start = datetime.now(timezone.utc)
                         try:
                             # _handle_tool_execution reads `self._tool_context` internally.
-                            tool_results_by_id[str(tc_id)] = await self._handle_tool_execution(tc)
+                            res = await self._handle_tool_execution(tc)
                         except Exception as tool_exc:
-                            # Preserve prior behavior: a single tool failure should not
-                            # abort the entire step/run; it should become a tool error
-                            # message in the run loop.
-                            tool_results_by_id[str(tc_id)] = tool_exc
+                            res = tool_exc
+                        duration_ms = (datetime.now(timezone.utc) - start).total_seconds() * 1000
+                        return str(tc_id_local), res, duration_ms
+
+                    tasks = [_run_one_tool(tc) for tc in tool_calls]
+                    results = await asyncio.gather(*tasks, return_exceptions=False)
+                    for tc_id, res, dur in results:
+                        if not tc_id:
+                            continue
+                        tool_results_by_id[tc_id] = res
+                        tool_durations_ms_by_id[tc_id] = dur
 
                 if tool_results_by_id:
                     metrics["_tool_execution_results"] = tool_results_by_id
+                    metrics["_tool_execution_durations_ms"] = tool_durations_ms_by_id
             
             return response, metrics
         except Exception as e:
@@ -1501,12 +1511,14 @@ class Agent(BaseModel):
                         should_break = False
                         if has_tool_calls:
                             tool_execution_results = metrics.get("_tool_execution_results", {}) or {}
+                            tool_execution_durations_ms = metrics.get("_tool_execution_durations_ms", {}) or {}
 
                             # Backward-compatibility: if step() did not execute tools (e.g. because
                             # it was patched in a test), execute them here so behavior matches the
                             # pre-refactor run loop.
                             if not tool_execution_results:
                                 tool_execution_results = {}
+                                tool_execution_durations_ms = {}
                                 for tc in tool_calls:
                                     try:
                                         tc_id = tc.id if hasattr(tc, "id") else tc.get("id")
@@ -1516,9 +1528,12 @@ class Agent(BaseModel):
                                         continue
                                     try:
                                         # _handle_tool_execution reads `self._tool_context` internally.
+                                        start = datetime.now(timezone.utc)
                                         tool_execution_results[str(tc_id)] = await self._handle_tool_execution(tc)
+                                        tool_execution_durations_ms[str(tc_id)] = (datetime.now(timezone.utc) - start).total_seconds() * 1000
                                     except Exception as tool_exc:
                                         tool_execution_results[str(tc_id)] = tool_exc
+                                        tool_execution_durations_ms[str(tc_id)] = (datetime.now(timezone.utc) - start).total_seconds() * 1000
 
                             # Record tool selections
                             for tool_call in tool_calls:
@@ -1545,6 +1560,7 @@ class Agent(BaseModel):
 
                                 # If execution didn't happen (e.g., missing id), treat as error
                                 result = tool_execution_results.get(str(tool_id))
+                                duration_ms = tool_execution_durations_ms.get(str(tool_id))
                                 if isinstance(result, Exception):
                                     record_event(EventType.TOOL_ERROR, {
                                         "tool_name": tool_name,
@@ -1569,7 +1585,7 @@ class Agent(BaseModel):
                                             "tool_name": tool_name,
                                             "result": result_content,
                                             "tool_call_id": tool_id,
-                                            "duration_ms": None
+                                            "duration_ms": duration_ms
                                         })
 
                                 # Process tool result into message
