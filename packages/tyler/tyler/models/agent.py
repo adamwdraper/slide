@@ -104,7 +104,6 @@ Use: "I've created an audio summary. You can listen to it [here](files/path/to/s
 This ensures the user can access the file correctly.
 </file_handling_instructions>""")
 
-    @weave.op()
     def system_prompt(self, purpose: Union[str, Prompt], name: str, model_name: str, tools: List[Dict], notes: Union[str, Prompt] = "") -> str:
         # Use cached tools description if available and tools haven't changed
         cache_key = f"{len(tools)}_{id(tools)}"
@@ -400,7 +399,6 @@ class Agent(BaseModel):
                 return ToolCallCopy(tool_call)
             return tool_call
 
-    @weave.op()
     async def _handle_tool_execution(self, tool_call, progress_callback=None) -> dict:
         """
         Execute a single tool call and format the result message
@@ -474,7 +472,6 @@ class Agent(BaseModel):
         
         return await tool_runner.execute_tool_call(normalized_tool_call, context=rich_context)
     
-    @weave.op()
     async def _get_completion(self, **completion_params) -> Any:
         """Get a completion from the LLM with weave tracing.
         
@@ -541,8 +538,15 @@ class Agent(BaseModel):
         api_start_time = datetime.now(timezone.utc)
         
         try:
-            # Get completion with weave call tracking (kept for backward compatibility)
-            response, call = await self._get_completion.call(self, **completion_params)
+            # Backward-compatible behavior:
+            # - If tests/users patch `_get_completion` with an object that exposes `.call(...)`,
+            #   use it to get `(response, call)` for metrics.
+            # - Otherwise call the coroutine directly and treat call info as unavailable.
+            if hasattr(self._get_completion, "call"):
+                response, call = await self._get_completion.call(self, **completion_params)
+            else:
+                response = await self._get_completion(**completion_params)
+                call = None
             
             # Use CompletionHandler to build metrics
             metrics = self.completion_handler._build_metrics(api_start_time, response, call)
@@ -562,7 +566,7 @@ class Agent(BaseModel):
                     "type": "agent",
                     "attributes": {
                         "model": self.model_name,
-                        "purpose": self.purpose
+                        "purpose": str(self.purpose)
                     }
                 }
             )
@@ -570,7 +574,6 @@ class Agent(BaseModel):
             thread.add_message(error_msg)
             return thread, [error_msg]
 
-    @weave.op()
     async def _get_thread(self, thread_or_id: Union[str, Thread]) -> Thread:
         """Get thread object from ID or return the thread object directly."""
         if isinstance(thread_or_id, str):
@@ -582,7 +585,6 @@ class Agent(BaseModel):
             return thread
         return thread_or_id
 
-    @weave.op()
     def _serialize_tool_calls(self, tool_calls: Optional[List[Any]]) -> Optional[List[Dict]]:
         """Serialize tool calls to a list of dictionaries.
 
@@ -616,7 +618,6 @@ class Agent(BaseModel):
                 })
         return serialized if serialized else None
 
-    @weave.op()
     async def _process_tool_call(self, tool_call, thread: Thread, new_messages: List[Message]) -> bool:
         """Process a single tool call and return whether to break the iteration."""
         # Get tool name based on tool_call type
@@ -705,7 +706,6 @@ class Agent(BaseModel):
             new_messages.append(error_message)
             return False
 
-    @weave.op()
     async def _handle_max_iterations(self, thread: Thread, new_messages: List[Message]) -> Tuple[Thread, List[Message]]:
         """Handle the case when max iterations is reached."""
         message = self.message_factory.create_max_iterations_message()
@@ -854,7 +854,6 @@ class Agent(BaseModel):
             }
         }
     
-    @weave.op()
     async def _run_with_structured_output(
         self,
         thread_or_id: Union[Thread, str],
@@ -1151,7 +1150,6 @@ class Agent(BaseModel):
                 last_response=last_response
             )
     
-    @weave.op()
     async def stream(
         self,
         thread_or_id: Union[Thread, str],
@@ -1230,7 +1228,6 @@ class Agent(BaseModel):
             # Clear tool context after execution
             self._tool_context = None
     
-    @weave.op()
     async def _run_complete(self, thread_or_id: Union[Thread, str]) -> AgentResult:
         """Non-streaming implementation that collects all events and returns AgentResult."""
         # Initialize execution tracking
@@ -1514,7 +1511,6 @@ class Agent(BaseModel):
                 content=None
             )
 
-    @weave.op()
     async def _stream_events(self, thread_or_id: Union[Thread, str]) -> AsyncGenerator[ExecutionEvent, None]:
         """Streaming implementation that yields ExecutionEvent objects in real-time."""
         try:
@@ -2091,7 +2087,6 @@ class Agent(BaseModel):
         
         return tool_message, should_break
     
-    @weave.op()
     async def _stream_raw(self, thread_or_id: Union[Thread, str]) -> AsyncGenerator[Any, None]:
         """
         Raw streaming implementation that yields unmodified LiteLLM chunks while executing tools.

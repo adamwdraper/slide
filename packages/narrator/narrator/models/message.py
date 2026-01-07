@@ -213,13 +213,13 @@ class Message(BaseModel):
                 
         return serialized_calls
 
-    def model_dump(self, mode: str = "json") -> Dict[str, Any]:
-        """Convert message to a dictionary suitable for JSON serialization
-        
+    def to_dict(self, mode: Literal["json", "python"] = "json") -> Dict[str, Any]:
+        """Return a stable dict representation intended for serialization/logging.
+
         Args:
-            mode: Serialization mode, either "json" or "python". 
-                 "json" converts datetimes to ISO strings (default).
-                 "python" keeps datetimes as datetime objects.
+            mode: Serialization mode, either "json" or "python".
+                - "json": converts datetimes to ISO strings (default).
+                - "python": keeps datetimes as datetime objects.
         """
         message_dict = {
             "id": self.id,
@@ -274,6 +274,16 @@ class Message(BaseModel):
                 message_dict["attachments"].append(attachment_dict)
             
         return message_dict
+
+    def model_dump(self, *, mode: Literal["json", "python"] = "json", **kwargs: Any) -> Dict[str, Any]:
+        """Pydantic-compatible model_dump.
+
+        - If called without extra kwargs, preserve legacy behavior by returning `to_dict`.
+        - Otherwise, delegate to Pydantic's default implementation.
+        """
+        if not kwargs:
+            return self.to_dict(mode=mode)
+        return super().model_dump(mode=mode, **kwargs)
         
     def to_chat_completion_message(self, file_store: Optional[FileStore] = None) -> Dict[str, Any]:
         """Return message in the format expected by chat completion APIs

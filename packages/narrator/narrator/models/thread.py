@@ -47,23 +47,33 @@ class Thread(BaseModel):
             return value.replace(tzinfo=timezone.utc)
         return value
 
-    def model_dump(self, mode: str = "json") -> Dict[str, Any]:
-        """Convert thread to a dictionary suitable for JSON serialization
-        
+    def to_dict(self, mode: Literal["json", "python"] = "json") -> Dict[str, Any]:
+        """Return a stable dict representation intended for serialization/logging.
+
         Args:
-            mode: Serialization mode, either "json" or "python". 
-                 "json" converts datetimes to ISO strings (default).
-                 "python" keeps datetimes as datetime objects.
+            mode: Serialization mode, either "json" or "python".
+                - "json": converts datetimes to ISO strings (default).
+                - "python": keeps datetimes as datetime objects.
         """
         return {
             "id": self.id,
             "title": self.title,
-            "messages": [msg.model_dump(mode=mode) for msg in self.messages],
+            "messages": [msg.to_dict(mode=mode) for msg in self.messages],
             "created_at": self.created_at.isoformat() if mode == "json" else self.created_at,
             "updated_at": self.updated_at.isoformat() if mode == "json" else self.updated_at,
             "attributes": self.attributes,
-            "platforms": self.platforms
+            "platforms": self.platforms,
         }
+
+    def model_dump(self, *, mode: Literal["json", "python"] = "json", **kwargs: Any) -> Dict[str, Any]:
+        """Pydantic-compatible model_dump.
+
+        - If called without extra kwargs, preserve legacy behavior by returning `to_dict`.
+        - Otherwise, delegate to Pydantic's default implementation.
+        """
+        if not kwargs:
+            return self.to_dict(mode=mode)
+        return super().model_dump(mode=mode, **kwargs)
     
     def add_message(self, message: Message, same_turn: bool = False) -> None:
         """Add a new message to the thread and update analytics
