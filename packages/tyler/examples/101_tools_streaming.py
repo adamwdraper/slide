@@ -16,6 +16,7 @@ import weave
 import sys
 from tyler import Agent, Thread, Message, EventType
 
+@weave.op(name="calculate")
 def custom_calculator_implementation(operation: str, x: float, y: float) -> str:
     """
     Implementation of a simple calculator tool.
