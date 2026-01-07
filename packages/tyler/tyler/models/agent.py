@@ -26,6 +26,108 @@ import asyncio
 from functools import partial
 
 
+def _weave_stream_accumulator(state: Any | None, value: Any) -> dict:
+    """Accumulate yields from Agent.stream() into a compact, serializable summary.
+
+    This is only for Weave tracing output; it does not change what `stream()` yields.
+    Handles both `mode="events"` (ExecutionEvent yields) and `mode="raw"` (provider chunks).
+    """
+    if state is None or not isinstance(state, dict):
+        state = {
+            "mode": None,
+            "content": "",
+            "thinking": "",
+            "events": {"counts": {}},
+            "tools": [],
+            "errors": [],
+            "metrics": {},
+        }
+
+    def _bump(event_name: str) -> None:
+        counts = state.setdefault("events", {}).setdefault("counts", {})
+        counts[event_name] = int(counts.get(event_name, 0)) + 1
+
+    # --- Events mode (Tyler ExecutionEvent) ---
+    if hasattr(value, "type") and hasattr(value, "data"):
+        try:
+            event_type = getattr(value.type, "value", None) or str(value.type)
+        except Exception:
+            event_type = "unknown"
+
+        state["mode"] = state.get("mode") or "events"
+        _bump(event_type)
+
+        data = getattr(value, "data", {}) or {}
+
+        if event_type == "llm_stream_chunk":
+            chunk = data.get("content_chunk")
+            if chunk:
+                state["content"] = (state.get("content") or "") + str(chunk)
+        elif event_type == "llm_thinking_chunk":
+            chunk = data.get("thinking_chunk")
+            if chunk:
+                state["thinking"] = (state.get("thinking") or "") + str(chunk)
+        elif event_type == "tool_selected":
+            state.setdefault("tools", []).append(
+                {
+                    "tool_name": data.get("tool_name"),
+                    "tool_call_id": data.get("tool_call_id"),
+                    "arguments": data.get("arguments"),
+                    "status": "selected",
+                }
+            )
+        elif event_type == "tool_result":
+            state.setdefault("tools", []).append(
+                {
+                    "tool_name": data.get("tool_name"),
+                    "tool_call_id": data.get("tool_call_id"),
+                    "result": data.get("result"),
+                    "duration_ms": data.get("duration_ms"),
+                    "status": "result",
+                }
+            )
+        elif event_type == "tool_error":
+            state.setdefault("errors", []).append(
+                {
+                    "tool_name": data.get("tool_name"),
+                    "tool_call_id": data.get("tool_call_id"),
+                    "error": data.get("error"),
+                }
+            )
+        elif event_type == "llm_response":
+            tokens = data.get("tokens")
+            if isinstance(tokens, dict) and tokens:
+                state.setdefault("metrics", {})["tokens"] = tokens
+            latency = data.get("latency_ms")
+            if latency is not None:
+                state.setdefault("metrics", {})["latency_ms"] = latency
+            if data.get("tool_calls") is not None:
+                state.setdefault("metrics", {})["tool_calls"] = data.get("tool_calls")
+        elif event_type == "execution_complete":
+            if "duration_ms" in data:
+                state.setdefault("metrics", {})["duration_ms"] = data.get("duration_ms")
+            if "total_tokens" in data:
+                state.setdefault("metrics", {})["total_tokens"] = data.get("total_tokens")
+
+        return state
+
+    # --- Raw mode (best-effort) ---
+    state["mode"] = state.get("mode") or "raw"
+    try:
+        choices = getattr(value, "choices", None)
+        if choices:
+            delta = getattr(choices[0], "delta", None)
+            if delta is not None and hasattr(delta, "content"):
+                content = getattr(delta, "content", None)
+                if content:
+                    state["content"] = (state.get("content") or "") + str(content)
+    except Exception:
+        # Chunk shapes vary by provider; keep tracing robust.
+        pass
+
+    return state
+
+
 
 class AgentPrompt(Prompt):
     system_template: str = Field(default="""<agent_overview>
@@ -1187,6 +1289,7 @@ class Agent(BaseModel):
                 last_response=last_response
             )
     
+    @weave.op(accumulator=_weave_stream_accumulator)
     async def stream(
         self,
         thread_or_id: Union[Thread, str],
