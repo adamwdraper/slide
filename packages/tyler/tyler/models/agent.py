@@ -491,14 +491,15 @@ class Agent(BaseModel):
         stream: bool = False,
         tools: Optional[List[Dict]] = None,
         system_prompt: Optional[str] = None,
-        tool_choice: Optional[str] = None
+        tool_choice: Optional[str] = None,
+        execute_tools: bool = False,
     ) -> Tuple[Any, Dict]:
         """Execute a single step of the agent's processing.
         
         A step consists of:
         1. Getting a completion from the LLM
         2. Collecting metrics about the completion
-        3. Processing any tool calls if present
+        3. (Optional) Executing any tool calls produced by the completion
         
         Args:
             thread: The thread to process
@@ -507,6 +508,9 @@ class Agent(BaseModel):
             system_prompt: Optional system prompt override. If None, uses self._system_prompt.
             tool_choice: Optional tool_choice parameter for LLM. Use "required" to force
                 tool calls (used for structured output), "auto" for default behavior.
+            execute_tools: If True, execute any tool calls produced by this completion
+                *within* the step (so tool ops nest under this step in traces). Tool
+                execution results are returned in `metrics["_tool_execution_results"]`.
             
         Returns:
             Tuple[Any, Dict]: The completion response and metrics.
@@ -550,6 +554,33 @@ class Agent(BaseModel):
             
             # Use CompletionHandler to build metrics
             metrics = self.completion_handler._build_metrics(api_start_time, response, call)
+
+            # Optionally execute tool calls within the step to keep the step span
+            # inclusive (completion + resulting work) for tracing purposes.
+            if execute_tools:
+                tool_calls = None
+                try:
+                    if response and hasattr(response, "choices") and response.choices:
+                        assistant_message = response.choices[0].message
+                        tool_calls = getattr(assistant_message, "tool_calls", None)
+                except Exception:
+                    tool_calls = None
+
+                tool_results_by_id: Dict[str, Any] = {}
+                if tool_calls:
+                    for tc in tool_calls:
+                        try:
+                            tc_id = tc.id if hasattr(tc, "id") else tc.get("id")
+                        except Exception:
+                            tc_id = None
+                        if not tc_id:
+                            continue
+                        # Execute tool but do not mutate the thread here. The run loop
+                        # will add tool messages in the correct order.
+                        tool_results_by_id[str(tc_id)] = await self._handle_tool_execution(tc)
+
+                if tool_results_by_id:
+                    metrics["_tool_execution_results"] = tool_results_by_id
             
             return response, metrics
         except Exception as e:
@@ -1288,8 +1319,9 @@ class Agent(BaseModel):
                             "temperature": self.temperature
                         })
                         
-                        # Get completion
-                        response, metrics = await self.step(thread)
+                        # Get completion (+ optionally execute resulting tools inside the step
+                        # so tool ops nest under the step span for tracing).
+                        response, metrics = await self.step(thread, execute_tools=True)
                         
                         if not response or not hasattr(response, 'choices') or not response.choices:
                             error_msg = "No response received from chat completion"
@@ -1336,47 +1368,33 @@ class Agent(BaseModel):
                         # Process tool calls
                         should_break = False
                         if has_tool_calls:
+                            tool_execution_results = metrics.get("_tool_execution_results", {}) or {}
+
                             # Record tool selections
                             for tool_call in tool_calls:
                                 tool_name = tool_call.function.name if hasattr(tool_call, 'function') else tool_call['function']['name']
                                 tool_id = tool_call.id if hasattr(tool_call, 'id') else tool_call.get('id')
                                 args = tool_call.function.arguments if hasattr(tool_call, 'function') else tool_call['function']['arguments']
-                                
+
                                 # Parse arguments
                                 try:
                                     parsed_args = json.loads(args) if isinstance(args, str) else args
                                 except (json.JSONDecodeError, TypeError, AttributeError):
                                     parsed_args = {}
-                                
+
                                 record_event(EventType.TOOL_SELECTED, {
                                     "tool_name": tool_name,
                                     "arguments": parsed_args,
                                     "tool_call_id": tool_id
                                 })
-                            
-                            # Execute tools in parallel with timing
-                            tool_start_times = {}
-                            tool_tasks = []
-                            
+
+                            # Process results (tools were executed inside step)
                             for tool_call in tool_calls:
-                                tool_id = tool_call.id if hasattr(tool_call, 'id') else tool_call.get('id')
-                                tool_start_times[tool_id] = datetime.now(timezone.utc)
-                                tool_tasks.append(self._handle_tool_execution(tool_call))
-                            
-                            tool_results = await asyncio.gather(*tool_tasks, return_exceptions=True)
-                            
-                            # Process results
-                            should_break = False
-                            for i, result in enumerate(tool_results):
-                                tool_call = tool_calls[i]
                                 tool_name = tool_call.function.name if hasattr(tool_call, 'function') else tool_call['function']['name']
                                 tool_id = tool_call.id if hasattr(tool_call, 'id') else tool_call.get('id')
-                                
-                                # Calculate duration
-                                tool_end_time = datetime.now(timezone.utc)
-                                tool_duration_ms = (tool_end_time - tool_start_times[tool_id]).total_seconds() * 1000
-                                
-                                # Record tool result or error
+
+                                # If execution didn't happen (e.g., missing id), treat as error
+                                result = tool_execution_results.get(str(tool_id))
                                 if isinstance(result, Exception):
                                     record_event(EventType.TOOL_ERROR, {
                                         "tool_name": tool_name,
@@ -1385,24 +1403,31 @@ class Agent(BaseModel):
                                     })
                                 else:
                                     # Extract result content
-                                    if isinstance(result, tuple) and len(result) >= 1:
-                                        result_content = str(result[0])
+                                    if result is None:
+                                        record_event(EventType.TOOL_ERROR, {
+                                            "tool_name": tool_name,
+                                            "error": "Tool result missing",
+                                            "tool_call_id": tool_id
+                                        })
                                     else:
-                                        result_content = str(result)
-                                    
-                                    record_event(EventType.TOOL_RESULT, {
-                                        "tool_name": tool_name,
-                                        "result": result_content,
-                                        "tool_call_id": tool_id,
-                                        "duration_ms": tool_duration_ms
-                                    })
-                                
+                                        if isinstance(result, tuple) and len(result) >= 1:
+                                            result_content = str(result[0])
+                                        else:
+                                            result_content = str(result)
+
+                                        record_event(EventType.TOOL_RESULT, {
+                                            "tool_name": tool_name,
+                                            "result": result_content,
+                                            "tool_call_id": tool_id,
+                                            "duration_ms": None
+                                        })
+
                                 # Process tool result into message
                                 tool_message, break_iteration = self._process_tool_result(result, tool_call, tool_name)
                                 thread.add_message(tool_message)
                                 new_messages.append(tool_message)
                                 record_event(EventType.MESSAGE_CREATED, {"message": tool_message})
-                                
+
                                 if break_iteration:
                                     should_break = True
                                 
