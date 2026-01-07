@@ -95,7 +95,7 @@ async def main():
 
     # Example conversation with web page fetch followed by calculations
     conversations = [
-        "Can you fetch the content from https://adamwdraper.github.io/tyler/?",
+        "Can you fetch the content from https://slide.mintlify.app/introduction?",
         "Let's do a calculation: what is 537 divided by 3?"
     ]
 

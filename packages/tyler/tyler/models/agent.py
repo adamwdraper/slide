@@ -555,9 +555,8 @@ class Agent(BaseModel):
             # Use CompletionHandler to build metrics
             metrics = self.completion_handler._build_metrics(api_start_time, response, call)
 
-            # Optionally execute tool calls within the step to keep the step span
-            # inclusive (completion + resulting work) for tracing purposes.
-            if execute_tools:
+            # Optionally execute tool calls
+            if execute_tools or getattr(self, "_execute_tools_in_step", False):
                 tool_calls = None
                 try:
                     if response and hasattr(response, "choices") and response.choices:
@@ -577,7 +576,14 @@ class Agent(BaseModel):
                             continue
                         # Execute tool but do not mutate the thread here. The run loop
                         # will add tool messages in the correct order.
-                        tool_results_by_id[str(tc_id)] = await self._handle_tool_execution(tc)
+                        try:
+                            # _handle_tool_execution reads `self._tool_context` internally.
+                            tool_results_by_id[str(tc_id)] = await self._handle_tool_execution(tc)
+                        except Exception as tool_exc:
+                            # Preserve prior behavior: a single tool failure should not
+                            # abort the entire step/run; it should become a tool error
+                            # message in the run loop.
+                            tool_results_by_id[str(tc_id)] = tool_exc
 
                 if tool_results_by_id:
                     metrics["_tool_execution_results"] = tool_results_by_id
@@ -1319,10 +1325,33 @@ class Agent(BaseModel):
                             "temperature": self.temperature
                         })
                         
-                        # Get completion (+ optionally execute resulting tools inside the step
-                        # so tool ops nest under the step span for tracing).
-                        response, metrics = await self.step(thread, execute_tools=True)
-                        
+                        # Get completion (+ execute resulting tools *inside the step* so tool
+                        # ops nest under the step span for tracing). We use an internal flag
+                        # rather than a kwarg so tests that patch `step()` with a side_effect
+                        # (without accepting extra kwargs) keep working.
+                        self._execute_tools_in_step = True
+                        try:
+                            response, metrics = await self.step(thread)
+                        finally:
+                            self._execute_tools_in_step = False
+
+                        # Backward-compatible step error behavior: some callers/tests expect
+                        # `step()` to append an assistant error message and return
+                        # `(thread, [error_message])` instead of raising.
+                        if isinstance(response, Thread):
+                            thread = response
+                            if isinstance(metrics, list):
+                                for msg in metrics:
+                                    new_messages.append(msg)
+                                    record_event(EventType.MESSAGE_CREATED, {"message": msg})
+                            record_event(EventType.EXECUTION_ERROR, {
+                                "error_type": "StepError",
+                                "message": metrics[-1].content if isinstance(metrics, list) and metrics else "Step error"
+                            })
+                            if self.thread_store:
+                                await self.thread_store.save(thread)
+                            break
+
                         if not response or not hasattr(response, 'choices') or not response.choices:
                             error_msg = "No response received from chat completion"
                             logging.getLogger(__name__).error(error_msg)
@@ -1369,6 +1398,24 @@ class Agent(BaseModel):
                         should_break = False
                         if has_tool_calls:
                             tool_execution_results = metrics.get("_tool_execution_results", {}) or {}
+
+                            # Backward-compatibility: if step() did not execute tools (e.g. because
+                            # it was patched in a test), execute them here so behavior matches the
+                            # pre-refactor run loop.
+                            if not tool_execution_results:
+                                tool_execution_results = {}
+                                for tc in tool_calls:
+                                    try:
+                                        tc_id = tc.id if hasattr(tc, "id") else tc.get("id")
+                                    except Exception:
+                                        tc_id = None
+                                    if not tc_id:
+                                        continue
+                                    try:
+                                        # _handle_tool_execution reads `self._tool_context` internally.
+                                        tool_execution_results[str(tc_id)] = await self._handle_tool_execution(tc)
+                                    except Exception as tool_exc:
+                                        tool_execution_results[str(tc_id)] = tool_exc
 
                             # Record tool selections
                             for tool_call in tool_calls:
