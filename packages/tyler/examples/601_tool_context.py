@@ -54,7 +54,7 @@ class MockDatabase:
 # Tools that use context injection
 # Note: The first parameter must be named 'ctx' or 'context'
 
-@weave.op(name="get_my_orders")
+@weave.op()
 async def get_my_orders(ctx: ToolContext, limit: int = 5) -> str:
     """Get the current user's orders.
     
@@ -79,7 +79,7 @@ async def get_my_orders(ctx: ToolContext, limit: int = 5) -> str:
     })
 
 
-@weave.op(name="get_my_preferences")
+@weave.op()
 async def get_my_preferences(ctx: ToolContext) -> str:
     """Get the current user's preferences.
     
@@ -102,7 +102,7 @@ async def get_my_preferences(ctx: ToolContext) -> str:
     })
 
 
-@weave.op(name="get_current_user_info")
+@weave.op()
 def get_current_user_info(ctx: ToolContext) -> str:
     """Get information about the current user.
     
@@ -122,7 +122,7 @@ def get_current_user_info(ctx: ToolContext) -> str:
     return f"Current user: {user_name} (ID: {user_id}, Tier: {user_tier})"
 
 
-@weave.op(name="get_debug_info")
+@weave.op()
 async def get_debug_info(ctx: ToolContext) -> str:
     """Get debug information about the current tool execution.
     

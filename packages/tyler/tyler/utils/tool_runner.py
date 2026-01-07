@@ -627,7 +627,6 @@ class ToolRunner:
             tools.append(tool_def)
         return tools
 
-    @weave.op()
     async def execute_tool_call(
         self, 
         tool_call, 
