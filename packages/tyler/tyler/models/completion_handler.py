@@ -59,7 +59,6 @@ class CompletionHandler:
         self.drop_params = drop_params
         self.reasoning = reasoning
     
-    @weave.op()
     async def get_completion(
         self,
         system_prompt: str,
@@ -209,7 +208,6 @@ class CompletionHandler:
         
         return modified_tools
     
-    @weave.op()
     async def _get_completion_with_tracking(self, **completion_params) -> Tuple[Any, Any]:
         """Get completion from LLM with weave tracking.
         

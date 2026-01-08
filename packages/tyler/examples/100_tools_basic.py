@@ -16,6 +16,7 @@ import weave
 import sys
 from tyler import Agent, Thread, Message
 
+@weave.op()
 def custom_calculator_implementation(operation: str, x: float, y: float) -> str:
     """
     Implementation of a simple calculator tool.
@@ -94,7 +95,7 @@ async def main():
 
     # Example conversation with web page fetch followed by calculations
     conversations = [
-        "Can you fetch the content from https://adamwdraper.github.io/tyler/?",
+        "Can you fetch the content from https://slide.mintlify.app/introduction?",
         "Let's do a calculation: what is 537 divided by 3?"
     ]
 

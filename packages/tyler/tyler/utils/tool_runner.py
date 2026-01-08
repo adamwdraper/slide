@@ -187,7 +187,6 @@ class ToolRunner:
         tool = self.tools.get(name)
         return tool['definition'] if tool else None
 
-    @weave.op()
     def run_tool(self, tool_name: str, parameters: Dict[str, Any]) -> Any:
         """
         Executes a synchronous tool by name with the given parameters.
@@ -218,7 +217,6 @@ class ToolRunner:
         except Exception as e:
             raise ValueError(f"Error executing tool '{tool_name}': {str(e)}")
 
-    @weave.op()
     async def run_tool_async(
         self, 
         tool_name: str, 
@@ -629,7 +627,6 @@ class ToolRunner:
             tools.append(tool_def)
         return tools
 
-    @weave.op()
     async def execute_tool_call(
         self, 
         tool_call, 

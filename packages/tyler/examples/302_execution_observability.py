@@ -18,6 +18,7 @@ import sys
 from tyler import Agent, Thread, Message, EventType, ExecutionEvent, AgentResult
 
 # Define a simple tool to demonstrate tool usage tracking
+@weave.op()
 def calculate(expression: str) -> str:
     """Evaluate a mathematical expression."""
     try:

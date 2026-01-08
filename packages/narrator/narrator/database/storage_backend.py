@@ -160,7 +160,7 @@ class MemoryBackend(StorageBackend):
         # Traverse all threads and messages
         for thread in self._threads.values():
             for message in thread.messages:
-                current: Any = message.model_dump(mode="python")
+                current: Any = message.to_dict(mode="python")
                 # Navigate the nested structure
                 parts = [p for p in path.split('.') if p]
                 for part in parts:

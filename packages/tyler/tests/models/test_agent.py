@@ -40,6 +40,69 @@ class MockToolCall:
         self.type = "function"
         self.function = SimpleNamespace(name=function_name, arguments=arguments)
 
+
+@pytest.mark.asyncio
+async def test_run_tool_returning_none_is_not_treated_as_missing(agent):
+    """A tool may legitimately return None; it should be recorded as TOOL_RESULT, not TOOL_ERROR."""
+    # Patch the ExecutionEvent constructor used by Agent._run_complete to capture events.
+    from tyler.models import agent as agent_module
+
+    captured = []
+
+    class CapturingExecutionEvent:
+        def __init__(self, type, timestamp, data, attributes=None):
+            self.type = type
+            self.timestamp = timestamp
+            self.data = data
+            self.attributes = attributes
+            captured.append(self)
+
+    original_execution_event = agent_module.ExecutionEvent
+    agent_module.ExecutionEvent = CapturingExecutionEvent
+    try:
+        thread = Thread(id="test-conv", title="Test Thread")
+
+        tool_id = "tool-1"
+        tool_call = MockToolCall(id=tool_id, function_name="test_tool", arguments="{}")
+        mock_message = MockMessage(content=None, tool_calls=[tool_call])
+        mock_response = MockResponse(choices=[MockChoice(message=mock_message)])
+        mock_message2 = MockMessage(content="done", tool_calls=None)
+        mock_response2 = MockResponse(choices=[MockChoice(message=mock_message2)])
+
+        # Make step return a tool call and claim it executed the tool with a None result.
+        step_calls = {"n": 0}
+        async def mock_step(*args, **kwargs):
+            step_calls["n"] += 1
+            if step_calls["n"] == 1:
+                return mock_response, {
+                    "_tool_execution_results": {tool_id: None},
+                    "_tool_execution_durations_ms": {tool_id: 1.0},
+                }
+            return mock_response2, {}
+
+        with patch.object(agent, "_get_thread", return_value=thread):
+            with patch.object(agent, "step", side_effect=mock_step):
+                await agent.run(thread)
+
+        tool_errors = [
+            e
+            for e in captured
+            if getattr(e, "type", None) == agent_module.EventType.TOOL_ERROR
+            and (e.data or {}).get("tool_call_id") == tool_id
+        ]
+        tool_results = [
+            e
+            for e in captured
+            if getattr(e, "type", None) == agent_module.EventType.TOOL_RESULT
+            and (e.data or {}).get("tool_call_id") == tool_id
+        ]
+
+        assert tool_errors == [], "Tool returning None should not emit TOOL_ERROR"
+        assert len(tool_results) == 1
+        assert tool_results[0].data.get("result") == "None"
+    finally:
+        agent_module.ExecutionEvent = original_execution_event
+
 @pytest.fixture(autouse=True)
 def mock_openai():
     """Mock OpenAI client to prevent real API calls"""
