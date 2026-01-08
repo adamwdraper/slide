@@ -49,9 +49,9 @@ class Thread(BaseModel):
 
     def to_dict(self, mode: Literal["json", "python"] = "json") -> Dict[str, Any]:
         """Return a stable dict representation intended for serialization/logging.
-
+        
         Args:
-            mode: Serialization mode, either "json" or "python".
+            mode: Serialization mode, either "json" or "python". 
                 - "json": converts datetimes to ISO strings (default).
                 - "python": keeps datetimes as datetime objects.
         """
