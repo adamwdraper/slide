@@ -2294,25 +2294,25 @@ class Agent(BaseModel):
                                     })
                                 else:
                                     result = tool_execution_results.get(key)
-                                    if isinstance(result, Exception):
-                                        record_event(EventType.TOOL_ERROR, {
-                                            "tool_name": tool_name,
-                                            "error": str(result),
-                                            "tool_call_id": tool_id
-                                        })
-                                    else:
+                                if isinstance(result, Exception):
+                                    record_event(EventType.TOOL_ERROR, {
+                                        "tool_name": tool_name,
+                                        "error": str(result),
+                                        "tool_call_id": tool_id
+                                    })
+                                else:
                                         # Extract result content (None is a valid successful return)
-                                        if isinstance(result, tuple) and len(result) >= 1:
-                                            result_content = str(result[0])
-                                        else:
-                                            result_content = str(result)
-                                        
-                                        record_event(EventType.TOOL_RESULT, {
-                                            "tool_name": tool_name,
-                                            "result": result_content,
-                                            "tool_call_id": tool_id,
+                                    if isinstance(result, tuple) and len(result) >= 1:
+                                        result_content = str(result[0])
+                                    else:
+                                        result_content = str(result)
+                                    
+                                    record_event(EventType.TOOL_RESULT, {
+                                        "tool_name": tool_name,
+                                        "result": result_content,
+                                        "tool_call_id": tool_id,
                                             "duration_ms": duration_ms
-                                        })
+                                    })
                                 
                                 # Process tool result into message
                                 tool_message, break_iteration = self._process_tool_result(result, tool_call, tool_name)
