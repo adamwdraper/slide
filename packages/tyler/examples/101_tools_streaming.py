@@ -39,37 +39,6 @@ def custom_calculator_implementation(operation: str, x: float, y: float) -> str:
     except Exception as e:
         return f"Error performing calculation: {str(e)}"
 
-# Define custom calculator tool
-custom_calculator_tool = {
-    "definition": {
-        "type": "function",
-        "function": {
-            "name": "calculate",
-            "description": "Perform basic mathematical operations",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "operation": {
-                        "type": "string",
-                        "description": "The mathematical operation to perform (add, subtract, multiply, divide)",
-                        "enum": ["add", "subtract", "multiply", "divide"]
-                    },
-                    "x": {
-                        "type": "number",
-                        "description": "First number"
-                    },
-                    "y": {
-                        "type": "number",
-                        "description": "Second number"
-                    }
-                },
-                "required": ["operation", "x", "y"]
-            }
-        }
-    },
-    "implementation": custom_calculator_implementation
-}
-
 # Initialize weave tracing if WANDB_PROJECT is set
 weave_project = os.getenv("WANDB_PROJECT")
 if weave_project:
@@ -82,10 +51,9 @@ if weave_project:
 # Initialize the agent with both built-in and custom tools
 agent = Agent(
     model_name="gpt-4.1",
-    purpose="To help with calculations and web searches",
+    purpose="To give concise answers to questions with web searches",
     tools=[
         "web",                    # Load the web tools module
-        custom_calculator_tool,   # Add our calculator tool
     ]
 )
 
@@ -95,8 +63,8 @@ async def main():
 
     # Example conversation with web page fetch followed by calculations
     conversations = [
-        "Can you fetch the content from https://adamwdraper.github.io/tyler/?",
-        "Let's do a calculation: what is 537 divided by 3?"
+        "What is https://slide.mintlify.app/introduction and should I use it?",
+        "Show me the code for creating a basic agent with Slide"
     ]
 
     for user_input in conversations:
