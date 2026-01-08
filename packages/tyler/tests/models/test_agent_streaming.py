@@ -74,7 +74,7 @@ def mock_litellm():
 
 @pytest.fixture
 def agent(mock_litellm):
-    with patch('tyler.models.agent.tool_runner', create_autospec(tool_runner)):
+    with patch('tyler.models.agent_tools.tool_runner', create_autospec(tool_runner)):
         agent = Agent(
             model_name="gpt-4.1",
             temperature=0.7,
@@ -146,7 +146,7 @@ async def test_stream_with_tool_calls():
     mock_weave_call.id = "test-weave-id"
     
     with patch.object(agent, '_get_completion') as mock_get_completion, \
-         patch('tyler.models.agent.tool_runner') as mock_tool_runner:
+         patch('tyler.models.agent_tools.tool_runner') as mock_tool_runner:
         mock_get_completion.call.return_value = (async_generator(chunks), mock_weave_call)
         # Return a dict that will be stringified
         mock_tool_runner.execute_tool_call = AsyncMock(return_value={
@@ -218,7 +218,7 @@ async def test_stream_max_iterations():
         return (async_generator(chunks_with_tools), mock_weave_call)
     
     with patch.object(agent, '_get_completion') as mock_get_completion, \
-         patch('tyler.models.agent.tool_runner') as mock_tool_runner:
+         patch('tyler.models.agent_tools.tool_runner') as mock_tool_runner:
         mock_get_completion.call.side_effect = mock_completion
         mock_tool_runner.execute_tool_call = AsyncMock(return_value={
             "name": "test_tool",
@@ -364,7 +364,7 @@ async def test_stream_tool_metrics():
     mock_weave_call.ui_url = "https://weave.ui/test"
     
     with patch.object(agent, '_get_completion') as mock_get_completion, \
-         patch('tyler.models.agent.tool_runner') as mock_tool_runner:
+         patch('tyler.models.agent_tools.tool_runner') as mock_tool_runner:
         mock_get_completion.call.return_value = (async_generator(chunks), mock_weave_call)
         mock_tool_runner.execute_tool_call = AsyncMock(return_value={
             "name": "test_tool",
@@ -423,7 +423,7 @@ async def test_stream_multiple_messages_metrics():
     mock_weave_call.ui_url = "https://weave.ui/test"
     
     with patch.object(agent, '_get_completion') as mock_get_completion, \
-         patch('tyler.models.agent.tool_runner') as mock_tool_runner:
+         patch('tyler.models.agent_tools.tool_runner') as mock_tool_runner:
         mock_get_completion.call.side_effect = [
             (async_generator(first_chunks), mock_weave_call),
             (async_generator(second_chunks), mock_weave_call)
@@ -492,7 +492,7 @@ async def test_stream_object_format_tool_calls():
     mock_weave_call = MagicMock()
 
     with patch.object(agent, '_get_completion') as mock_get_completion, \
-         patch('tyler.models.agent.tool_runner') as mock_tool_runner:
+         patch('tyler.models.agent_tools.tool_runner') as mock_tool_runner:
         mock_get_completion.call.return_value = (async_generator([chunk]), mock_weave_call)
         mock_tool_runner.execute_tool_call = AsyncMock(return_value={
             "name": "test_tool",
@@ -538,7 +538,7 @@ async def test_stream_object_format_tool_call_updates():
     mock_weave_call = MagicMock()
     
     with patch.object(agent, '_get_completion') as mock_get_completion, \
-         patch('tyler.models.agent.tool_runner') as mock_tool_runner:
+         patch('tyler.models.agent_tools.tool_runner') as mock_tool_runner:
         mock_get_completion.call.return_value = (async_generator(chunks), mock_weave_call)
         mock_tool_runner.execute_tool_call = AsyncMock(return_value={
             "name": "test_tool",
@@ -582,7 +582,7 @@ async def test_stream_dict_arguments_in_delta():
     mock_weave_call = MagicMock()
 
     with patch.object(agent, '_get_completion') as mock_get_completion, \
-         patch('tyler.models.agent.tool_runner') as mock_tool_runner:
+         patch('tyler.models.agent_tools.tool_runner') as mock_tool_runner:
         mock_get_completion.call.return_value = (async_generator(chunks), mock_weave_call)
         mock_tool_runner.execute_tool_call = AsyncMock(return_value={"ok": True})
 
@@ -629,7 +629,7 @@ async def test_stream_dict_format_tool_call_updates():
     mock_weave_call = MagicMock()
 
     with patch.object(agent, '_get_completion') as mock_get_completion, \
-         patch('tyler.models.agent.tool_runner') as mock_tool_runner:
+         patch('tyler.models.agent_tools.tool_runner') as mock_tool_runner:
         mock_get_completion.call.return_value = (async_generator(chunks), mock_weave_call)
         mock_tool_runner.execute_tool_call = AsyncMock(return_value={"ok": True})
 
@@ -706,7 +706,7 @@ async def test_stream_empty_arguments():
     mock_weave_call = MagicMock()
     
     with patch.object(agent, '_get_completion') as mock_get_completion, \
-         patch('tyler.models.agent.tool_runner') as mock_tool_runner:
+         patch('tyler.models.agent_tools.tool_runner') as mock_tool_runner:
         mock_get_completion.call.return_value = (async_generator(chunks), mock_weave_call)
         mock_tool_runner.execute_tool_call = AsyncMock(return_value={
             "name": "test_tool",
@@ -798,7 +798,7 @@ async def test_stream_thread_store_save():
     mock_weave_call = MagicMock()
     
     with patch.object(agent, '_get_completion') as mock_get_completion, \
-         patch('tyler.models.agent.tool_runner') as mock_tool_runner:
+         patch('tyler.models.agent_tools.tool_runner') as mock_tool_runner:
         mock_get_completion.call.return_value = (async_generator(chunks), mock_weave_call)
         mock_tool_runner.execute_tool_call = AsyncMock(return_value={
             "name": "test_tool",
@@ -889,7 +889,7 @@ async def test_stream_tool_call_with_files():
     }
     
     with patch.object(agent, '_get_completion') as mock_get_completion, \
-         patch('tyler.models.agent.tool_runner') as mock_tool_runner:
+         patch('tyler.models.agent_tools.tool_runner') as mock_tool_runner:
         mock_get_completion.call.return_value = (async_generator(chunks), mock_weave_call)
         # Return tuple of content and files
         mock_tool_runner.execute_tool_call = AsyncMock(return_value=(
@@ -937,7 +937,7 @@ async def test_stream_tool_call_with_attributes():
     mock_weave_call = MagicMock()
     
     with patch.object(agent, '_get_completion') as mock_get_completion, \
-         patch('tyler.models.agent.tool_runner') as mock_tool_runner:
+         patch('tyler.models.agent_tools.tool_runner') as mock_tool_runner:
         mock_get_completion.call.return_value = (async_generator(chunks), mock_weave_call)
         # Mock tool runner to return attributes
         mock_tool_runner.get_tool_attributes.return_value = {
@@ -986,7 +986,7 @@ async def test_stream_interrupt_tool():
     mock_weave_call = MagicMock()
     
     with patch.object(agent, '_get_completion') as mock_get_completion, \
-         patch('tyler.models.agent.tool_runner') as mock_tool_runner:
+         patch('tyler.models.agent_tools.tool_runner') as mock_tool_runner:
         mock_get_completion.call.return_value = (async_generator(chunks), mock_weave_call)
         # Mock tool runner to return interrupt type
         mock_tool_runner.get_tool_attributes.return_value = {
