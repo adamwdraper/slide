@@ -2279,24 +2279,29 @@ class Agent(BaseModel):
                                 tool_name = tool_call.function.name if hasattr(tool_call, 'function') else tool_call['function']['name']
                                 tool_id = tool_call.id if hasattr(tool_call, 'id') else tool_call.get('id')
                                 
-                                # If execution didn't happen (e.g., missing id), treat as error
-                                result = tool_execution_results.get(str(tool_id))
-                                duration_ms = tool_execution_durations_ms.get(str(tool_id))
-                                if isinstance(result, Exception):
+                                key = str(tool_id) if tool_id is not None else None
+                                duration_ms = tool_execution_durations_ms.get(key) if key else None
+
+                                # Distinguish "missing result" from "tool returned None":
+                                # - Missing: tool call id not present in results mapping
+                                # - Present: tool executed; its return value may legitimately be None
+                                if not key or key not in tool_execution_results:
+                                    result = RuntimeError("Tool result missing")
                                     record_event(EventType.TOOL_ERROR, {
                                         "tool_name": tool_name,
-                                        "error": str(result),
+                                        "error": "Tool result missing",
                                         "tool_call_id": tool_id
                                     })
                                 else:
-                                    # Extract result content
-                                    if result is None:
+                                    result = tool_execution_results.get(key)
+                                    if isinstance(result, Exception):
                                         record_event(EventType.TOOL_ERROR, {
                                             "tool_name": tool_name,
-                                            "error": "Tool result missing",
+                                            "error": str(result),
                                             "tool_call_id": tool_id
                                         })
                                     else:
+                                        # Extract result content (None is a valid successful return)
                                         if isinstance(result, tuple) and len(result) >= 1:
                                             result_content = str(result[0])
                                         else:
