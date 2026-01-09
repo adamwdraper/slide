@@ -1249,7 +1249,7 @@ async def test_invalid_stream_value_raises_error():
     thread.add_message(Message(role="user", content="Test"))
     
     # Test with invalid mode value
-    with pytest.raises(ValueError, match="Invalid mode"):
+    with pytest.raises(ValueError, match="Invalid streaming mode"):
         async for _ in agent.stream(thread, mode="invalid"):
             pass
 
