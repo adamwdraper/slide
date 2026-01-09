@@ -599,16 +599,16 @@ async def test_step_no_weave(agent):
 @pytest.mark.asyncio
 async def test_handle_max_iterations(agent, mock_thread_store):
     """Test handling of max iterations reached"""
+    # When max_tool_iterations == 0, Agent.run() should immediately emit the max-iterations message.
+    agent.max_tool_iterations = 0
     thread = Thread(id="test-thread")
-    new_messages = [Message(role="user", content="test")]
-    
-    # The _handle_max_iterations method uses _get_thread_store which is already patched in the fixture
-    result_thread, filtered_messages = await agent._handle_max_iterations(thread, new_messages)
-    
-    assert len(filtered_messages) == 1
-    assert filtered_messages[0].role == "assistant"
-    assert filtered_messages[0].content == "Maximum tool iteration count reached. Stopping further tool calls."
-    mock_thread_store.save.assert_called_once_with(result_thread)
+
+    result = await agent.run(thread)
+    assert result.thread is thread
+    assert len(result.new_messages) == 1
+    assert result.new_messages[0].role == "assistant"
+    assert result.new_messages[0].content == "Maximum tool iteration count reached. Stopping further tool calls."
+    mock_thread_store.save.assert_called_once_with(thread)
 
 @pytest.mark.asyncio
 async def test_get_thread_direct(agent):
@@ -629,8 +629,6 @@ async def test_get_thread_missing_store(agent):
 @pytest.mark.asyncio
 async def test_tool_execution_error(agent):
     """Test handling of tool execution errors"""
-    thread = Thread(id="test-thread")
-    new_messages = []
     tool_call = {
         "id": "test-id",
         "type": "function",
@@ -639,50 +637,30 @@ async def test_tool_execution_error(agent):
             "arguments": "{}"
         }
     }
-
-    with patch('tyler.models.agent.tool_runner') as mock_tool_runner:
-        mock_tool_runner.execute_tool_call = AsyncMock(side_effect=Exception("Tool error"))
-        mock_tool_runner.get_tool_attributes.return_value = None
-
-        # Should not raise exception but handle it gracefully
-        should_break = await agent._process_tool_call(tool_call, thread, new_messages)
-
-        assert not should_break
-        assert len(new_messages) == 1
-        assert new_messages[0].role == "tool"
-        assert new_messages[0].name == "test-tool"
-        # Just check that the error message contains the error text
-        assert "Tool error" in new_messages[0].content
+    tool_message, should_break = agent._process_tool_result(Exception("Tool error"), tool_call, "test-tool")
+    assert should_break is False
+    assert tool_message.role == "tool"
+    assert tool_message.name == "test-tool"
+    assert tool_message.tool_call_id == "test-id"
+    assert "Tool error" in tool_message.content
 
 @pytest.mark.asyncio
 async def test_process_tool_call_with_interrupt(agent):
     """Test processing a tool call that is marked as an interrupt"""
-    tool_call = MagicMock()
-    tool_call.id = "test-call-id"
-    tool_call.function.name = "interrupt_tool"
-    tool_call.function.arguments = "{}"
-    
-    thread = Thread(id="test-thread")
-    new_messages = []
-    
     with patch('tyler.models.agent.tool_runner') as mock_tool_runner:
         # Mock tool attributes to indicate it's an interrupt tool
         mock_tool_runner.get_tool_attributes.return_value = {'type': 'interrupt'}
-        
-        # Mock tool execution
-        mock_tool_runner.execute_tool_call = AsyncMock(return_value={
-            "name": "interrupt_tool",
-            "content": "Interrupting execution"
-        })
-        
-        should_break = await agent._process_tool_call(tool_call, thread, new_messages)
-        
+        tool_call = {
+            "id": "test-call-id",
+            "type": "function",
+            "function": {"name": "interrupt_tool", "arguments": "{}"},
+        }
+        tool_message, should_break = agent._process_tool_result("Interrupting execution", tool_call, "interrupt_tool")
         assert should_break is True
-        assert len(new_messages) == 1
-        assert new_messages[0].role == "tool"
-        assert new_messages[0].name == "interrupt_tool"
-        assert new_messages[0].tool_call_id == "test-call-id"
-        assert "metrics" in new_messages[0].model_dump()
+        assert tool_message.role == "tool"
+        assert tool_message.name == "interrupt_tool"
+        assert tool_message.tool_call_id == "test-call-id"
+        assert "metrics" in tool_message.model_dump()
 
 @pytest.mark.asyncio
 async def test_serialize_tool_calls():
@@ -1063,8 +1041,8 @@ async def test_go_with_tool_calls_no_content(agent, mock_thread_store, mock_prom
 
 @pytest.mark.asyncio
 async def test_process_tool_call_with_files(agent, thread):
-    """Test processing a tool call that returns files"""
-    # Mock the tool execution result
+    """Test processing a tool result that returns files"""
+    # Mock result with files tuple
     mock_result = (
         json.dumps({"success": True, "message": "File generated"}),
         [{
@@ -1075,66 +1053,50 @@ async def test_process_tool_call_with_files(agent, thread):
         }]
     )
 
-    with patch.object(agent, '_handle_tool_execution', new_callable=AsyncMock) as mock_execute:
-        mock_execute.return_value = mock_result
-
-        # Create a tool call
-        tool_call = {
-            'id': 'test_id',
-            'type': 'function',
-            'function': {
-                'name': 'test_tool',
-                'arguments': '{}'
-            }
+    tool_call = {
+        'id': 'test_id',
+        'type': 'function',
+        'function': {
+            'name': 'test_tool',
+            'arguments': '{}'
         }
+    }
 
-        new_messages = []
-        result = await agent._process_tool_call(tool_call, thread, new_messages)
+    # Use _process_tool_result directly (sync method that processes already-executed results)
+    message, should_break = agent._process_tool_result(mock_result, tool_call, 'test_tool')
 
-        # Check that attachments were created
-        assert len(new_messages) == 1
-        message = new_messages[0]
-        assert len(message.attachments) == 1
-        assert message.attachments[0].filename == "test.txt"
-        assert message.attachments[0].content == b"test content"
-        assert message.attachments[0].mime_type == "text/plain"
+    # Check that attachments were created
+    assert len(message.attachments) == 1
+    assert message.attachments[0].filename == "test.txt"
+    assert message.attachments[0].content == b"test content"
+    assert message.attachments[0].mime_type == "text/plain"
 
 @pytest.mark.asyncio
 async def test_process_tool_call_without_files(agent, thread):
-    """Test processing a tool call that doesn't return files"""
-    # Mock the tool execution result
+    """Test processing a tool result that doesn't return files"""
     mock_result = "Simple result"  # Just return a string
 
-    with patch.object(agent, '_handle_tool_execution', new_callable=AsyncMock) as mock_execute:
-        mock_execute.return_value = mock_result
-
-        # Create a tool call
-        tool_call = {
-            'id': 'test_id',
-            'type': 'function',
-            'function': {
-                'name': 'test_tool',
-                'arguments': '{}'
-            }
+    tool_call = {
+        'id': 'test_id',
+        'type': 'function',
+        'function': {
+            'name': 'test_tool',
+            'arguments': '{}'
         }
+    }
 
-        new_messages = []
-        result = await agent._process_tool_call(tool_call, thread, new_messages)
+    # Use _process_tool_result directly
+    message, should_break = agent._process_tool_result(mock_result, tool_call, 'test_tool')
 
-        # Check that message was created without attachments
-        assert len(new_messages) == 1
-        message = new_messages[0]
-        assert len(message.attachments) == 0
-        assert message.content == "Simple result"
+    # Check that message was created without attachments
+    assert len(message.attachments) == 0
+    assert message.content == "Simple result"
 
 @pytest.mark.asyncio
 async def test_process_tool_call_with_image_attachment():
-    """Test processing a tool call that returns an image attachment."""
+    """Test processing a tool result that returns an image attachment."""
     agent = Agent()
-    thread = Thread(id="test-thread")
-    new_messages = []
 
-    # Create a tool call
     tool_call = {
         'id': 'test_id',
         'type': 'function',
@@ -1148,7 +1110,7 @@ async def test_process_tool_call_with_image_attachment():
     test_image_bytes = b"test image content"
     encoded_content = base64.b64encode(test_image_bytes).decode('utf-8')
 
-    # Mock the tool execution result with an image attachment
+    # Mock result with an image attachment
     mock_result = (
         "Image generated successfully",
         [{
@@ -1159,18 +1121,15 @@ async def test_process_tool_call_with_image_attachment():
         }]
     )
 
-    with patch.object(agent, '_handle_tool_execution', new_callable=AsyncMock) as mock_execute:
-        mock_execute.return_value = mock_result
-        await agent._process_tool_call(tool_call, thread, new_messages)
+    # Use _process_tool_result directly
+    message, should_break = agent._process_tool_result(mock_result, tool_call, 'test_tool')
 
-        # Check that attachments were created
-        assert len(new_messages) == 1
-        message = new_messages[0]
-        assert len(message.attachments) == 1
-        attachment = message.attachments[0]
-        assert attachment.filename == "test.png"
-        assert attachment.content == encoded_content  # Compare with encoded content
-        assert attachment.mime_type == "image/png"
+    # Check that attachments were created
+    assert len(message.attachments) == 1
+    attachment = message.attachments[0]
+    assert attachment.filename == "test.png"
+    assert attachment.content == encoded_content  # Compare with encoded content
+    assert attachment.mime_type == "image/png"
 
 @pytest.mark.asyncio
 async def test_go_with_tool_returning_image(mock_thread_store, mock_file_store):
@@ -1404,8 +1363,7 @@ async def test_serialize_tool_calls_with_invalid_calls():
 
 @pytest.mark.asyncio
 async def test_process_tool_call_with_execution_error(agent, thread):
-    """Test _process_tool_call with tool execution error"""
-    # Create a tool call
+    """Test _process_tool_result with tool execution error (exception passed as result)"""
     tool_call = {
         "id": "call_123",
         "function": {
@@ -1414,21 +1372,17 @@ async def test_process_tool_call_with_execution_error(agent, thread):
         }
     }
 
-    # Mock _handle_tool_execution to raise an exception
-    with patch.object(agent, '_handle_tool_execution') as mock_handle:
-        mock_handle.side_effect = Exception("Tool execution failed")
+    # Pass an exception as the result (simulates tool execution failure)
+    message, should_break = agent._process_tool_result(
+        Exception("Tool execution failed"), tool_call, "test_tool"
+    )
 
-        new_messages = []
-        should_break = await agent._process_tool_call(tool_call, thread, new_messages)
-
-        # Verify error message was added
-        assert len(new_messages) == 1
-        assert new_messages[0].role == "tool"
-        # Check for presence of error message without requiring exact format
-        assert "Tool execution failed" in new_messages[0].content
-        
-        # Should not break iteration
-        assert should_break is False
+    # Verify error message was created
+    assert message.role == "tool"
+    assert "Tool execution failed" in message.content
+    
+    # Should not break iteration
+    assert should_break is False
 
 @pytest.mark.asyncio
 async def test_get_completion_with_weave_call():
