@@ -1,3 +1,8 @@
+## [narrator-v5.6.0] - 2026-01-09
+
+### ⚙️ Miscellaneous Tasks
+
+- *(weave)* Reduce trace noise; add narrator to_dict
 ## [tyler-v5.2.3] - 2025-12-04
 
 ### 🐛 Bug Fixes

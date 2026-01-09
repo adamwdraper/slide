@@ -1,9 +1,96 @@
+## [tyler-v5.6.0] - 2026-01-09
+
+### 🚀 Features
+
+- *(tyler)* Add structured output, retry config, and tool context injection
+- *(structured-output)* Add agent-level response_type as default
+- *(tyler)* Add retry_history for structured output debugging
+- *(tyler)* Implement output-tool pattern for structured output
+- Implement tool_choice=required for structured output like Pydantic AI
+- *(tyler)* [**breaking**] Add timeout support and rich ToolContext dataclass
+- *(mcp)* [**breaking**] Migrate to SDK ClientSessionGroup, remove custom wrappers
+- *(mcp)* Add progress callback support for MCP tools
+- Update MCP progress callback example with working local server
+- *(agent)* Add agent-level tool_context for static dependencies
+- *(agent)* Make step include tool execution
+- *(agent)* Implement stream accumulator for Weave tracing output
+- *(agent)* Enhance tool execution with duration tracking and metrics reporting
+
+### 🐛 Bug Fixes
+
+- *(tyler)* Add missing self.message attribute to StructuredOutputError
+- *(tests)* Add context param to mock functions and skip new examples in CI
+- *(ci)* Pass OPENAI_API_KEY secret to test steps
+- *(tests)* Add async mock for litellm.acompletion in conftest
+- *(tests)* Properly mock acompletion at import location
+- *(tests)* Return valid JSON mock for structured output requests
+- *(tyler)* Code review fixes for structured output
+- *(tests)* Update global mock to handle output-tool pattern for structured output
+- Address code review findings
+- Address Copilot PR review findings
+- Address additional Copilot PR review findings
+- *(examples)* Standardize weave project name to 'slide'
+- *(examples)* Use WANDB_PROJECT env var for weave initialization
+- *(mcp)* Address PR review feedback
+- *(mcp)* Prevent tool name collisions when multiple servers have same-named tools
+- *(mcp)* Remove websocket transport (not supported by SDK's ClientSessionGroup)
+- Handle optional context in tool runner and prevent progress_callback collision
+- Prevent ctx parameter collision and ensure exit_stack cleanup
+- Address code review feedback (5 issues)
+- Extract progress_callback from tool_context dict
+- Composite progress callbacks when both stream and custom exist
+- Add __bool__ to ToolContext to prevent falsy evaluation
+- Allow MCP tools with ctx/context/progress_callback params
+- Address Copilot review comments
+- *(agent)* Keep step-inclusive tool execution compatible with tests
+
+### 🚜 Refactor
+
+- *(tool_runner)* Extract shared context injection logic to _execute_implementation
+- Centralize reserved MCP params and fix docs
+- Remove custom calculator tool and update agent purpose
+- *(agent)* Remove dead code and legacy streaming paths
+
+### 📚 Documentation
+
+- Add MCP progress callback example
+
+### 🧪 Testing
+
+- *(tyler)* Skip structured output example from integration tests
+- Enable structured output example in integration tests
+
+### ⚙️ Miscellaneous Tasks
+
+- *(weave)* Reduce trace noise; add narrator to_dict
+- *(examples)* Weave-op custom tools
+- *(weave)* Simplify example tool ops
+- Upgrade weave to 0.52.23
 ## [tyler-v5.5.0] - 2025-12-30
 
 ### 🚀 Features
 
-- *(a2a)* [**breaking**] Add full A2A Protocol v0.3.0 support
 - *(a2a)* Add real-time token streaming support
+
+### 🐛 Bug Fixes
+
+- *(a2a)* Send initial artifact with append=False before streaming chunks
+- *(a2a)* Use append=True for final artifact to preserve content
+- *(a2a)* Address code review feedback
+
+### 🚜 Refactor
+
+- *(a2a)* Simplify executor to always stream internally
+
+### ⚙️ Miscellaneous Tasks
+
+- Remove broken test-examples.yml workflow
+- Remove empty leftover test files
+## [tyler-v5.4.0] - 2025-12-30
+
+### 🚀 Features
+
+- *(a2a)* [**breaking**] Add full A2A Protocol v0.3.0 support
 
 ### 🐛 Bug Fixes
 
@@ -16,9 +103,6 @@
 - Address PR review comments
 - *(tests)* Skip A2A examples in CI to prevent hangs
 - *(security)* Avoid DNS resolution in webhook URL validation
-- *(a2a)* Send initial artifact with append=False before streaming chunks
-- *(a2a)* Use append=True for final artifact to preserve content
-- *(a2a)* Address code review feedback
 
 ### 🚜 Refactor
 
@@ -26,16 +110,10 @@
 - Remove custom URL validation, trust SDK/httpx
 - Remove unused push notification types
 - Rename A2AServer param from tyler_agent to agent
-- *(a2a)* Simplify executor to always stream internally
 
 ### 📚 Documentation
 
 - *(a2a)* Update documentation for v0.3.0 SDK field names
-
-### ⚙️ Miscellaneous Tasks
-
-- Remove broken test-examples.yml workflow
-- Remove empty leftover test files
 ## [tyler-v5.3.0] - 2025-12-04
 
 ### 🚀 Features

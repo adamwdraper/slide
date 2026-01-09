@@ -1,3 +1,8 @@
+## [lye-v5.6.0] - 2026-01-09
+
+### ⚙️ Miscellaneous Tasks
+
+- Upgrade weave to 0.52.23
 ## [tyler-v5.2.2] - 2025-12-04
 
 ### 🐛 Bug Fixes

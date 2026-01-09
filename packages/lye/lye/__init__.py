@@ -1,7 +1,7 @@
 """
 Lye - Tools package for Tyler
 """
-__version__ = "5.5.0"
+__version__ = "5.6.0"
 
 import importlib
 import sys
