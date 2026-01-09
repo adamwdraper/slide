@@ -28,7 +28,7 @@ def _weave_stream_accumulator(state: Any | None, value: Any) -> dict:
     """Accumulate yields from Agent.stream() into a compact, serializable summary.
 
     This is only for Weave tracing output; it does not change what `stream()` yields.
-    Handles both `mode="events"` (ExecutionEvent yields) and `mode="raw"` (provider chunks).
+    Handles both `mode="events"` (ExecutionEvent yields) and `mode="openai"` (provider chunks).
     """
     if state is None or not isinstance(state, dict):
         state = {
@@ -109,8 +109,8 @@ def _weave_stream_accumulator(state: Any | None, value: Any) -> dict:
 
         return state
 
-    # --- Raw mode (best-effort) ---
-    state["mode"] = state.get("mode") or "raw"
+    # --- OpenAI mode (best-effort) ---
+    state["mode"] = state.get("mode") or "openai"
     try:
         choices = getattr(value, "choices", None)
         if choices:
@@ -1205,7 +1205,7 @@ class Agent(BaseModel):
     async def stream(
         self,
         thread_or_id: Union[Thread, str],
-        mode: Literal["events", "raw", "vercel"] = "events",
+        mode: Literal["events", "openai", "vercel"] = "events",
         tool_context: Optional[Dict[str, Any]] = None
     ) -> AsyncGenerator[Union[ExecutionEvent, Any, str], None]:
         """
@@ -1220,7 +1220,7 @@ class Agent(BaseModel):
                          modified in-place with new messages.
             mode: Streaming mode:
                   - "events" (default): Yields ExecutionEvent objects with detailed telemetry
-                  - "raw": Yields raw LiteLLM chunks in OpenAI-compatible format
+                  - "openai": Yields raw LiteLLM chunks in OpenAI-compatible format
                   - "vercel": Yields SSE strings in Vercel AI SDK Data Stream Protocol format
             tool_context: Optional dictionary of dependencies to inject into tools.
                          Tools that have 'ctx' or 'context' as their first parameter
@@ -1231,7 +1231,7 @@ class Agent(BaseModel):
                 ExecutionEvent objects including LLM_REQUEST, LLM_RESPONSE, 
                 TOOL_SELECTED, TOOL_RESULT, MESSAGE_CREATED, and EXECUTION_COMPLETE events.
             
-            If mode="raw":
+            If mode="openai":
                 Raw LiteLLM chunk objects passed through unmodified for direct
                 integration with OpenAI-compatible clients.
             
@@ -1251,8 +1251,8 @@ class Agent(BaseModel):
                 if event.type == EventType.MESSAGE_CREATED:
                     print(f"New message: {event.data['message'].content}")
             
-            # Raw chunk streaming (OpenAI compatibility)
-            async for chunk in agent.stream(thread, mode="raw"):
+            # OpenAI-compatible chunk streaming
+            async for chunk in agent.stream(thread, mode="openai"):
                 if hasattr(chunk.choices[0].delta, 'content'):
                     print(chunk.choices[0].delta.content, end="")
             
@@ -1277,9 +1277,9 @@ class Agent(BaseModel):
                 logging.getLogger(__name__).debug("Agent.stream() called with mode='events'")
                 async for event in self._stream_events_step_stream(thread_or_id):
                     yield event
-            elif mode == "raw":
-                logging.getLogger(__name__).debug("Agent.stream() called with mode='raw'")
-                async for chunk in self._stream_raw_step_stream(thread_or_id):
+            elif mode == "openai":
+                logging.getLogger(__name__).debug("Agent.stream() called with mode='openai'")
+                async for chunk in self._stream_openai_step_stream(thread_or_id):
                     yield chunk
             elif mode == "vercel":
                 logging.getLogger(__name__).debug("Agent.stream() called with mode='vercel'")
@@ -1287,7 +1287,7 @@ class Agent(BaseModel):
                     yield sse_chunk
             else:
                 raise ValueError(
-                    f"Invalid mode: {mode}. Must be 'events', 'raw', or 'vercel'"
+                    f"Invalid mode: {mode}. Must be 'events', 'openai', or 'vercel'"
                 )
         finally:
             # Clear tool context after execution
@@ -1297,7 +1297,7 @@ class Agent(BaseModel):
     async def step_stream(
         self,
         thread: Thread,
-        mode: Literal["events", "raw"] = "events",
+        mode: Literal["events", "openai"] = "events",
     ) -> AsyncGenerator[Union[ExecutionEvent, Any], None]:
         """Execute a single streaming step (one LLM streamed completion + resulting tool execution).
 
@@ -1311,11 +1311,11 @@ class Agent(BaseModel):
         if mode == "events":
             async for event in self._step_stream_events_impl(thread):
                 yield event
-        elif mode == "raw":
-            async for chunk in self._step_stream_raw_impl(thread):
+        elif mode == "openai":
+            async for chunk in self._step_stream_openai_impl(thread):
                 yield chunk
         else:
-            raise ValueError(f"Invalid mode: {mode}. Must be 'events' or 'raw'")
+            raise ValueError(f"Invalid mode: {mode}. Must be 'events' or 'openai'")
 
     async def _get_streaming_completion(
         self,
@@ -1432,7 +1432,7 @@ class Agent(BaseModel):
             data={"duration_ms": duration_ms, "total_tokens": total_tokens},
         )
 
-    async def _stream_raw_step_stream(
+    async def _stream_openai_step_stream(
         self, thread_or_id: Union[Thread, str]
     ) -> AsyncGenerator[Any, None]:
         """Raw streaming orchestrator that emits per-iteration step_stream spans."""
@@ -1442,7 +1442,7 @@ class Agent(BaseModel):
         self._tool_attributes_cache.clear()
 
         while self._iteration_count < self.max_tool_iterations:
-            async for chunk in self.step_stream(thread, mode="raw"):
+            async for chunk in self.step_stream(thread, mode="openai"):
                 yield chunk
 
             if not self._last_step_stream_should_continue:
@@ -1842,7 +1842,7 @@ class Agent(BaseModel):
         # Continue only if tools were called and we didn't hit an interrupt
         self._last_step_stream_should_continue = bool(current_tool_calls) and not should_break
 
-    async def _step_stream_raw_impl(self, thread: Thread) -> AsyncGenerator[Any, None]:
+    async def _step_stream_openai_impl(self, thread: Thread) -> AsyncGenerator[Any, None]:
         """One streaming step that yields raw chunks and executes tools inside the step span."""
         try:
             streaming_response, metrics = await self._get_streaming_completion(thread)

@@ -1239,7 +1239,7 @@ async def test_stream_usage_metrics_from_final_chunk():
         assert assistant_msg.metrics["usage"]["total_tokens"] == 15
 
 
-# ========== New Tests for Raw Streaming Mode ==========
+# ========== Tests for OpenAI Streaming Mode ==========
 
 @pytest.mark.asyncio
 async def test_invalid_stream_value_raises_error():
@@ -1252,6 +1252,34 @@ async def test_invalid_stream_value_raises_error():
     with pytest.raises(ValueError, match="Invalid mode"):
         async for _ in agent.stream(thread, mode="invalid"):
             pass
+
+
+@pytest.mark.asyncio
+async def test_openai_mode_yields_chunks():
+    """Test that stream mode='openai' yields raw LiteLLM chunks"""
+    agent = Agent(name="Tyler")
+    thread = Thread()
+    thread.add_message(Message(role="user", content="Test"))
+    
+    chunks = [
+        MockChunk([MockChoiceDelta(MockDelta(content="Hello"))]),
+        MockChunk([MockChoiceDelta(MockDelta(content=" world"))]),
+    ]
+    
+    async def mock_stream():
+        for chunk in chunks:
+            yield chunk
+    
+    with patch.object(agent, 'step') as mock_step:
+        mock_step.return_value = (mock_stream(), {"model": "gpt-4"})
+        
+        raw_chunks = []
+        async for chunk in agent.stream(thread, mode="openai"):
+            raw_chunks.append(chunk)
+        
+        # Should NOT be ExecutionEvent objects
+        assert not any(isinstance(c, ExecutionEvent) for c in raw_chunks)
+        assert len(raw_chunks) == 2
 
 
 @pytest.mark.asyncio
@@ -1291,8 +1319,8 @@ async def test_stream_events_explicit():
 
 
 @pytest.mark.asyncio
-async def test_raw_mode_yields_chunks_with_openai_fields():
-    """Test that stream='raw' yields raw LiteLLM chunks with OpenAI-compatible fields"""
+async def test_openai_mode_yields_chunks_with_openai_fields():
+    """Test that stream='openai' yields raw LiteLLM chunks with OpenAI-compatible fields"""
     agent = Agent(name="Tyler")
     thread = Thread()
     thread.add_message(Message(role="user", content="Test"))
@@ -1331,7 +1359,7 @@ async def test_raw_mode_yields_chunks_with_openai_fields():
         mock_step.return_value = (mock_stream(), {"model": "gpt-4"})
         
         raw_chunks = []
-        async for chunk in agent.stream(thread, mode="raw"):
+        async for chunk in agent.stream(thread, mode="openai"):
             raw_chunks.append(chunk)
         
         # Should NOT be ExecutionEvent objects
@@ -1358,8 +1386,8 @@ async def test_raw_mode_yields_chunks_with_openai_fields():
 
 
 @pytest.mark.asyncio
-async def test_raw_mode_includes_usage_in_final_chunk():
-    """Test that stream='raw' includes usage information in the final chunk"""
+async def test_openai_mode_includes_usage_in_final_chunk():
+    """Test that stream='openai' includes usage information in the final chunk"""
     agent = Agent(name="Tyler")
     thread = Thread()
     thread.add_message(Message(role="user", content="Test"))
@@ -1383,7 +1411,7 @@ async def test_raw_mode_includes_usage_in_final_chunk():
         mock_step.return_value = (mock_stream(), {"model": "gpt-4"})
         
         raw_chunks = []
-        async for chunk in agent.stream(thread, mode="raw"):
+        async for chunk in agent.stream(thread, mode="openai"):
             raw_chunks.append(chunk)
         
         # Final chunk should have usage
@@ -1394,8 +1422,8 @@ async def test_raw_mode_includes_usage_in_final_chunk():
 
 
 @pytest.mark.asyncio
-async def test_raw_mode_tool_call_deltas():
-    """Test that stream='raw' passes through tool call deltas unmodified"""
+async def test_openai_mode_tool_call_deltas():
+    """Test that stream='openai' passes through tool call deltas unmodified"""
     agent = Agent(name="Tyler")
     thread = Thread()
     thread.add_message(Message(role="user", content="Test"))
@@ -1459,7 +1487,7 @@ async def test_raw_mode_tool_call_deltas():
         mock_step.return_value = (mock_stream(), {"model": "gpt-4"})
         
         raw_chunks = []
-        async for chunk in agent.stream(thread, mode="raw"):
+        async for chunk in agent.stream(thread, mode="openai"):
             raw_chunks.append(chunk)
         
         # Should have tool call deltas in raw format

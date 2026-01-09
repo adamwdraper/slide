@@ -18,8 +18,8 @@ Quick start guide showing the essential Tyler workflow.
 ### 004_streaming.py
 **Event-based streaming** - demonstrates the new event streaming API with different event types (LLM_REQUEST, LLM_STREAM_CHUNK, LLM_RESPONSE, TOOL_SELECTED, etc.).
 
-### 005_raw_streaming.py
-**Raw streaming mode** - shows how to use `stream="raw"` to get unmodified LiteLLM chunks in OpenAI-compatible format, useful for building proxies or direct OpenAI client integration.
+### 005_openai_streaming.py
+**OpenAI streaming mode** - shows how to use `mode="openai"` to get unmodified LiteLLM chunks in OpenAI-compatible format, useful for building proxies or direct OpenAI client integration.
 
 ### 005_thread_persistence.py
 Thread persistence with streaming responses.
@@ -155,9 +155,9 @@ Tyler supports four streaming modes:
    - Best for: Building UIs, collecting metrics, custom event handling
    - Example: `004_streaming.py`
 
-2. **Raw mode** (`mode="raw"`): Unmodified LiteLLM chunks (OpenAI-compatible)
+2. **OpenAI mode** (`mode="openai"`): Unmodified LiteLLM chunks (OpenAI-compatible)
    - Best for: Building API proxies, direct OpenAI client integration
-   - Example: `005_raw_streaming.py`
+   - Example: `005_openai_streaming.py`
 
 3. **Vercel mode** (`mode="vercel"`): SSE strings for Vercel AI SDK
    - Best for: React/Next.js frontends with `@ai-sdk/react`'s `useChat` hook

@@ -16,11 +16,11 @@ Streaming responses enable your agents to provide real-time feedback, making int
     Stream events with tool tracking
   </Card>
   <Card
-    title="Raw Streaming"
+    title="OpenAI Streaming"
     icon="wave-square"
-    href="https://github.com/adamwdraper/slide/blob/main/packages/tyler/examples/005_raw_streaming.py"
+    href="https://github.com/adamwdraper/slide/blob/main/packages/tyler/examples/005_openai_streaming.py"
   >
-    OpenAI-compatible raw chunks
+    OpenAI-compatible chunks
   </Card>
   <Card
     title="Thinking Tokens"
@@ -52,7 +52,7 @@ Tyler supports four streaming modes via the `stream` parameter:
 |------|-------|-------------|----------|
 | **Non-Streaming** | `False` (default) | `AgentResult` | Simple request/response |
 | **Event Streaming** | `True` or `"events"` | `ExecutionEvent` | Rich observability, tool tracking |
-| **Raw Streaming** | `"raw"` | Raw LiteLLM chunks | OpenAI compatibility, proxying |
+| **OpenAI Streaming** | `"openai"` | Raw LiteLLM chunks | OpenAI compatibility, proxying |
 | **Vercel Streaming** | `"vercel"` | SSE strings | React/Next.js with AI SDK |
 
 ### Event Streaming (Recommended)
@@ -87,10 +87,10 @@ async def stream_response():
 asyncio.run(stream_response())
 ```
 
-### Raw Streaming (Advanced)
+### OpenAI Streaming (Advanced)
 
 <Warning>
-Raw mode is for advanced use cases. Tools ARE executed for full agentic behavior, but you only receive raw chunks (no ExecutionEvents).
+OpenAI mode is for advanced use cases. Tools ARE executed for full agentic behavior, but you only receive raw chunks (no ExecutionEvents).
 </Warning>
 
 Stream raw LiteLLM chunks for OpenAI compatibility:
@@ -105,13 +105,13 @@ agent = Agent(
     purpose="OpenAI-compatible streaming"
 )
 
-async def raw_stream_response():
+async def openai_stream_response():
     thread = Thread()
     message = Message(role="user", content="Hello!")
     thread.add_message(message)
     
     # Get raw OpenAI-compatible chunks
-    async for chunk in agent.stream(thread, mode="raw"):
+    async for chunk in agent.stream(thread, mode="openai"):
         # chunk is a raw LiteLLM object
         if hasattr(chunk, 'choices') and chunk.choices:
             delta = chunk.choices[0].delta
@@ -129,10 +129,10 @@ async def raw_stream_response():
         if hasattr(chunk, 'usage') and chunk.usage:
             print(f"\n\nTokens: {chunk.usage.total_tokens}")
 
-asyncio.run(raw_stream_response())
+asyncio.run(openai_stream_response())
 ```
 
-**When to use raw mode:**
+**When to use openai mode:**
 - Building OpenAI API proxies or gateways
 - Direct integration with OpenAI-compatible clients
 - Minimal latency requirements (no transformation overhead)
@@ -205,13 +205,13 @@ async def openai_compatible_endpoint(messages: list):
         thread.add_message(Message(role=msg["role"], content=msg["content"]))
     
     async def generate():
-        async for chunk in agent.stream(thread, mode="raw"):
+        async for chunk in agent.stream(thread, mode="openai"):
             yield serialize_chunk_to_sse(chunk)
     
     return StreamingResponse(generate(), media_type="text/event-stream")
 ```
 
-See `examples/005_raw_streaming.py` for a complete working example.
+See `examples/005_openai_streaming.py` for a complete working example.
 
 ### Vercel AI SDK Streaming
 
@@ -414,12 +414,12 @@ async for event in agent.stream(thread):
                 print(f"Full reasoning: {msg.reasoning_content}")
 ```
 
-### Raw Streaming with Thinking
+### OpenAI Streaming with Thinking
 
-Raw mode preserves all thinking fields from LiteLLM:
+OpenAI mode preserves all thinking fields from LiteLLM:
 
 ```python
-async for chunk in agent.stream(thread, mode="raw"):
+async for chunk in agent.stream(thread, mode="openai"):
     if hasattr(chunk, 'choices') and chunk.choices:
         delta = chunk.choices[0].delta
         

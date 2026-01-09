@@ -409,7 +409,7 @@ async for event in agent.stream(thread):
         print(f"New {msg.role} message")
 ```
 
-### Raw Streaming Mode (stream="raw")
+### OpenAI Streaming Mode (mode="openai")
 
 <Warning>
   Raw mode is for advanced use cases requiring OpenAI compatibility. Tools ARE executed, but you only receive raw LiteLLM chunks (no ExecutionEvents for observability).
@@ -419,7 +419,7 @@ Stream raw LiteLLM chunks in OpenAI-compatible format for direct integration:
 
 ```python
 # Get raw chunks for OpenAI compatibility
-async for chunk in agent.stream(thread, mode="raw"):
+async for chunk in agent.stream(thread, mode="openai"):
     # chunk is a raw LiteLLM object with OpenAI structure
     if hasattr(chunk, 'choices') and chunk.choices:
         delta = chunk.choices[0].delta
@@ -437,13 +437,13 @@ async for chunk in agent.stream(thread, mode="raw"):
         print(f"\nTokens: {chunk.usage.total_tokens}")
 ```
 
-**When to use raw mode:**
+**When to use openai mode:**
 - Building OpenAI API proxies or gateways
 - Direct integration with OpenAI-compatible clients
 - Debugging provider-specific behavior
 - Minimal latency requirements (no transformation overhead)
 
-**How raw mode works:**
+**How openai mode works:**
 - ✅ Tools ARE executed (fully agentic behavior)
 - ✅ Multi-turn iteration supported (continues until task complete)
 - ✅ Raw chunks show tool calls via `finish_reason: "tool_calls"`
