@@ -1,3 +1,8 @@
+## [space-monkey-v5.6.0] - 2026-01-09
+
+### ⚙️ Miscellaneous Tasks
+
+- Upgrade weave to 0.52.23
 ## [tyler-v4.0.0] - 2025-10-23
 
 ### ⚙️ Miscellaneous Tasks
