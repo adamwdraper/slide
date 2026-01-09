@@ -1205,9 +1205,9 @@ class Agent(BaseModel):
     async def stream(
         self,
         thread_or_id: Union[Thread, str],
-        mode: Literal["events", "raw"] = "events",
+        mode: Literal["events", "raw", "vercel"] = "events",
         tool_context: Optional[Dict[str, Any]] = None
-    ) -> AsyncGenerator[Union[ExecutionEvent, Any], None]:
+    ) -> AsyncGenerator[Union[ExecutionEvent, Any, str], None]:
         """
         Stream agent execution events or raw chunks in real-time.
         
@@ -1221,6 +1221,7 @@ class Agent(BaseModel):
             mode: Streaming mode:
                   - "events" (default): Yields ExecutionEvent objects with detailed telemetry
                   - "raw": Yields raw LiteLLM chunks in OpenAI-compatible format
+                  - "vercel": Yields SSE strings in Vercel AI SDK Data Stream Protocol format
             tool_context: Optional dictionary of dependencies to inject into tools.
                          Tools that have 'ctx' or 'context' as their first parameter
                          will receive this context.
@@ -1233,6 +1234,10 @@ class Agent(BaseModel):
             If mode="raw":
                 Raw LiteLLM chunk objects passed through unmodified for direct
                 integration with OpenAI-compatible clients.
+            
+            If mode="vercel":
+                SSE-formatted strings compatible with Vercel AI SDK's useChat hook.
+                See: https://ai-sdk.dev/docs/ai-sdk-ui/stream-protocol#data-stream-protocol
         
         Raises:
             ValueError: If thread_id is provided but thread is not found, or
@@ -1250,6 +1255,10 @@ class Agent(BaseModel):
             async for chunk in agent.stream(thread, mode="raw"):
                 if hasattr(chunk.choices[0].delta, 'content'):
                     print(chunk.choices[0].delta.content, end="")
+            
+            # Vercel AI SDK streaming (for React/Next.js frontends)
+            async for sse_chunk in agent.stream(thread, mode="vercel"):
+                yield sse_chunk  # Send directly to HTTP response
         """
         # Merge agent-level and run-level tool contexts
         # Run-level context overrides agent-level context
@@ -1272,9 +1281,13 @@ class Agent(BaseModel):
                 logging.getLogger(__name__).debug("Agent.stream() called with mode='raw'")
                 async for chunk in self._stream_raw_step_stream(thread_or_id):
                     yield chunk
+            elif mode == "vercel":
+                logging.getLogger(__name__).debug("Agent.stream() called with mode='vercel'")
+                async for sse_chunk in self._stream_vercel_impl(thread_or_id):
+                    yield sse_chunk
             else:
                 raise ValueError(
-                    f"Invalid mode: {mode}. Must be 'events' or 'raw'"
+                    f"Invalid mode: {mode}. Must be 'events', 'raw', or 'vercel'"
                 )
         finally:
             # Clear tool context after execution
@@ -1998,6 +2011,118 @@ class Agent(BaseModel):
             should_break = True
 
         self._last_step_stream_should_continue = bool(current_tool_calls) and not should_break
+    
+    async def _stream_vercel_impl(
+        self, thread_or_id: Union[Thread, str]
+    ) -> AsyncGenerator[str, None]:
+        """Stream in Vercel AI SDK Data Stream Protocol format.
+        
+        This method transforms ExecutionEvents into SSE-formatted strings compatible
+        with the Vercel AI SDK's useChat hook.
+        
+        See: https://ai-sdk.dev/docs/ai-sdk-ui/stream-protocol#data-stream-protocol
+        
+        Args:
+            thread_or_id: Thread object or thread ID to process
+            
+        Yields:
+            SSE-formatted strings ready to send to an HTTP response
+        """
+        from tyler.streaming.vercel_protocol import VercelStreamFormatter, FinishReason
+        
+        formatter = VercelStreamFormatter()
+        
+        # Message start
+        yield formatter.format_message_start()
+        
+        text_open = False
+        reasoning_open = False
+        step_open = False
+        
+        async for event in self._stream_events_step_stream(thread_or_id):
+            # Handle iteration/step boundaries
+            if event.type == EventType.ITERATION_START:
+                if not step_open:
+                    yield formatter.format_step_start()
+                    step_open = True
+            
+            # Reasoning/thinking chunks
+            elif event.type == EventType.LLM_THINKING_CHUNK:
+                if not reasoning_open:
+                    yield formatter.format_reasoning_start()
+                    reasoning_open = True
+                thinking_chunk = event.data.get("thinking_chunk", "")
+                if thinking_chunk:
+                    yield formatter.format_reasoning_delta(thinking_chunk)
+            
+            # Text content chunks
+            elif event.type == EventType.LLM_STREAM_CHUNK:
+                # Close reasoning block if transitioning to text
+                if reasoning_open:
+                    yield formatter.format_reasoning_end()
+                    reasoning_open = False
+                # Start text block if not already open
+                if not text_open:
+                    yield formatter.format_text_start()
+                    text_open = True
+                content_chunk = event.data.get("content_chunk", "")
+                if content_chunk:
+                    yield formatter.format_text_delta(content_chunk)
+            
+            # LLM response complete (end of content stream for this step)
+            elif event.type == EventType.LLM_RESPONSE:
+                if text_open:
+                    yield formatter.format_text_end()
+                    text_open = False
+                if reasoning_open:
+                    yield formatter.format_reasoning_end()
+                    reasoning_open = False
+            
+            # Tool selected - emit tool input
+            elif event.type == EventType.TOOL_SELECTED:
+                tool_id = event.data.get("tool_call_id", "")
+                tool_name = event.data.get("tool_name", "")
+                args = event.data.get("arguments", {})
+                
+                yield formatter.format_tool_input_start(tool_id, tool_name)
+                yield formatter.format_tool_input_available(tool_id, tool_name, args)
+            
+            # Tool result
+            elif event.type == EventType.TOOL_RESULT:
+                tool_id = event.data.get("tool_call_id", "")
+                result = event.data.get("result", "")
+                yield formatter.format_tool_output_available(tool_id, {"result": result})
+                # Finish step after tool results
+                if step_open:
+                    yield formatter.format_step_finish()
+                    step_open = False
+            
+            # Tool error
+            elif event.type == EventType.TOOL_ERROR:
+                tool_id = event.data.get("tool_call_id", "")
+                error = event.data.get("error", "Tool execution failed")
+                yield formatter.format_tool_output_error(tool_id, error)
+            
+            # Execution error
+            elif event.type == EventType.EXECUTION_ERROR:
+                error_msg = event.data.get("message", "Execution error")
+                yield formatter.format_error(error_msg)
+            
+            # Execution complete
+            elif event.type == EventType.EXECUTION_COMPLETE:
+                # Close any open blocks
+                if text_open:
+                    yield formatter.format_text_end()
+                    text_open = False
+                if reasoning_open:
+                    yield formatter.format_reasoning_end()
+                    reasoning_open = False
+                if step_open:
+                    yield formatter.format_step_finish()
+                    step_open = False
+                
+                yield formatter.format_finish(FinishReason.STOP)
+                yield formatter.format_done()
     
     async def _run_complete(self, thread_or_id: Union[Thread, str]) -> AgentResult:
         """Non-streaming implementation that collects all events and returns AgentResult."""

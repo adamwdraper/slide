@@ -46,13 +46,14 @@ Streaming approach:
 
 ## Streaming Modes
 
-Tyler supports three streaming modes via the `stream` parameter:
+Tyler supports four streaming modes via the `stream` parameter:
 
 | Mode | Value | Output Type | Use Case |
 |------|-------|-------------|----------|
 | **Non-Streaming** | `False` (default) | `AgentResult` | Simple request/response |
 | **Event Streaming** | `True` or `"events"` | `ExecutionEvent` | Rich observability, tool tracking |
 | **Raw Streaming** | `"raw"` | Raw LiteLLM chunks | OpenAI compatibility, proxying |
+| **Vercel Streaming** | `"vercel"` | SSE strings | React/Next.js with AI SDK |
 
 ### Event Streaming (Recommended)
 
@@ -211,6 +212,110 @@ async def openai_compatible_endpoint(messages: list):
 ```
 
 See `examples/005_raw_streaming.py` for a complete working example.
+
+### Vercel AI SDK Streaming
+
+<Note>
+Perfect for React/Next.js frontends using `@ai-sdk/react`'s `useChat` hook.
+</Note>
+
+Tyler supports the [Vercel AI SDK Data Stream Protocol](https://ai-sdk.dev/docs/ai-sdk-ui/stream-protocol#data-stream-protocol), enabling seamless integration with modern React frontends.
+
+```python
+import asyncio
+from tyler import Agent, Thread, Message, VERCEL_STREAM_HEADERS
+
+agent = Agent(
+    name="vercel-assistant",
+    model_name="gpt-4.1",
+    purpose="To provide AI-powered responses"
+)
+
+async def vercel_stream_response():
+    thread = Thread()
+    message = Message(role="user", content="Hello!")
+    thread.add_message(message)
+    
+    # Stream in Vercel AI SDK format
+    async for sse_chunk in agent.stream(thread, mode="vercel"):
+        print(sse_chunk, end="")  # SSE-formatted strings
+
+asyncio.run(vercel_stream_response())
+```
+
+**When to use Vercel mode:**
+- Building React/Next.js chat interfaces with `@ai-sdk/react`
+- Direct integration with Vercel's AI SDK ecosystem
+- Need SSE streams compatible with `useChat` hook
+
+**How it works:**
+- ✅ Tools ARE executed (fully agentic behavior)
+- ✅ Thinking/reasoning tokens supported
+- ✅ Pre-formatted SSE strings ready for HTTP response
+- ✅ Compatible with `x-vercel-ai-ui-message-stream: v1` protocol
+
+**FastAPI Integration Example:**
+
+```python
+from fastapi import FastAPI, Request
+from fastapi.responses import StreamingResponse
+from tyler import Agent, Thread, Message, VERCEL_STREAM_HEADERS
+
+app = FastAPI()
+agent = Agent(name="chat", model_name="gpt-4.1", purpose="Chat assistant")
+
+@app.post("/api/chat")
+async def chat(request: Request):
+    body = await request.json()
+    messages = body.get("messages", [])
+    
+    thread = Thread()
+    for msg in messages:
+        thread.add_message(Message(role=msg["role"], content=msg["content"]))
+    
+    async def generate():
+        async for sse_chunk in agent.stream(thread, mode="vercel"):
+            yield sse_chunk
+    
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers=VERCEL_STREAM_HEADERS  # Includes x-vercel-ai-ui-message-stream: v1
+    )
+```
+
+**React Frontend with @ai-sdk/react:**
+
+```tsx
+import { useChat } from '@ai-sdk/react';
+
+export default function Chat() {
+    const { messages, sendMessage, input, setInput } = useChat({
+        api: '/api/chat',  // Points to your Tyler backend
+    });
+    
+    return (
+        <div>
+            {messages.map(message => (
+                <div key={message.id}>
+                    {message.role}: {message.parts.map((part, i) => 
+                        part.type === 'text' ? <span key={i}>{part.text}</span> : null
+                    )}
+                </div>
+            ))}
+            <form onSubmit={e => {
+                e.preventDefault();
+                sendMessage({ text: input });
+                setInput('');
+            }}>
+                <input value={input} onChange={e => setInput(e.target.value)} />
+            </form>
+        </div>
+    );
+}
+```
+
+See `examples/007_vercel_streaming.py` for a complete working example.
 
 ## Understanding Execution Events
 
