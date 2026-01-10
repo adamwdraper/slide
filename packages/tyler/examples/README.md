@@ -18,19 +18,26 @@ Quick start guide showing the essential Tyler workflow.
 ### 004_streaming.py
 **Event-based streaming** - demonstrates the new event streaming API with different event types (LLM_REQUEST, LLM_STREAM_CHUNK, LLM_RESPONSE, TOOL_SELECTED, etc.).
 
-### 005_raw_streaming.py
-**Raw streaming mode** - shows how to use `stream="raw"` to get unmodified LiteLLM chunks in OpenAI-compatible format, useful for building proxies or direct OpenAI client integration.
+### 005_openai_streaming.py
+**OpenAI streaming mode** - shows how to use `mode="openai"` to get unmodified LiteLLM chunks in OpenAI-compatible format, useful for building proxies or direct OpenAI client integration.
 
 ### 005_thread_persistence.py
 Thread persistence with streaming responses.
 
-### 006_thinking_tokens.py ✨ NEW
+### 006_thinking_tokens.py
 **Thinking tokens (reasoning) streaming** - demonstrates:
 - Enabling thinking tokens with `reasoning` parameter
 - Streaming both thinking and content separately
 - Using models that support reasoning (OpenAI o1/o3, DeepSeek-R1, etc.)
 - W&B Inference integration with DeepSeek-R1
 - Comparing responses with and without thinking tokens
+
+### 007_vercel_streaming.py ✨ NEW
+**Vercel AI SDK streaming** - demonstrates:
+- Using `mode="vercel"` for Vercel AI SDK Data Stream Protocol
+- SSE-formatted output compatible with `@ai-sdk/react`'s `useChat` hook
+- FastAPI integration example with `VERCEL_STREAM_HEADERS`
+- React frontend integration with the Vercel AI SDK
 
 ## Tool Examples (100-199)
 
@@ -142,17 +149,21 @@ BRAVE_API_KEY=...
 
 ### 🌊 Streaming Modes
 
-Tyler supports three streaming modes:
+Tyler supports four streaming modes:
 
-1. **Events mode** (`stream=True` or `stream="events"`): High-level event stream with structured data
+1. **Events mode** (`mode="events"` or default): High-level event stream with structured data
    - Best for: Building UIs, collecting metrics, custom event handling
    - Example: `004_streaming.py`
 
-2. **Raw mode** (`stream="raw"`): Unmodified LiteLLM chunks (OpenAI-compatible)
+2. **OpenAI mode** (`mode="openai"`): Unmodified LiteLLM chunks (OpenAI-compatible)
    - Best for: Building API proxies, direct OpenAI client integration
-   - Example: `005_raw_streaming.py`
+   - Example: `005_openai_streaming.py`
 
-3. **Thinking tokens** (`reasoning="low|medium|high"`): Stream model reasoning separately
+3. **Vercel mode** (`mode="vercel"`): SSE strings for Vercel AI SDK
+   - Best for: React/Next.js frontends with `@ai-sdk/react`'s `useChat` hook
+   - Example: `007_vercel_streaming.py`
+
+4. **Thinking tokens** (`reasoning="low|medium|high"`): Stream model reasoning separately
    - Best for: Showing model's thought process, debugging, transparency
    - Example: `006_thinking_tokens.py`
 

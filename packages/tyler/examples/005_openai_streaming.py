@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Example demonstrating raw streaming mode for OpenAI compatibility.
+Example demonstrating OpenAI streaming mode.
 
-This example shows how to use stream="raw" to get unmodified LiteLLM chunks
+This example shows how to use mode="openai" to get unmodified LiteLLM chunks
 in OpenAI-compatible format, which is useful for:
 - Building OpenAI API proxies
 - Direct integration with OpenAI-compatible clients
@@ -35,7 +35,7 @@ if weave_project:
 # Initialize the agent
 agent = Agent(
     model_name="gpt-4o",
-    purpose="To demonstrate raw streaming mode.",
+    purpose="To demonstrate OpenAI streaming mode.",
     temperature=0.7
 )
 
@@ -89,10 +89,10 @@ def serialize_chunk_to_sse(chunk) -> str:
     return f"data: {json.dumps(chunk_dict)}\n\n"
 
 
-async def demo_raw_streaming():
-    """Demonstrate raw streaming with SSE serialization"""
+async def demo_openai_streaming():
+    """Demonstrate OpenAI streaming with SSE serialization"""
     logger.info("=" * 60)
-    logger.info("Raw Streaming Mode Demo")
+    logger.info("OpenAI Streaming Mode Demo")
     logger.info("=" * 60)
     
     # Create a thread
@@ -105,15 +105,15 @@ async def demo_raw_streaming():
     
     logger.info("User: %s", message.content)
     logger.info("-" * 60)
-    logger.info("Streaming raw chunks (printing as SSE format)...")
+    logger.info("Streaming OpenAI chunks (printing as SSE format)...")
     logger.info("-" * 60)
     
     chunk_count = 0
     content_pieces = []
     usage_info = None
     
-    # Stream raw chunks
-    async for chunk in agent.stream(thread, mode="raw"):
+    # Stream OpenAI-compatible chunks
+    async for chunk in agent.stream(thread, mode="openai"):
         chunk_count += 1
         
         # Serialize to SSE format (what you'd send to a client)
@@ -133,7 +133,7 @@ async def demo_raw_streaming():
             usage_info = chunk.usage
     
     logger.info("-" * 60)
-    logger.info("✅ Raw streaming complete!")
+    logger.info("✅ OpenAI streaming complete!")
     logger.info(f"   Chunks received: {chunk_count}")
     logger.info(f"   Content: {''.join(content_pieces)}")
     if usage_info:
@@ -143,9 +143,9 @@ async def demo_raw_streaming():
 
 
 async def demo_comparison():
-    """Compare raw mode vs events mode"""
+    """Compare openai mode vs events mode"""
     logger.info("\n" + "=" * 60)
-    logger.info("Mode Comparison: Raw vs Events")
+    logger.info("Mode Comparison: OpenAI vs Events")
     logger.info("=" * 60)
     
     thread = Thread()
@@ -154,10 +154,10 @@ async def demo_comparison():
         content="Say 'Hello from Tyler!' in exactly those words."
     ))
     
-    # Test raw mode
-    logger.info("\n[Raw Mode]")
+    # Test openai mode
+    logger.info("\n[OpenAI Mode]")
     raw_content = []
-    async for chunk in agent.stream(thread, mode="raw"):
+    async for chunk in agent.stream(thread, mode="openai"):
         if hasattr(chunk, 'choices') and chunk.choices:
             delta = chunk.choices[0].delta
             if hasattr(delta, 'content') and delta.content:
@@ -182,17 +182,17 @@ async def demo_comparison():
     logger.info(f"Output: {events_text}")
     
     logger.info("\n✅ Both modes produce the same content")
-    logger.info(f"   Raw mode: {len(raw_text)} chars")
+    logger.info(f"   OpenAI mode: {len(raw_text)} chars")
     logger.info(f"   Events mode: {len(events_text)} chars")
 
 
 async def main():
     """Run all demos"""
     try:
-        # Demo 1: Raw streaming with SSE serialization
-        await demo_raw_streaming()
+        # Demo 1: OpenAI streaming with SSE serialization
+        await demo_openai_streaming()
         
-        # Demo 2: Compare raw vs events mode
+        # Demo 2: Compare openai vs events mode
         await demo_comparison()
         
     except Exception as e:
