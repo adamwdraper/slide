@@ -26,8 +26,7 @@ logger = get_logger(__name__)
 
 import asyncio
 
-from tyler import Agent, Thread, Message, EventType, VERCEL_STREAM_HEADERS
-from tyler.streaming import VercelStreamFormatter
+from tyler import Agent, Thread, Message, VERCEL_STREAM_HEADERS
 
 
 # Create agent
@@ -90,6 +89,7 @@ async def demo_with_parsing():
                     print(data.get("delta", ""), end="", flush=True)
                     
             except json.JSONDecodeError:
+                # Skip malformed JSON chunks (e.g., partial SSE data)
                 pass
     
     print()  # Newline

@@ -5,7 +5,7 @@ compatible with the Vercel AI SDK's useChat hook.
 
 Protocol reference: https://ai-sdk.dev/docs/ai-sdk-ui/stream-protocol#data-stream-protocol
 """
-from typing import TYPE_CHECKING, Any, AsyncGenerator
+from typing import TYPE_CHECKING, AsyncGenerator
 
 from tyler.models.execution import EventType
 from tyler.streaming.base import BaseStreamMode

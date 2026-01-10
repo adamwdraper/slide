@@ -1300,6 +1300,10 @@ class Agent(BaseModel):
         
         Note: For most use cases, use `stream()` which handles multi-step iteration.
         This method is for advanced use cases where you need step-by-step control.
+        
+        Note: 'vercel' mode is not supported in step_stream() because it requires
+        multi-step orchestration to properly format the complete message stream.
+        Use `stream(thread, mode="vercel")` instead.
         """
         # Reset per-step flags
         self._last_step_stream_had_tool_calls = False

@@ -6,7 +6,7 @@ in OpenAI-compatible format for direct integration with OpenAI clients.
 import asyncio
 import json
 import logging
-from typing import TYPE_CHECKING, Any, AsyncGenerator, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, AsyncGenerator
 
 from narrator import Message
 from tyler.streaming.base import BaseStreamMode, ChunkAccumulator

@@ -12,17 +12,11 @@ from typing import (
     List,
     Optional,
     Protocol,
-    TypeVar,
-    Union,
 )
-from datetime import datetime, timezone
 
 if TYPE_CHECKING:
     from tyler.models.agent import Agent
     from tyler.models.thread import Thread
-
-# Type variable for stream output
-T = TypeVar("T")
 
 
 class StreamMode(Protocol):

@@ -2,7 +2,7 @@
 import pytest
 import json
 from unittest.mock import patch, MagicMock, AsyncMock
-from tyler import Agent, Thread, Message, ExecutionEvent, EventType
+from tyler import Agent, Thread, Message
 from types import SimpleNamespace
 from litellm import ModelResponse
 
