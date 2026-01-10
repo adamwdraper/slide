@@ -24,10 +24,20 @@ load_dotenv()
 from tyler.utils.logging import get_logger
 logger = get_logger(__name__)
 
+import os
 import asyncio
+import weave
 
 from tyler import Agent, Thread, Message, VERCEL_STREAM_HEADERS
 
+# Initialize weave tracing if WANDB_PROJECT is set
+weave_project = os.getenv("WANDB_PROJECT")
+if weave_project:
+    try:
+        weave.init(weave_project)
+        logger.debug("Weave tracing initialized successfully")
+    except Exception as e:
+        logger.warning(f"Failed to initialize weave tracing: {e}. Continuing without weave.")
 
 # Create agent
 agent = Agent(
