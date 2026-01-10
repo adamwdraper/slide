@@ -236,17 +236,11 @@ class EventsStreamMode(BaseStreamMode):
                     parsed_args = {}
                 tool_call["function"]["arguments"] = json.dumps(parsed_args)
 
-            # Execute tools in parallel
-            tool_tasks = [agent._handle_tool_execution(tc) for tc in accumulator.tool_calls]
-            tool_results = await asyncio.gather(*tool_tasks, return_exceptions=True)
-
-            # Process results
-            for i, result in enumerate(tool_results):
-                tool_call = accumulator.tool_calls[i]
+            # Yield tool selected events first
+            for tool_call in accumulator.tool_calls:
                 tool_name = tool_call["function"]["name"]
                 tool_call_id = tool_call["id"]
-
-                # Yield tool selected event
+                
                 try:
                     args_dict = json.loads(tool_call["function"]["arguments"])
                 except json.JSONDecodeError:
@@ -262,6 +256,27 @@ class EventsStreamMode(BaseStreamMode):
                     },
                 )
 
+            # Execute tools in parallel with timing
+            tool_start_times: Dict[str, datetime] = {}
+            tool_tasks = []
+            
+            for tool_call in accumulator.tool_calls:
+                tool_id = tool_call["id"]
+                tool_start_times[tool_id] = datetime.now(timezone.utc)
+                tool_tasks.append(agent._handle_tool_execution(tool_call))
+            
+            tool_results = await asyncio.gather(*tool_tasks, return_exceptions=True)
+
+            # Process results
+            for i, result in enumerate(tool_results):
+                tool_call = accumulator.tool_calls[i]
+                tool_name = tool_call["function"]["name"]
+                tool_call_id = tool_call["id"]
+                
+                # Calculate duration
+                tool_end_time = datetime.now(timezone.utc)
+                tool_duration_ms = (tool_end_time - tool_start_times[tool_call_id]).total_seconds() * 1000
+
                 # Process result
                 tool_message, break_iteration = agent._process_tool_result(result, tool_call, tool_name)
                 thread.add_message(tool_message)
@@ -275,6 +290,7 @@ class EventsStreamMode(BaseStreamMode):
                             "tool_name": tool_name,
                             "tool_call_id": tool_call_id,
                             "error": str(result),
+                            "duration_ms": tool_duration_ms,
                         },
                     )
                 else:
@@ -285,6 +301,7 @@ class EventsStreamMode(BaseStreamMode):
                             "tool_name": tool_name,
                             "tool_call_id": tool_call_id,
                             "result": tool_message.content,
+                            "duration_ms": tool_duration_ms,
                         },
                     )
 
