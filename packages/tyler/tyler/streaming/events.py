@@ -59,8 +59,8 @@ class EventsStreamMode(BaseStreamMode):
                 },
             )
 
-            # Execute one step and yield all events
-            async for event in self._step_stream(agent, thread):
+            # Execute one step via agent.step_stream for proper Weave tracing
+            async for event in agent.step_stream(thread, mode="events"):
                 if event.type == EventType.LLM_RESPONSE:
                     toks = (event.data or {}).get("tokens") or {}
                     if isinstance(toks, dict):

@@ -50,7 +50,8 @@ class OpenAIStreamMode(BaseStreamMode):
         agent._tool_attributes_cache.clear()
 
         while agent._iteration_count < agent.max_tool_iterations:
-            async for chunk in self._step_stream(agent, thread):
+            # Execute one step via agent.step_stream for proper Weave tracing
+            async for chunk in agent.step_stream(thread, mode="openai"):
                 yield chunk
 
             if not agent._last_step_stream_should_continue:
