@@ -17,16 +17,17 @@ Usage:
 To integrate with FastAPI:
     See the `create_fastapi_endpoint()` function below.
 """
+# Load environment variables first
+from dotenv import load_dotenv
+load_dotenv()
+
+from tyler.utils.logging import get_logger
+logger = get_logger(__name__)
 
 import asyncio
-import logging
 
 from tyler import Agent, Thread, Message, EventType, VERCEL_STREAM_HEADERS
 from tyler.streaming import VercelStreamFormatter
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 
 # Create agent
