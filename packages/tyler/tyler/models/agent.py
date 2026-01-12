@@ -1291,8 +1291,8 @@ class Agent(BaseModel):
     async def step_stream(
         self,
         thread: Thread,
-        mode: Literal["events", "openai"] = "events",
-    ) -> AsyncGenerator[Union[ExecutionEvent, Any], None]:
+        mode: Literal["events", "openai", "vercel"] = "events",
+    ) -> AsyncGenerator[Union[ExecutionEvent, Any, str], None]:
         """Execute a single streaming step (one LLM streamed completion + resulting tool execution).
 
         This is the streaming equivalent of `step()` for `run()`: tool execution happens
@@ -1300,10 +1300,6 @@ class Agent(BaseModel):
         
         Note: For most use cases, use `stream()` which handles multi-step iteration.
         This method is for advanced use cases where you need step-by-step control.
-        
-        Note: 'vercel' mode is not supported in step_stream() because it requires
-        multi-step orchestration to properly format the complete message stream.
-        Use `stream(thread, mode="vercel")` instead.
         """
         # Reset per-step flags
         self._last_step_stream_had_tool_calls = False
@@ -1317,8 +1313,12 @@ class Agent(BaseModel):
             from tyler.streaming.openai import openai_stream_mode
             async for chunk in openai_stream_mode._step_stream(self, thread):
                 yield chunk
+        elif mode == "vercel":
+            from tyler.streaming.vercel import vercel_stream_mode
+            async for sse in vercel_stream_mode._step_stream(self, thread):
+                yield sse
         else:
-            raise ValueError(f"Invalid mode: {mode}. Must be 'events' or 'openai'")
+            raise ValueError(f"Invalid mode: {mode}. Must be 'events', 'openai', or 'vercel'")
 
     async def _get_streaming_completion(
         self,

@@ -127,6 +127,49 @@ async def test_vercel_stream_text_content():
 
 
 @pytest.mark.asyncio
+async def test_vercel_step_stream_basic_response():
+    """step_stream(mode='vercel') yields step-local SSE without message-level [DONE]."""
+    agent = Agent(stream=True)
+    thread = Thread()
+    thread.add_message(Message(role="user", content="Hello"))
+
+    chunks = [
+        create_streaming_chunk(content="Hi"),
+        create_streaming_chunk(content="!"),
+    ]
+
+    mock_weave_call = MagicMock()
+    mock_weave_call.id = "test-weave-id"
+
+    with patch.object(agent, "_get_completion") as mock_get_completion:
+        mock_get_completion.call.return_value = (async_generator(chunks), mock_weave_call)
+
+        sse_events = []
+        async for sse_chunk in agent.step_stream(thread, mode="vercel"):
+            sse_events.append(sse_chunk)
+
+        assert all(isinstance(s, str) for s in sse_events)
+
+        # First event should be step start
+        first_event = json.loads(sse_events[0][6:-2])
+        assert first_event["type"] == "start-step"
+
+        # Should include text events and finish-step
+        event_types = []
+        for sse in sse_events:
+            if sse.startswith("data: ") and not sse.startswith("data: [DONE]"):
+                event_types.append(json.loads(sse[6:-2])["type"])
+
+        assert "text-start" in event_types
+        assert "text-delta" in event_types
+        assert "text-end" in event_types
+        assert "finish-step" in event_types
+
+        # step_stream should not emit message-level done marker
+        assert "data: [DONE]\n\n" not in sse_events
+
+
+@pytest.mark.asyncio
 async def test_vercel_stream_with_reasoning():
     """Test vercel streaming with reasoning/thinking tokens."""
     agent = Agent(stream=True)
