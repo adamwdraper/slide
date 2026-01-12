@@ -1,9 +1,10 @@
-## [tyler-v6.0.0] - 2026-01-12
+## [tyler-v6.1.0] - 2026-01-12
 
 ### 🚀 Features
 
 - *(tyler)* Add Vercel AI SDK Data Stream Protocol streaming mode
 - *(tyler)* Support step_stream(mode="vercel")
+- *(streaming)* Add vercel_objects mode for marimo integration
 
 ### 🐛 Bug Fixes
 
@@ -23,6 +24,7 @@
 ### 🧪 Testing
 
 - *(tyler)* Add tests for Vercel AI SDK streaming
+- *(streaming)* Add tests for vercel_objects mode
 
 ### ⚙️ Miscellaneous Tasks
 
