@@ -456,6 +456,52 @@ chunks → finish_reason="tool_calls" → [tools execute silently] → more chun
 
 See the [streaming guide](/guides/streaming-responses) for more details and examples.
 
+### Vercel AI SDK Streaming Mode (mode="vercel")
+
+<Note>
+  Perfect for React/Next.js frontends using `@ai-sdk/react`'s `useChat` hook.
+</Note>
+
+Stream responses as SSE-formatted strings compatible with the [Vercel AI SDK Data Stream Protocol](https://ai-sdk.dev/docs/ai-sdk-ui/stream-protocol#data-stream-protocol):
+
+```python
+from tyler import VERCEL_STREAM_HEADERS
+
+# Stream in Vercel AI SDK format
+async for sse_chunk in agent.stream(thread, mode="vercel"):
+    print(sse_chunk, end="")  # Pre-formatted SSE strings
+
+# In a FastAPI endpoint:
+from fastapi.responses import StreamingResponse
+
+@app.post("/api/chat")
+async def chat(request: Request):
+    # ... setup thread from request ...
+    
+    async def generate():
+        async for sse_chunk in agent.stream(thread, mode="vercel"):
+            yield sse_chunk
+    
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers=VERCEL_STREAM_HEADERS  # Includes x-vercel-ai-ui-message-stream: v1
+    )
+```
+
+**When to use vercel mode:**
+- Building React/Next.js chat interfaces with `@ai-sdk/react`
+- Direct integration with Vercel's AI SDK ecosystem
+- Need SSE streams compatible with `useChat` hook
+
+**How vercel mode works:**
+- ✅ Tools ARE executed (fully agentic behavior)
+- ✅ Thinking/reasoning tokens supported
+- ✅ Pre-formatted SSE strings ready for HTTP response
+- ✅ Compatible with `x-vercel-ai-ui-message-stream: v1` protocol
+
+See the [streaming guide](/guides/streaming-responses#vercel-ai-sdk-streaming) for complete examples including React frontend code.
+
 ## Return Values
 
 ### AgentResult (Non-Streaming)
