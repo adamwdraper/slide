@@ -1318,7 +1318,9 @@ class Agent(BaseModel):
             async for sse in vercel_stream_mode._step_stream(self, thread):
                 yield sse
         else:
-            raise ValueError(f"Invalid mode: {mode}. Must be 'events', 'openai', or 'vercel'")
+            raise ValueError(
+                f"Invalid streaming mode: '{mode}'. Must be one of: 'events', 'openai', 'vercel'"
+            )
 
     async def _get_streaming_completion(
         self,
