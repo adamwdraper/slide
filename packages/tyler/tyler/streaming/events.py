@@ -3,9 +3,8 @@
 This module provides the EventsStreamMode which yields ExecutionEvent objects
 with detailed telemetry about agent execution.
 """
-import logging
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, AsyncGenerator, Dict, Optional
+from typing import TYPE_CHECKING, AsyncGenerator
 
 from tyler.models.execution import ExecutionEvent, EventType
 from narrator import Message
