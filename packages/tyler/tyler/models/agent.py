@@ -1205,7 +1205,7 @@ class Agent(BaseModel):
     async def stream(
         self,
         thread_or_id: Union[Thread, str],
-        mode: Literal["events", "openai", "vercel"] = "events",
+        mode: Literal["events", "openai", "vercel", "vercel_objects"] = "events",
         tool_context: Optional[Dict[str, Any]] = None
     ) -> AsyncGenerator[Union[ExecutionEvent, Any, str], None]:
         """
@@ -1222,6 +1222,7 @@ class Agent(BaseModel):
                   - "events" (default): Yields ExecutionEvent objects with detailed telemetry
                   - "openai": Yields raw LiteLLM chunks in OpenAI-compatible format
                   - "vercel": Yields SSE strings in Vercel AI SDK Data Stream Protocol format
+                  - "vercel_objects": Yields chunk dicts for Vercel AI SDK (for marimo, etc.)
             tool_context: Optional dictionary of dependencies to inject into tools.
                          Tools that have 'ctx' or 'context' as their first parameter
                          will receive this context.
@@ -1238,6 +1239,10 @@ class Agent(BaseModel):
             If mode="vercel":
                 SSE-formatted strings compatible with Vercel AI SDK's useChat hook.
                 See: https://ai-sdk.dev/docs/ai-sdk-ui/stream-protocol#data-stream-protocol
+            
+            If mode="vercel_objects":
+                Chunk dictionaries (without SSE wrapping) for frameworks like marimo's
+                mo.ui.chat(vercel_messages=True) that consume Vercel chunks directly.
         
         Raises:
             ValueError: If thread_id is provided but thread is not found, or
@@ -1259,6 +1264,10 @@ class Agent(BaseModel):
             # Vercel AI SDK streaming (for React/Next.js frontends)
             async for sse_chunk in agent.stream(thread, mode="vercel"):
                 yield sse_chunk  # Send directly to HTTP response
+            
+            # marimo mo.ui.chat() integration
+            async for chunk in agent.stream(thread, mode="vercel_objects"):
+                yield chunk  # Chunk dicts for vercel_messages=True
         """
         # Merge agent-level and run-level tool contexts
         # Run-level context overrides agent-level context
@@ -1291,7 +1300,7 @@ class Agent(BaseModel):
     async def step_stream(
         self,
         thread: Thread,
-        mode: Literal["events", "openai", "vercel"] = "events",
+        mode: Literal["events", "openai", "vercel", "vercel_objects"] = "events",
     ) -> AsyncGenerator[Union[ExecutionEvent, Any, str], None]:
         """Execute a single streaming step (one LLM streamed completion + resulting tool execution).
 
@@ -1317,9 +1326,13 @@ class Agent(BaseModel):
             from tyler.streaming.vercel import vercel_stream_mode
             async for sse in vercel_stream_mode._step_stream(self, thread):
                 yield sse
+        elif mode == "vercel_objects":
+            from tyler.streaming.vercel_objects import vercel_objects_stream_mode
+            async for chunk in vercel_objects_stream_mode._step_stream(self, thread):
+                yield chunk
         else:
             raise ValueError(
-                f"Invalid streaming mode: '{mode}'. Must be one of: 'events', 'openai', 'vercel'"
+                f"Invalid streaming mode: '{mode}'. Must be one of: 'events', 'openai', 'vercel', 'vercel_objects'"
             )
 
     async def _get_streaming_completion(
