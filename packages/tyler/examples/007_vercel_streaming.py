@@ -3,8 +3,10 @@
 Example: Vercel AI SDK Streaming
 ================================
 
-This example demonstrates using Tyler's 'vercel' streaming mode to produce
-output compatible with the Vercel AI SDK's useChat hook.
+This example demonstrates Tyler's Vercel streaming modes:
+
+- **vercel**: Yields SSE-formatted strings for HTTP streaming (React/Next.js)
+- **vercel_objects**: Yields chunk dictionaries for frameworks like marimo
 
 The Vercel AI SDK Data Stream Protocol uses Server-Sent Events (SSE) format
 and is designed for building chat interfaces with React/Next.js frontends.
@@ -16,6 +18,9 @@ Usage:
     
 To integrate with FastAPI:
     See the `create_fastapi_endpoint()` function below.
+    
+To integrate with marimo:
+    See the `demo_vercel_objects()` function below.
 """
 # Load environment variables first
 from dotenv import load_dotenv
@@ -107,6 +112,66 @@ async def demo_with_parsing():
     logger.info("Full response: %s", "".join(content_parts))
 
 
+async def demo_vercel_objects():
+    """Demonstrate vercel_objects mode for marimo integration.
+    
+    This mode yields chunk dictionaries directly (no SSE wrapping),
+    which is what marimo's mo.ui.chat(vercel_messages=True) expects.
+    """
+    thread = Thread()
+    message = Message(
+        role="user",
+        content="Say hello in exactly 3 words."
+    )
+    thread.add_message(message)
+    
+    logger.info("User: %s", message.content)
+    logger.info("Streaming with vercel_objects mode (raw chunk dicts)...")
+    logger.info("-" * 50)
+    
+    content_parts = []
+    
+    async for chunk in agent.stream(thread, mode="vercel_objects"):
+        # chunk is a dict, not an SSE string
+        chunk_type = chunk.get("type", "")
+        
+        if chunk_type == "text-delta":
+            delta = chunk.get("delta", "")
+            content_parts.append(delta)
+            print(delta, end="", flush=True)
+        elif chunk_type == "reasoning-delta":
+            # Thinking/reasoning tokens
+            delta = chunk.get("delta", "")
+            print(f"[thinking: {delta}]", end="", flush=True)
+        elif chunk_type in ("start", "finish", "start-step", "finish-step"):
+            # Log protocol events for debugging
+            logger.debug("Protocol event: %s", chunk)
+    
+    print()  # Newline
+    logger.info("-" * 50)
+    logger.info("Full response: %s", "".join(content_parts))
+    
+    # Show example marimo integration
+    logger.info("\n")
+    logger.info("Example marimo integration:")
+    logger.info("""
+    import marimo as mo
+    from tyler import Agent, Thread, Message
+    
+    agent = Agent(name="assistant", model_name="gpt-4.1")
+    
+    async def model(messages, config):
+        thread = Thread()
+        for msg in messages:
+            thread.add_message(Message(role=msg.role, content=msg.content))
+        
+        async for chunk in agent.stream(thread, mode="vercel_objects"):
+            yield chunk
+    
+    mo.ui.chat(model, vercel_messages=True)
+    """)
+
+
 def create_fastapi_endpoint():
     """
     Example of integrating with FastAPI.
@@ -185,7 +250,7 @@ def create_fastapi_endpoint():
 
 async def main():
     logger.info("=" * 60)
-    logger.info("Demo 1: Raw Vercel AI SDK Streaming")
+    logger.info("Demo 1: Raw Vercel AI SDK Streaming (SSE strings)")
     logger.info("=" * 60)
     await demo_vercel_streaming()
     
@@ -194,6 +259,12 @@ async def main():
     logger.info("Demo 2: Parsing Vercel Stream for Text")
     logger.info("=" * 60)
     await demo_with_parsing()
+    
+    logger.info("\n")
+    logger.info("=" * 60)
+    logger.info("Demo 3: Vercel Objects Mode (for marimo, etc.)")
+    logger.info("=" * 60)
+    await demo_vercel_objects()
     
     logger.info("\n")
     logger.info("=" * 60)
