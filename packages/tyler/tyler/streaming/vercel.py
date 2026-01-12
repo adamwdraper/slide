@@ -146,6 +146,90 @@ class VercelStreamMode(BaseStreamMode):
                 yield formatter.format_finish(FinishReason.STOP)
                 yield formatter.format_done()
 
+    async def _step_stream(
+        self,
+        agent: "Agent",
+        thread: "Thread",
+    ) -> AsyncGenerator[str, None]:
+        """Stream a single agent step as Vercel AI SDK SSE strings.
+
+        This is the `step_stream(mode="vercel")` implementation. It yields a
+        *step-local* SSE sequence and intentionally does NOT emit the message-level
+        start/finish/[DONE] markers, since those belong to the full `stream(mode="vercel")`
+        orchestration.
+
+        Expected output shape:
+        - start-step
+        - (optional) reasoning/text/tool events for this step
+        - finish-step
+        """
+        from tyler.streaming.events import events_stream_mode
+
+        formatter = VercelStreamFormatter()
+
+        # Step start
+        yield formatter.format_step_start()
+
+        text_open = False
+        reasoning_open = False
+
+        async for event in events_stream_mode._step_stream(agent, thread):
+            if event.type == EventType.LLM_THINKING_CHUNK:
+                if not reasoning_open:
+                    yield formatter.format_reasoning_start()
+                    reasoning_open = True
+                thinking_chunk = event.data.get("thinking_chunk", "")
+                if thinking_chunk:
+                    yield formatter.format_reasoning_delta(thinking_chunk)
+
+            elif event.type == EventType.LLM_STREAM_CHUNK:
+                # Close reasoning block if transitioning to text
+                if reasoning_open:
+                    yield formatter.format_reasoning_end()
+                    reasoning_open = False
+                if not text_open:
+                    yield formatter.format_text_start()
+                    text_open = True
+                content_chunk = event.data.get("content_chunk", "")
+                if content_chunk:
+                    yield formatter.format_text_delta(content_chunk)
+
+            elif event.type == EventType.LLM_RESPONSE:
+                if text_open:
+                    yield formatter.format_text_end()
+                    text_open = False
+                if reasoning_open:
+                    yield formatter.format_reasoning_end()
+                    reasoning_open = False
+
+            elif event.type == EventType.TOOL_SELECTED:
+                tool_id = event.data.get("tool_call_id", "")
+                tool_name = event.data.get("tool_name", "")
+                args = event.data.get("arguments", {})
+                yield formatter.format_tool_input_start(tool_id, tool_name)
+                yield formatter.format_tool_input_available(tool_id, tool_name, args)
+
+            elif event.type == EventType.TOOL_RESULT:
+                tool_id = event.data.get("tool_call_id", "")
+                result = event.data.get("result", "")
+                yield formatter.format_tool_output_available(tool_id, {"result": result})
+
+            elif event.type == EventType.TOOL_ERROR:
+                tool_id = event.data.get("tool_call_id", "")
+                error = event.data.get("error", "Tool execution failed")
+                yield formatter.format_tool_output_error(tool_id, error)
+
+            elif event.type == EventType.EXECUTION_ERROR:
+                error_msg = event.data.get("message", "Execution error")
+                yield formatter.format_error(error_msg)
+
+        # Close any open blocks and finish the step
+        if text_open:
+            yield formatter.format_text_end()
+        if reasoning_open:
+            yield formatter.format_reasoning_end()
+        yield formatter.format_step_finish()
+
 
 # Singleton instance for use by the Agent
 vercel_stream_mode = VercelStreamMode()
