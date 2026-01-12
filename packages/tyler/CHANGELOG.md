@@ -1,3 +1,33 @@
+## [tyler-v6.0.0] - 2026-01-12
+
+### 🚀 Features
+
+- *(tyler)* Add Vercel AI SDK Data Stream Protocol streaming mode
+- *(tyler)* Support step_stream(mode="vercel")
+
+### 🐛 Bug Fixes
+
+- *(streaming)* Add duration_ms tracking to TOOL_RESULT events
+- *(examples)* Add dotenv loading to vercel streaming example
+- *(streaming)* Restore Weave trace hierarchy
+- *(examples)* Add Weave tracing init to vercel streaming example
+- *(tyler)* Align invalid mode error message with stream()
+
+### 🚜 Refactor
+
+- *(tyler)* [**breaking**] Rename 'raw' streaming mode to 'openai'
+- *(tyler)* Extract streaming modes into unified module
+- *(vercel)* Stream via step_stream for single-mode semantics
+- *(streaming)* Centralize step execution (LLM + tools)
+
+### 🧪 Testing
+
+- *(tyler)* Add tests for Vercel AI SDK streaming
+
+### ⚙️ Miscellaneous Tasks
+
+- Address PR review comments
+- *(streaming)* Remove unused imports after core refactor
 ## [tyler-v5.6.0] - 2026-01-09
 
 ### 🚀 Features
