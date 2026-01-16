@@ -47,12 +47,13 @@ Each Lye tool is a dictionary with the following structure:
 
 Tool functions follow specific patterns:
 
+<Note>
+**Automatic Weave Tracing**: Tyler automatically wraps all tool implementations with `weave.op()` when they are registered. You don't need to add `@weave.op()` decorators to your tools - they will appear in Weave traces automatically with the tool name as the operation name.
+</Note>
+
 ### Basic Tool
 
 ```python
-import weave
-
-@weave.op(name="category-tool_name")
 def tool_function(*, param1: str, param2: Optional[int] = None) -> str:
     """
     Tool implementation.
@@ -75,7 +76,6 @@ def tool_function(*, param1: str, param2: Optional[int] = None) -> str:
 Tools that return files use a tuple format:
 
 ```python
-@weave.op(name="files-create_file")
 def create_file(*, filename: str, content: str) -> Tuple[str, List[Dict[str, Any]]]:
     """
     Create a file and return it.
@@ -338,7 +338,6 @@ When a tool exceeds its timeout:
 ## Example: Complete Tool
 
 ```python
-import weave
 import requests
 from typing import Tuple, List, Dict, Any
 import base64
@@ -372,8 +371,7 @@ WEB_DOWNLOAD_TOOL = {
     "timeout": 120.0  # Tool-level timeout (2 minutes max)
 }
 
-# Tool implementation
-@weave.op(name="web-download_file")
+# Tool implementation (automatically traced by Tyler)
 def download_file(*, url: str, timeout: int = 30) -> Tuple[str, List[Dict[str, Any]]]:
     """Download a file from URL."""
     try:

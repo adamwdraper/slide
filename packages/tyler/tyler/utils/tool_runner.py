@@ -117,6 +117,27 @@ class ToolRunner:
         self.tool_attributes = {}  # name -> tool attributes
         self._module_cache = {}  # module_spec -> loaded tools
 
+    def _should_skip_weave_wrap(self, func: Callable) -> bool:
+        """Check if function should skip weave.op wrapping.
+        
+        Returns True if:
+        - Function is already wrapped by weave.op (prevents double-wrapping)
+        - Function is an MCP tool (MCP SDK provides its own Weave tracing)
+        
+        Args:
+            func: The function to check
+            
+        Returns:
+            True if the function should not be wrapped with weave.op
+        """
+        # Already wrapped by weave.op
+        if hasattr(func, 'resolve_fn') or getattr(func, '_is_weave_op', False):
+            return True
+        # MCP tools are traced by the MCP SDK itself
+        if getattr(func, '_is_mcp_tool', False):
+            return True
+        return False
+
     def register_tool(
         self, 
         name: str, 
@@ -126,6 +147,11 @@ class ToolRunner:
     ) -> None:
         """
         Register a new tool implementation.
+        
+        Tools are automatically wrapped with weave.op() for tracing, using the
+        tool name as the operation name. This provides clean trace trees where
+        each tool call appears as a named span. If the implementation is already
+        wrapped with @weave.op(), it won't be double-wrapped.
         
         Args:
             name: The name of the tool
@@ -139,6 +165,11 @@ class ToolRunner:
             ValueError: If timeout is not a positive number
         """
         self._validate_timeout(timeout, name)
+        
+        # Wrap with weave.op for automatic tracing
+        # Skip if already wrapped or if it's an MCP tool (MCP SDK traces those)
+        if not self._should_skip_weave_wrap(implementation):
+            implementation = weave.op(name=name)(implementation)
         
         self.tools[name] = {
             'implementation': implementation,

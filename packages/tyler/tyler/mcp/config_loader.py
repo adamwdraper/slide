@@ -233,6 +233,9 @@ def _create_tool_implementation(group: ClientSessionGroup, sdk_tool_name: str, d
     # Set function metadata for better debugging
     call_mcp_tool.__name__ = f"mcp_{display_name}"
     call_mcp_tool.__doc__ = f"MCP tool: {display_name}"
+    # Mark as MCP tool so ToolRunner skips weave.op wrapping
+    # (MCP SDK already provides its own Weave tracing)
+    call_mcp_tool._is_mcp_tool = True
     
     return call_mcp_tool
 

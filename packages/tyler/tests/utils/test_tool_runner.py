@@ -900,4 +900,196 @@ def test_selective_tool_loading_backward_compatibility(tool_runner):
         
         # Check tools are registered in the tool_runner
         assert 'mock_tool_1' in tool_runner.tools
-        assert 'mock_tool_2' in tool_runner.tools 
+        assert 'mock_tool_2' in tool_runner.tools
+
+
+# Tests for automatic weave.op wrapping
+class TestWeaveAutoWrapping:
+    """Tests for automatic weave.op() wrapping of tool implementations."""
+    
+    def test_should_skip_weave_wrap_detects_weave_op(self):
+        """Test that _should_skip_weave_wrap detects already-wrapped functions."""
+        import weave
+        
+        runner = ToolRunner()
+        
+        @weave.op()
+        def already_wrapped():
+            return "wrapped"
+        
+        def not_wrapped():
+            return "not wrapped"
+        
+        # Already wrapped should return True
+        assert runner._should_skip_weave_wrap(already_wrapped) is True
+        # Not wrapped should return False
+        assert runner._should_skip_weave_wrap(not_wrapped) is False
+    
+    def test_should_skip_weave_wrap_detects_mcp_tools(self):
+        """Test that _should_skip_weave_wrap detects MCP tool markers."""
+        runner = ToolRunner()
+        
+        def mcp_tool():
+            return "mcp"
+        mcp_tool._is_mcp_tool = True
+        
+        def regular_tool():
+            return "regular"
+        
+        # MCP tool should return True
+        assert runner._should_skip_weave_wrap(mcp_tool) is True
+        # Regular tool should return False
+        assert runner._should_skip_weave_wrap(regular_tool) is False
+    
+    def test_regular_tools_get_wrapped(self):
+        """Test that regular tools get wrapped with weave.op."""
+        runner = ToolRunner()
+        
+        def my_tool(x: str) -> str:
+            return f"result: {x}"
+        
+        runner.register_tool('my_tool', my_tool)
+        
+        # The registered implementation should have weave attributes
+        impl = runner.tools['my_tool']['implementation']
+        assert hasattr(impl, 'resolve_fn'), "Tool should be wrapped with weave.op"
+    
+    def test_already_wrapped_tools_not_double_wrapped(self):
+        """Test that @weave.op() decorated tools are not wrapped again."""
+        import weave
+        
+        runner = ToolRunner()
+        
+        @weave.op(name="custom_name")
+        def already_wrapped(x: str) -> str:
+            return f"result: {x}"
+        
+        # Get original weave wrapper reference
+        original_impl = already_wrapped
+        
+        runner.register_tool('already_wrapped', already_wrapped)
+        
+        # The registered implementation should be the same object (not re-wrapped)
+        impl = runner.tools['already_wrapped']['implementation']
+        assert impl is original_impl, "Already wrapped tool should not be wrapped again"
+    
+    def test_mcp_tools_not_wrapped(self):
+        """Test that MCP tools (marked with _is_mcp_tool) are not wrapped."""
+        runner = ToolRunner()
+        
+        async def mcp_tool_impl(query: str) -> str:
+            return f"MCP result: {query}"
+        mcp_tool_impl._is_mcp_tool = True
+        
+        # Get original reference
+        original_impl = mcp_tool_impl
+        
+        runner.register_tool('mcp_tool', mcp_tool_impl)
+        
+        # The registered implementation should be the same object (not wrapped)
+        impl = runner.tools['mcp_tool']['implementation']
+        assert impl is original_impl, "MCP tool should not be wrapped"
+        assert not hasattr(impl, 'resolve_fn'), "MCP tool should not have weave attributes"
+    
+    @pytest.mark.asyncio
+    async def test_wrapped_tools_still_execute_correctly(self):
+        """Test that auto-wrapped tools still execute correctly."""
+        runner = ToolRunner()
+        
+        async def async_tool(message: str) -> str:
+            return f"Hello, {message}!"
+        
+        runner.register_tool('greeting_tool', async_tool)
+        
+        result = await runner.run_tool_async('greeting_tool', {'message': 'World'})
+        assert result == "Hello, World!"
+    
+    def test_wrapped_sync_tools_execute_correctly(self):
+        """Test that auto-wrapped sync tools still execute correctly."""
+        runner = ToolRunner()
+        
+        def sync_tool(x: int, y: int) -> int:
+            return x + y
+        
+        runner.register_tool('add_tool', sync_tool)
+        
+        result = runner.run_tool('add_tool', {'x': 5, 'y': 3})
+        assert result == 8
+    
+    def test_weave_op_preserves_signature_for_context_detection(self):
+        """Test that weave.op preserves signature so context detection works.
+        
+        This is a regression test to ensure weave.op properly preserves function
+        signatures. If weave ever changes this behavior, this test will fail.
+        """
+        from tyler.utils.tool_runner import ToolContext
+        
+        runner = ToolRunner()
+        
+        def tool_with_context(ctx: ToolContext, query: str) -> str:
+            return f"User {ctx.get('user_id')}: {query}"
+        
+        # Register the tool (which wraps with weave.op)
+        runner.register_tool('context_tool', tool_with_context)
+        
+        # Get the wrapped implementation
+        impl = runner.tools['context_tool']['implementation']
+        
+        # Verify the wrapped function still has detectable context parameter
+        assert runner._tool_expects_context(impl) is True, \
+            "weave.op should preserve signature for context detection"
+    
+    def test_weave_op_preserves_async_detection(self):
+        """Test that weave.op preserves async nature of functions.
+        
+        This is a regression test to ensure weave.op properly preserves
+        the coroutine nature of async functions.
+        """
+        import inspect
+        
+        runner = ToolRunner()
+        
+        async def async_tool(x: str) -> str:
+            return f"result: {x}"
+        
+        def sync_tool(x: str) -> str:
+            return f"result: {x}"
+        
+        runner.register_tool('async_tool', async_tool)
+        runner.register_tool('sync_tool', sync_tool)
+        
+        # Verify async detection is preserved after wrapping
+        assert runner.tools['async_tool']['is_async'] is True, \
+            "weave.op should preserve async detection"
+        assert runner.tools['sync_tool']['is_async'] is False, \
+            "weave.op should preserve sync detection"
+    
+    @pytest.mark.asyncio
+    async def test_context_injection_works_after_weave_wrap(self):
+        """Test that context injection works correctly on weave-wrapped tools.
+        
+        This is an integration test ensuring the full flow:
+        1. Tool with context param is registered (gets weave.op wrapped)
+        2. Context detection still works on the wrapped function
+        3. Context is properly injected when tool is called
+        """
+        from tyler.utils.tool_runner import ToolContext
+        
+        runner = ToolRunner()
+        received_context = None
+        
+        async def tool_needing_context(ctx: ToolContext, value: str) -> str:
+            nonlocal received_context
+            received_context = ctx
+            return f"Got {value} for user {ctx.get('user_id')}"
+        
+        runner.register_tool('ctx_tool', tool_needing_context)
+        
+        # Create context and call the tool
+        context = ToolContext(deps={"user_id": "test123"})
+        result = await runner.run_tool_async('ctx_tool', {'value': 'hello'}, context=context)
+        
+        # Verify context was injected correctly
+        assert result == "Got hello for user test123"
+        assert received_context is not None
+        assert received_context.get('user_id') == "test123"
