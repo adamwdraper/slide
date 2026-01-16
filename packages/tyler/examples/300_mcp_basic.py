@@ -42,7 +42,7 @@ async def main():
     agent = Agent(
         name="DocsBot",
         model_name="gpt-4o-mini",
-        purpose="To help users find information in Slide documentation",
+        purpose="To help users find information in Slide documentation. Always use the docs_SearchSlideFramework tool to search the documentation before answering questions about Slide, Tyler agents, or the framework.",
         mcp={
             "servers": [{
                 "name": "docs",
