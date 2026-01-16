@@ -1,10 +1,33 @@
+## [tyler-v6.2.0] - 2026-01-16
+
+### 🚀 Features
+
+- *(tracing)* Auto-wrap tools with weave.op() for consistent trace trees
+
+### 🐛 Bug Fixes
+
+- *(tracing)* Skip weave.op wrapping for MCP tools
+- *(examples)* Improve MCP example prompt to ensure tool usage
+
+### 🧪 Testing
+
+- *(tracing)* Add tests for weave.op auto-wrapping
+- *(tracing)* Add regression tests for weave.op signature preservation
 ## [tyler-v6.1.0] - 2026-01-12
+
+### 🚀 Features
+
+- *(streaming)* Add vercel_objects mode for marimo integration
+
+### 🧪 Testing
+
+- *(streaming)* Add tests for vercel_objects mode
+## [tyler-v6.0.0] - 2026-01-12
 
 ### 🚀 Features
 
 - *(tyler)* Add Vercel AI SDK Data Stream Protocol streaming mode
 - *(tyler)* Support step_stream(mode="vercel")
-- *(streaming)* Add vercel_objects mode for marimo integration
 
 ### 🐛 Bug Fixes
 
@@ -24,7 +47,6 @@
 ### 🧪 Testing
 
 - *(tyler)* Add tests for Vercel AI SDK streaming
-- *(streaming)* Add tests for vercel_objects mode
 
 ### ⚙️ Miscellaneous Tasks
 
