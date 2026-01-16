@@ -1015,3 +1015,81 @@ class TestWeaveAutoWrapping:
         
         result = runner.run_tool('add_tool', {'x': 5, 'y': 3})
         assert result == 8
+    
+    def test_weave_op_preserves_signature_for_context_detection(self):
+        """Test that weave.op preserves signature so context detection works.
+        
+        This is a regression test to ensure weave.op properly preserves function
+        signatures. If weave ever changes this behavior, this test will fail.
+        """
+        from tyler.utils.tool_runner import ToolContext
+        
+        runner = ToolRunner()
+        
+        def tool_with_context(ctx: ToolContext, query: str) -> str:
+            return f"User {ctx.get('user_id')}: {query}"
+        
+        # Register the tool (which wraps with weave.op)
+        runner.register_tool('context_tool', tool_with_context)
+        
+        # Get the wrapped implementation
+        impl = runner.tools['context_tool']['implementation']
+        
+        # Verify the wrapped function still has detectable context parameter
+        assert runner._tool_expects_context(impl) is True, \
+            "weave.op should preserve signature for context detection"
+    
+    def test_weave_op_preserves_async_detection(self):
+        """Test that weave.op preserves async nature of functions.
+        
+        This is a regression test to ensure weave.op properly preserves
+        the coroutine nature of async functions.
+        """
+        import inspect
+        
+        runner = ToolRunner()
+        
+        async def async_tool(x: str) -> str:
+            return f"result: {x}"
+        
+        def sync_tool(x: str) -> str:
+            return f"result: {x}"
+        
+        runner.register_tool('async_tool', async_tool)
+        runner.register_tool('sync_tool', sync_tool)
+        
+        # Verify async detection is preserved after wrapping
+        assert runner.tools['async_tool']['is_async'] is True, \
+            "weave.op should preserve async detection"
+        assert runner.tools['sync_tool']['is_async'] is False, \
+            "weave.op should preserve sync detection"
+    
+    @pytest.mark.asyncio
+    async def test_context_injection_works_after_weave_wrap(self):
+        """Test that context injection works correctly on weave-wrapped tools.
+        
+        This is an integration test ensuring the full flow:
+        1. Tool with context param is registered (gets weave.op wrapped)
+        2. Context detection still works on the wrapped function
+        3. Context is properly injected when tool is called
+        """
+        from tyler.utils.tool_runner import ToolContext
+        
+        runner = ToolRunner()
+        received_context = None
+        
+        async def tool_needing_context(ctx: ToolContext, value: str) -> str:
+            nonlocal received_context
+            received_context = ctx
+            return f"Got {value} for user {ctx.get('user_id')}"
+        
+        runner.register_tool('ctx_tool', tool_needing_context)
+        
+        # Create context and call the tool
+        context = ToolContext(deps={"user_id": "test123"})
+        result = await runner.run_tool_async('ctx_tool', {'value': 'hello'}, context=context)
+        
+        # Verify context was injected correctly
+        assert result == "Got hello for user test123"
+        assert received_context is not None
+        assert received_context.get('user_id') == "test123"
