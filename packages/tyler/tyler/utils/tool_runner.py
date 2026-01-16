@@ -117,6 +117,22 @@ class ToolRunner:
         self.tool_attributes = {}  # name -> tool attributes
         self._module_cache = {}  # module_spec -> loaded tools
 
+    def _is_weave_traced(self, func: Callable) -> bool:
+        """Check if function is already wrapped by weave.op.
+        
+        This prevents double-wrapping when users explicitly decorate their tools
+        with @weave.op() before passing them to the agent.
+        
+        Args:
+            func: The function to check
+            
+        Returns:
+            True if the function is already a weave operation
+        """
+        # weave.op wraps functions and adds specific attributes
+        # Check for common weave op indicators
+        return hasattr(func, 'resolve_fn') or getattr(func, '_is_weave_op', False)
+
     def register_tool(
         self, 
         name: str, 
@@ -126,6 +142,11 @@ class ToolRunner:
     ) -> None:
         """
         Register a new tool implementation.
+        
+        Tools are automatically wrapped with weave.op() for tracing, using the
+        tool name as the operation name. This provides clean trace trees where
+        each tool call appears as a named span. If the implementation is already
+        wrapped with @weave.op(), it won't be double-wrapped.
         
         Args:
             name: The name of the tool
@@ -139,6 +160,10 @@ class ToolRunner:
             ValueError: If timeout is not a positive number
         """
         self._validate_timeout(timeout, name)
+        
+        # Wrap with weave.op for automatic tracing (skip if already wrapped)
+        if not self._is_weave_traced(implementation):
+            implementation = weave.op(name=name)(implementation)
         
         self.tools[name] = {
             'implementation': implementation,

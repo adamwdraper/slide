@@ -21,8 +21,6 @@ import asyncio
 from typing import Dict, Any
 from dataclasses import dataclass
 
-import weave
-
 from tyler import Agent, Thread, Message, ToolContext
 
 
@@ -54,7 +52,6 @@ class MockDatabase:
 # Tools that use context injection
 # Note: The first parameter must be named 'ctx' or 'context'
 
-@weave.op()
 async def get_my_orders(ctx: ToolContext, limit: int = 5) -> str:
     """Get the current user's orders.
     
@@ -79,7 +76,6 @@ async def get_my_orders(ctx: ToolContext, limit: int = 5) -> str:
     })
 
 
-@weave.op()
 async def get_my_preferences(ctx: ToolContext) -> str:
     """Get the current user's preferences.
     
@@ -102,7 +98,6 @@ async def get_my_preferences(ctx: ToolContext) -> str:
     })
 
 
-@weave.op()
 def get_current_user_info(ctx: ToolContext) -> str:
     """Get information about the current user.
     
@@ -122,7 +117,6 @@ def get_current_user_info(ctx: ToolContext) -> str:
     return f"Current user: {user_name} (ID: {user_id}, Tier: {user_tier})"
 
 
-@weave.op()
 async def get_debug_info(ctx: ToolContext) -> str:
     """Get debug information about the current tool execution.
     

@@ -16,6 +16,7 @@ The main `Agent` class orchestrates the execution of AI agents:
 - Handles thread and file stores
 - Inherits from `pydantic.BaseModel` for serialization
 - Uses `@weave.op()` decorators for observability/tracing
+- Automatically wraps all registered tools with `weave.op()` for consistent trace trees
 
 **Key Methods**:
 - `go(thread, stream=False)` - Main entry point for agent execution
