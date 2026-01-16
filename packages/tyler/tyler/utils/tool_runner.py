@@ -117,21 +117,26 @@ class ToolRunner:
         self.tool_attributes = {}  # name -> tool attributes
         self._module_cache = {}  # module_spec -> loaded tools
 
-    def _is_weave_traced(self, func: Callable) -> bool:
-        """Check if function is already wrapped by weave.op.
+    def _should_skip_weave_wrap(self, func: Callable) -> bool:
+        """Check if function should skip weave.op wrapping.
         
-        This prevents double-wrapping when users explicitly decorate their tools
-        with @weave.op() before passing them to the agent.
+        Returns True if:
+        - Function is already wrapped by weave.op (prevents double-wrapping)
+        - Function is an MCP tool (MCP SDK provides its own Weave tracing)
         
         Args:
             func: The function to check
             
         Returns:
-            True if the function is already a weave operation
+            True if the function should not be wrapped with weave.op
         """
-        # weave.op wraps functions and adds specific attributes
-        # Check for common weave op indicators
-        return hasattr(func, 'resolve_fn') or getattr(func, '_is_weave_op', False)
+        # Already wrapped by weave.op
+        if hasattr(func, 'resolve_fn') or getattr(func, '_is_weave_op', False):
+            return True
+        # MCP tools are traced by the MCP SDK itself
+        if getattr(func, '_is_mcp_tool', False):
+            return True
+        return False
 
     def register_tool(
         self, 
@@ -161,8 +166,9 @@ class ToolRunner:
         """
         self._validate_timeout(timeout, name)
         
-        # Wrap with weave.op for automatic tracing (skip if already wrapped)
-        if not self._is_weave_traced(implementation):
+        # Wrap with weave.op for automatic tracing
+        # Skip if already wrapped or if it's an MCP tool (MCP SDK traces those)
+        if not self._should_skip_weave_wrap(implementation):
             implementation = weave.op(name=name)(implementation)
         
         self.tools[name] = {
