@@ -109,16 +109,109 @@ def _weave_stream_accumulator(state: Any | None, value: Any) -> dict:
 
         return state
 
-    # --- OpenAI mode (best-effort) ---
+    # --- Vercel SSE mode (string chunks like "data: {...}\n\n") ---
+    if isinstance(value, str) and value.startswith("data: "):
+        state["mode"] = state.get("mode") or "vercel"
+        try:
+            # Parse JSON from SSE format: "data: {...}\n\n"
+            json_str = value[6:].strip()  # Remove "data: " prefix
+            if json_str and json_str != "[DONE]":
+                chunk = json.loads(json_str)
+                chunk_type = chunk.get("type")
+                
+                if chunk_type == "text-delta":
+                    delta = chunk.get("delta", "")
+                    if delta:
+                        state["content"] = (state.get("content") or "") + str(delta)
+                elif chunk_type == "reasoning-delta":
+                    delta = chunk.get("delta", "")
+                    if delta:
+                        state["thinking"] = (state.get("thinking") or "") + str(delta)
+                elif chunk_type == "tool-input-available":
+                    state.setdefault("tools", []).append({
+                        "tool_name": chunk.get("toolName"),
+                        "tool_call_id": chunk.get("toolCallId"),
+                        "arguments": chunk.get("input"),
+                        "status": "selected",
+                    })
+                elif chunk_type == "tool-output-available":
+                    state.setdefault("tools", []).append({
+                        "tool_call_id": chunk.get("toolCallId"),
+                        "result": chunk.get("output"),
+                        "status": "result",
+                    })
+                elif chunk_type == "tool-output-error":
+                    state.setdefault("errors", []).append({
+                        "tool_call_id": chunk.get("toolCallId"),
+                        "error": chunk.get("errorText"),
+                    })
+                elif chunk_type == "error":
+                    state.setdefault("errors", []).append({
+                        "error": chunk.get("errorText"),
+                    })
+        except (json.JSONDecodeError, ValueError):
+            pass  # Skip malformed SSE chunks
+        
+        return state
+
+    # --- Vercel objects mode (dict chunks with "type" key) ---
+    if isinstance(value, dict) and "type" in value:
+        state["mode"] = state.get("mode") or "vercel_objects"
+        chunk_type = value.get("type")
+        
+        if chunk_type == "text-delta":
+            delta = value.get("delta", "")
+            if delta:
+                state["content"] = (state.get("content") or "") + str(delta)
+        elif chunk_type == "reasoning-delta":
+            delta = value.get("delta", "")
+            if delta:
+                state["thinking"] = (state.get("thinking") or "") + str(delta)
+        elif chunk_type == "tool-input-available":
+            state.setdefault("tools", []).append({
+                "tool_name": value.get("toolName"),
+                "tool_call_id": value.get("toolCallId"),
+                "arguments": value.get("input"),
+                "status": "selected",
+            })
+        elif chunk_type == "tool-output-available":
+            state.setdefault("tools", []).append({
+                "tool_call_id": value.get("toolCallId"),
+                "result": value.get("output"),
+                "status": "result",
+            })
+        elif chunk_type == "tool-output-error":
+            state.setdefault("errors", []).append({
+                "tool_call_id": value.get("toolCallId"),
+                "error": value.get("errorText"),
+            })
+        elif chunk_type == "error":
+            state.setdefault("errors", []).append({
+                "error": value.get("errorText"),
+            })
+        
+        return state
+
+    # --- OpenAI mode (raw LiteLLM chunks with choices[].delta) ---
     state["mode"] = state.get("mode") or "openai"
     try:
         choices = getattr(value, "choices", None)
         if choices:
             delta = getattr(choices[0], "delta", None)
-            if delta is not None and hasattr(delta, "content"):
+            if delta is not None:
+                # Extract content
                 content = getattr(delta, "content", None)
                 if content:
                     state["content"] = (state.get("content") or "") + str(content)
+                
+                # Extract thinking/reasoning tokens (different providers use different attributes)
+                reasoning = (
+                    getattr(delta, "reasoning_content", None) or
+                    getattr(delta, "thinking", None) or
+                    getattr(delta, "extended_thinking", None)
+                )
+                if reasoning:
+                    state["thinking"] = (state.get("thinking") or "") + str(reasoning)
     except Exception:
         # Chunk shapes vary by provider; keep tracing robust.
         pass
