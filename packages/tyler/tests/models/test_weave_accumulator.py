@@ -559,3 +559,357 @@ class TestEdgeCases:
         original_mode = state["mode"]
         state = _weave_stream_accumulator(state, {"type": "text-delta", "delta": "B"})
         assert state["mode"] == original_mode
+
+
+# =============================================================================
+# Step Boundary Reset Tests
+# =============================================================================
+
+class TestStepBoundaryReset:
+    """Tests for step boundary detection and content/thinking reset.
+    
+    When a new step starts, content and thinking should be reset so the
+    final output reflects only the last step (the actual answer).
+    Events, tools, errors, and metrics continue accumulating.
+    """
+    
+    # --- Events Mode Step Boundary ---
+    
+    def test_events_mode_iteration_start_resets_content(self):
+        """Test that ITERATION_START resets content in events mode."""
+        state = None
+        
+        # Step 1: Add some content
+        content_event = ExecutionEvent(
+            type=EventType.LLM_STREAM_CHUNK,
+            timestamp=datetime.now(timezone.utc),
+            data={"content_chunk": "Step 1 content"}
+        )
+        state = _weave_stream_accumulator(state, content_event)
+        assert state["content"] == "Step 1 content"
+        
+        # Step 2 starts: ITERATION_START should reset content
+        iteration_start = ExecutionEvent(
+            type=EventType.ITERATION_START,
+            timestamp=datetime.now(timezone.utc),
+            data={"iteration_number": 1, "max_iterations": 10}
+        )
+        state = _weave_stream_accumulator(state, iteration_start)
+        assert state["content"] == ""  # Reset!
+        
+        # Step 2 content
+        content_event2 = ExecutionEvent(
+            type=EventType.LLM_STREAM_CHUNK,
+            timestamp=datetime.now(timezone.utc),
+            data={"content_chunk": "Step 2 content"}
+        )
+        state = _weave_stream_accumulator(state, content_event2)
+        assert state["content"] == "Step 2 content"  # Only step 2
+    
+    def test_events_mode_iteration_start_resets_thinking(self):
+        """Test that ITERATION_START resets thinking in events mode."""
+        state = None
+        
+        # Step 1: Add some thinking
+        thinking_event = ExecutionEvent(
+            type=EventType.LLM_THINKING_CHUNK,
+            timestamp=datetime.now(timezone.utc),
+            data={"thinking_chunk": "Step 1 thinking"}
+        )
+        state = _weave_stream_accumulator(state, thinking_event)
+        assert state["thinking"] == "Step 1 thinking"
+        
+        # Step 2 starts: ITERATION_START should reset thinking
+        iteration_start = ExecutionEvent(
+            type=EventType.ITERATION_START,
+            timestamp=datetime.now(timezone.utc),
+            data={"iteration_number": 1, "max_iterations": 10}
+        )
+        state = _weave_stream_accumulator(state, iteration_start)
+        assert state["thinking"] == ""  # Reset!
+    
+    def test_events_mode_tools_not_reset(self):
+        """Test that tools continue accumulating across steps."""
+        state = None
+        
+        # Step 1: Tool selected
+        tool_event1 = ExecutionEvent(
+            type=EventType.TOOL_SELECTED,
+            timestamp=datetime.now(timezone.utc),
+            data={"tool_name": "tool_1", "tool_call_id": "call_1", "arguments": {}}
+        )
+        state = _weave_stream_accumulator(state, tool_event1)
+        assert len(state["tools"]) == 1
+        
+        # Step 2 starts
+        iteration_start = ExecutionEvent(
+            type=EventType.ITERATION_START,
+            timestamp=datetime.now(timezone.utc),
+            data={"iteration_number": 1, "max_iterations": 10}
+        )
+        state = _weave_stream_accumulator(state, iteration_start)
+        
+        # Step 2: Another tool selected
+        tool_event2 = ExecutionEvent(
+            type=EventType.TOOL_SELECTED,
+            timestamp=datetime.now(timezone.utc),
+            data={"tool_name": "tool_2", "tool_call_id": "call_2", "arguments": {}}
+        )
+        state = _weave_stream_accumulator(state, tool_event2)
+        
+        # Both tools should be in the list
+        assert len(state["tools"]) == 2
+        assert state["tools"][0]["tool_name"] == "tool_1"
+        assert state["tools"][1]["tool_name"] == "tool_2"
+    
+    def test_events_mode_event_counts_not_reset(self):
+        """Test that event counts continue accumulating across steps."""
+        state = None
+        
+        # Step 1: Some events
+        event1 = ExecutionEvent(
+            type=EventType.LLM_STREAM_CHUNK,
+            timestamp=datetime.now(timezone.utc),
+            data={"content_chunk": "A"}
+        )
+        state = _weave_stream_accumulator(state, event1)
+        
+        # Step 2 starts
+        iteration_start = ExecutionEvent(
+            type=EventType.ITERATION_START,
+            timestamp=datetime.now(timezone.utc),
+            data={"iteration_number": 1, "max_iterations": 10}
+        )
+        state = _weave_stream_accumulator(state, iteration_start)
+        
+        # Step 2: More events
+        event2 = ExecutionEvent(
+            type=EventType.LLM_STREAM_CHUNK,
+            timestamp=datetime.now(timezone.utc),
+            data={"content_chunk": "B"}
+        )
+        state = _weave_stream_accumulator(state, event2)
+        
+        # Should have 2 llm_stream_chunk events and 1 iteration_start
+        assert state["events"]["counts"]["llm_stream_chunk"] == 2
+        assert state["events"]["counts"]["iteration_start"] == 1
+    
+    # --- Vercel Objects Mode Step Boundary ---
+    
+    def test_vercel_objects_start_step_resets_content(self):
+        """Test that start-step resets content in vercel_objects mode."""
+        state = None
+        
+        # Step 1: Add content
+        state = _weave_stream_accumulator(state, {"type": "text-delta", "delta": "Step 1"})
+        assert state["content"] == "Step 1"
+        
+        # Step 2 starts
+        state = _weave_stream_accumulator(state, {"type": "start-step"})
+        assert state["content"] == ""  # Reset!
+        
+        # Step 2 content
+        state = _weave_stream_accumulator(state, {"type": "text-delta", "delta": "Step 2"})
+        assert state["content"] == "Step 2"  # Only step 2
+    
+    def test_vercel_objects_start_step_resets_thinking(self):
+        """Test that start-step resets thinking in vercel_objects mode."""
+        state = None
+        
+        # Step 1: Add thinking
+        state = _weave_stream_accumulator(state, {"type": "reasoning-delta", "delta": "Think 1"})
+        assert state["thinking"] == "Think 1"
+        
+        # Step 2 starts
+        state = _weave_stream_accumulator(state, {"type": "start-step"})
+        assert state["thinking"] == ""  # Reset!
+    
+    def test_vercel_objects_tools_not_reset(self):
+        """Test that tools continue accumulating in vercel_objects mode."""
+        state = None
+        
+        # Step 1: Tool
+        state = _weave_stream_accumulator(state, {
+            "type": "tool-input-available",
+            "toolCallId": "call_1",
+            "toolName": "tool_1",
+            "input": {}
+        })
+        assert len(state["tools"]) == 1
+        
+        # Step 2 starts
+        state = _weave_stream_accumulator(state, {"type": "start-step"})
+        
+        # Step 2: Another tool
+        state = _weave_stream_accumulator(state, {
+            "type": "tool-input-available",
+            "toolCallId": "call_2",
+            "toolName": "tool_2",
+            "input": {}
+        })
+        
+        # Both tools should be present
+        assert len(state["tools"]) == 2
+    
+    # --- Vercel SSE Mode Step Boundary ---
+    
+    def test_vercel_sse_start_step_resets_content(self):
+        """Test that start-step SSE resets content in vercel mode."""
+        state = None
+        
+        # Step 1: Add content
+        sse1 = 'data: {"type": "text-delta", "id": "t_1", "delta": "Step 1"}\n\n'
+        state = _weave_stream_accumulator(state, sse1)
+        assert state["content"] == "Step 1"
+        
+        # Step 2 starts
+        sse_start = 'data: {"type": "start-step"}\n\n'
+        state = _weave_stream_accumulator(state, sse_start)
+        assert state["content"] == ""  # Reset!
+        
+        # Step 2 content
+        sse2 = 'data: {"type": "text-delta", "id": "t_2", "delta": "Step 2"}\n\n'
+        state = _weave_stream_accumulator(state, sse2)
+        assert state["content"] == "Step 2"  # Only step 2
+    
+    def test_vercel_sse_start_step_resets_thinking(self):
+        """Test that start-step SSE resets thinking in vercel mode."""
+        state = None
+        
+        # Step 1: Add thinking
+        sse1 = 'data: {"type": "reasoning-delta", "id": "r_1", "delta": "Think 1"}\n\n'
+        state = _weave_stream_accumulator(state, sse1)
+        assert state["thinking"] == "Think 1"
+        
+        # Step 2 starts
+        sse_start = 'data: {"type": "start-step"}\n\n'
+        state = _weave_stream_accumulator(state, sse_start)
+        assert state["thinking"] == ""  # Reset!
+    
+    # --- OpenAI Mode Step Boundary ---
+    
+    def test_openai_mode_finish_reason_resets_on_next_content(self):
+        """Test that finish_reason followed by new content resets in openai mode."""
+        state = None
+        
+        def _create_chunk(content=None, reasoning_content=None, finish_reason=None):
+            delta = SimpleNamespace()
+            if content is not None:
+                delta.content = content
+            if reasoning_content is not None:
+                delta.reasoning_content = reasoning_content
+            choice = SimpleNamespace(delta=delta, finish_reason=finish_reason)
+            return SimpleNamespace(choices=[choice])
+        
+        # Step 1: Content
+        chunk1 = _create_chunk(content="Step 1")
+        state = _weave_stream_accumulator(state, chunk1)
+        assert state["content"] == "Step 1"
+        
+        # Step 1 finishes
+        chunk_finish = _create_chunk(finish_reason="stop")
+        state = _weave_stream_accumulator(state, chunk_finish)
+        assert state["_step_finished"] == True
+        assert state["content"] == "Step 1"  # Not reset yet
+        
+        # Step 2 starts: new content after finish_reason
+        chunk2 = _create_chunk(content="Step 2")
+        state = _weave_stream_accumulator(state, chunk2)
+        assert state["content"] == "Step 2"  # Reset and new content!
+        assert state["_step_finished"] == False
+    
+    def test_openai_mode_finish_reason_resets_on_next_reasoning(self):
+        """Test that finish_reason followed by new reasoning resets in openai mode."""
+        state = None
+        
+        def _create_chunk(content=None, reasoning_content=None, finish_reason=None):
+            delta = SimpleNamespace()
+            if content is not None:
+                delta.content = content
+            if reasoning_content is not None:
+                delta.reasoning_content = reasoning_content
+            choice = SimpleNamespace(delta=delta, finish_reason=finish_reason)
+            return SimpleNamespace(choices=[choice])
+        
+        # Step 1: Thinking
+        chunk1 = _create_chunk(reasoning_content="Think 1")
+        state = _weave_stream_accumulator(state, chunk1)
+        assert state["thinking"] == "Think 1"
+        
+        # Step 1 finishes
+        chunk_finish = _create_chunk(finish_reason="tool_calls")
+        state = _weave_stream_accumulator(state, chunk_finish)
+        
+        # Step 2: New thinking after finish_reason
+        chunk2 = _create_chunk(reasoning_content="Think 2")
+        state = _weave_stream_accumulator(state, chunk2)
+        assert state["thinking"] == "Think 2"  # Reset and new thinking!
+    
+    # --- Multi-step Full Scenario ---
+    
+    def test_events_mode_multi_step_full_scenario(self):
+        """Test a complete multi-step scenario in events mode."""
+        state = None
+        
+        # Step 1: Thinking + content + tool call
+        state = _weave_stream_accumulator(state, ExecutionEvent(
+            type=EventType.LLM_THINKING_CHUNK,
+            timestamp=datetime.now(timezone.utc),
+            data={"thinking_chunk": "Let me search..."}
+        ))
+        state = _weave_stream_accumulator(state, ExecutionEvent(
+            type=EventType.LLM_STREAM_CHUNK,
+            timestamp=datetime.now(timezone.utc),
+            data={"content_chunk": "I'll search for that."}
+        ))
+        state = _weave_stream_accumulator(state, ExecutionEvent(
+            type=EventType.TOOL_SELECTED,
+            timestamp=datetime.now(timezone.utc),
+            data={"tool_name": "search", "tool_call_id": "call_1", "arguments": {"q": "test"}}
+        ))
+        state = _weave_stream_accumulator(state, ExecutionEvent(
+            type=EventType.TOOL_RESULT,
+            timestamp=datetime.now(timezone.utc),
+            data={"tool_name": "search", "tool_call_id": "call_1", "result": "Found it!", "duration_ms": 100}
+        ))
+        
+        assert state["thinking"] == "Let me search..."
+        assert state["content"] == "I'll search for that."
+        assert len(state["tools"]) == 2  # selected + result
+        
+        # Step 2 starts
+        state = _weave_stream_accumulator(state, ExecutionEvent(
+            type=EventType.ITERATION_START,
+            timestamp=datetime.now(timezone.utc),
+            data={"iteration_number": 1, "max_iterations": 10}
+        ))
+        
+        # Content and thinking should be reset
+        assert state["thinking"] == ""
+        assert state["content"] == ""
+        # Tools should still be there
+        assert len(state["tools"]) == 2
+        
+        # Step 2: Final answer
+        state = _weave_stream_accumulator(state, ExecutionEvent(
+            type=EventType.LLM_THINKING_CHUNK,
+            timestamp=datetime.now(timezone.utc),
+            data={"thinking_chunk": "Based on the search..."}
+        ))
+        state = _weave_stream_accumulator(state, ExecutionEvent(
+            type=EventType.LLM_STREAM_CHUNK,
+            timestamp=datetime.now(timezone.utc),
+            data={"content_chunk": "The answer is 42."}
+        ))
+        
+        # Final state should have only step 2's content/thinking
+        assert state["thinking"] == "Based on the search..."
+        assert state["content"] == "The answer is 42."
+        # But all tools from all steps
+        assert len(state["tools"]) == 2
+        # And all event counts
+        assert state["events"]["counts"]["llm_thinking_chunk"] == 2
+        assert state["events"]["counts"]["llm_stream_chunk"] == 2
+        assert state["events"]["counts"]["tool_selected"] == 1
+        assert state["events"]["counts"]["tool_result"] == 1
+        assert state["events"]["counts"]["iteration_start"] == 1

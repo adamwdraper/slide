@@ -29,6 +29,10 @@ def _weave_stream_accumulator(state: Any | None, value: Any) -> dict:
 
     This is only for Weave tracing output; it does not change what `stream()` yields.
     Handles both `mode="events"` (ExecutionEvent yields) and `mode="openai"` (provider chunks).
+    
+    IMPORTANT: For multi-step agent runs, content and thinking are RESET on each new step,
+    so the final output reflects only the last step (the actual answer). Events, tools,
+    errors, and metrics continue accumulating for full observability.
     """
     if state is None or not isinstance(state, dict):
         state = {
@@ -39,11 +43,17 @@ def _weave_stream_accumulator(state: Any | None, value: Any) -> dict:
             "tools": [],
             "errors": [],
             "metrics": {},
+            "_step_finished": False,  # Internal: tracks OpenAI mode step boundaries
         }
 
     def _bump(event_name: str) -> None:
         counts = state.setdefault("events", {}).setdefault("counts", {})
         counts[event_name] = int(counts.get(event_name, 0)) + 1
+    
+    def _reset_step_content() -> None:
+        """Reset content and thinking for a new step (last step output only)."""
+        state["content"] = ""
+        state["thinking"] = ""
 
     # --- Events mode (Tyler ExecutionEvent) ---
     if hasattr(value, "type") and hasattr(value, "data"):
@@ -54,6 +64,11 @@ def _weave_stream_accumulator(state: Any | None, value: Any) -> dict:
 
         state["mode"] = state.get("mode") or "events"
         _bump(event_type)
+        
+        # Reset content/thinking on new step (ITERATION_START)
+        if event_type == "iteration_start":
+            _reset_step_content()
+            return state
 
         data = getattr(value, "data", {}) or {}
 
@@ -119,6 +134,11 @@ def _weave_stream_accumulator(state: Any | None, value: Any) -> dict:
                 chunk = json.loads(json_str)
                 chunk_type = chunk.get("type")
                 
+                # Reset content/thinking on new step (start-step)
+                if chunk_type == "start-step":
+                    _reset_step_content()
+                    return state
+                
                 if chunk_type == "text-delta":
                     delta = chunk.get("delta", "")
                     if delta:
@@ -159,6 +179,11 @@ def _weave_stream_accumulator(state: Any | None, value: Any) -> dict:
         state["mode"] = state.get("mode") or "vercel_objects"
         chunk_type = value.get("type")
         
+        # Reset content/thinking on new step (start-step)
+        if chunk_type == "start-step":
+            _reset_step_content()
+            return state
+        
         if chunk_type == "text-delta":
             delta = value.get("delta", "")
             if delta:
@@ -197,11 +222,22 @@ def _weave_stream_accumulator(state: Any | None, value: Any) -> dict:
     try:
         choices = getattr(value, "choices", None)
         if choices:
-            delta = getattr(choices[0], "delta", None)
+            choice = choices[0]
+            delta = getattr(choice, "delta", None)
+            finish_reason = getattr(choice, "finish_reason", None)
+            
+            # Track when a step finishes (finish_reason set)
+            if finish_reason:
+                state["_step_finished"] = True
+            
             if delta is not None:
                 # Extract content
                 content = getattr(delta, "content", None)
                 if content:
+                    # Reset on first content after step finished (new step starting)
+                    if state.get("_step_finished"):
+                        _reset_step_content()
+                        state["_step_finished"] = False
                     state["content"] = (state.get("content") or "") + str(content)
                 
                 # Extract thinking/reasoning tokens (different providers use different attributes)
@@ -211,6 +247,10 @@ def _weave_stream_accumulator(state: Any | None, value: Any) -> dict:
                     getattr(delta, "extended_thinking", None)
                 )
                 if reasoning:
+                    # Reset on first reasoning after step finished (new step starting)
+                    if state.get("_step_finished"):
+                        _reset_step_content()
+                        state["_step_finished"] = False
                     state["thinking"] = (state.get("thinking") or "") + str(reasoning)
     except Exception:
         # Chunk shapes vary by provider; keep tracing robust.

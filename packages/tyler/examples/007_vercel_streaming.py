@@ -64,23 +64,35 @@ def get_wandb_api_key() -> str:
     return api_key
 
 
-# Create agent using DeepSeek-R1 via W&B Inference
-# This model actually streams back thinking/reasoning tokens
-# See available models: https://docs.wandb.ai/inference/models
-agent = Agent(
-    name="vercel-streaming-assistant",
-    model_name="openai/deepseek-ai/DeepSeek-R1-0528",
-    base_url="https://api.inference.wandb.ai/v1",
-    api_key=get_wandb_api_key(),
-    purpose="To demonstrate Vercel AI SDK streaming with thinking tokens.",
-    reasoning="low",
-    temperature=0.7,
-    drop_params=True
-)
+# Lazy-loaded agent to avoid sys.exit() on module import
+_agent: Agent | None = None
+
+
+def get_agent() -> Agent:
+    """Get or create the demo agent (lazy initialization).
+    
+    Uses DeepSeek-R1 via W&B Inference, which actually streams back
+    thinking/reasoning tokens. See: https://docs.wandb.ai/inference/models
+    """
+    global _agent
+    if _agent is None:
+        _agent = Agent(
+            name="vercel-streaming-assistant",
+            model_name="openai/deepseek-ai/DeepSeek-R1-0528",
+            base_url="https://api.inference.wandb.ai/v1",
+            api_key=get_wandb_api_key(),
+            purpose="To demonstrate Vercel AI SDK streaming with thinking tokens.",
+            reasoning="low",
+            temperature=0.7,
+            drop_params=True
+        )
+    return _agent
 
 
 async def demo_vercel_streaming():
     """Demonstrate raw Vercel streaming output."""
+    agent = get_agent()
+    
     thread = Thread()
     message = Message(
         role="user",
@@ -105,6 +117,8 @@ async def demo_vercel_streaming():
 async def demo_with_parsing():
     """Demonstrate parsing the Vercel stream to extract text."""
     import json
+    
+    agent = get_agent()
     
     thread = Thread()
     message = Message(
@@ -144,6 +158,8 @@ async def demo_vercel_objects():
     This mode yields chunk dictionaries directly (no SSE wrapping),
     which is what marimo's mo.ui.chat(vercel_messages=True) expects.
     """
+    agent = get_agent()
+    
     thread = Thread()
     message = Message(
         role="user",
@@ -262,6 +278,7 @@ def create_fastapi_endpoint():
         
         # Stream response
         async def generate():
+            agent = get_agent()
             async for sse_chunk in agent.stream(thread, mode="vercel"):
                 yield sse_chunk
         
