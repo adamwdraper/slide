@@ -13,7 +13,13 @@ and is designed for building chat interfaces with React/Next.js frontends.
 
 See: https://ai-sdk.dev/docs/ai-sdk-ui/stream-protocol#data-stream-protocol
 
+Requirements:
+    - WANDB_API_KEY: Required for W&B Inference (get from https://wandb.ai/authorize)
+    - WANDB_PROJECT: Optional, for Weave tracing
+
 Usage:
+    export WANDB_API_KEY=your_api_key
+    export WANDB_PROJECT=your_project  # optional
     python examples/007_vercel_streaming.py
     
 To integrate with FastAPI:
@@ -30,6 +36,7 @@ from tyler.utils.logging import get_logger
 logger = get_logger(__name__)
 
 import os
+import sys
 import asyncio
 import weave
 
@@ -44,17 +51,48 @@ if weave_project:
     except Exception as e:
         logger.warning(f"Failed to initialize weave tracing: {e}. Continuing without weave.")
 
-# Create agent
-agent = Agent(
-    name="vercel-streaming-assistant",
-    model_name="gpt-4.1",
-    purpose="To demonstrate Vercel AI SDK streaming.",
-    temperature=0.7
-)
+
+def get_wandb_api_key() -> str:
+    """Get W&B API key from environment, or exit with instructions."""
+    api_key = os.getenv("WANDB_API_KEY")
+    if not api_key:
+        logger.error("WANDB_API_KEY not set!")
+        logger.error("To use this example, you need a W&B API key:")
+        logger.error("  1. Get your API key from: https://wandb.ai/authorize")
+        logger.error("  2. Set it: export WANDB_API_KEY=your_api_key")
+        sys.exit(1)
+    return api_key
+
+
+# Lazy-loaded agent to avoid sys.exit() on module import
+_agent: Agent | None = None
+
+
+def get_agent() -> Agent:
+    """Get or create the demo agent (lazy initialization).
+    
+    Uses DeepSeek-R1 via W&B Inference, which actually streams back
+    thinking/reasoning tokens. See: https://docs.wandb.ai/inference/models
+    """
+    global _agent
+    if _agent is None:
+        _agent = Agent(
+            name="vercel-streaming-assistant",
+            model_name="openai/deepseek-ai/DeepSeek-R1-0528",
+            base_url="https://api.inference.wandb.ai/v1",
+            api_key=get_wandb_api_key(),
+            purpose="To demonstrate Vercel AI SDK streaming with thinking tokens.",
+            reasoning="low",
+            temperature=0.7,
+            drop_params=True
+        )
+    return _agent
 
 
 async def demo_vercel_streaming():
     """Demonstrate raw Vercel streaming output."""
+    agent = get_agent()
+    
     thread = Thread()
     message = Message(
         role="user",
@@ -79,6 +117,8 @@ async def demo_vercel_streaming():
 async def demo_with_parsing():
     """Demonstrate parsing the Vercel stream to extract text."""
     import json
+    
+    agent = get_agent()
     
     thread = Thread()
     message = Message(
@@ -118,6 +158,8 @@ async def demo_vercel_objects():
     This mode yields chunk dictionaries directly (no SSE wrapping),
     which is what marimo's mo.ui.chat(vercel_messages=True) expects.
     """
+    agent = get_agent()
+    
     thread = Thread()
     message = Message(
         role="user",
@@ -236,6 +278,7 @@ def create_fastapi_endpoint():
         
         # Stream response
         async def generate():
+            agent = get_agent()
             async for sse_chunk in agent.stream(thread, mode="vercel"):
                 yield sse_chunk
         

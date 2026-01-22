@@ -23,8 +23,8 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
 ]
 dependencies = [
-    "litellm>=1.75.3",
-    "openai>=1.99.2",
+    "litellm>=1.81.0",
+    "openai>=2.15.0",
     "tiktoken>=0.8.0",
     "pdf2image>=1.17.0",
     "pandas>=2.2.3",
@@ -41,7 +41,7 @@ dependencies = [
     "pydantic>=2.10.4",
     "backoff>=2.2.1",
     "uuid_utils>=0.10.0",
-    "weave>=0.52.23",
+    "weave>=0.52.24",
     "wandb>=0.19.1",
     "slack_sdk>=3.34.0",
     "huggingface-hub>=0.27.0",

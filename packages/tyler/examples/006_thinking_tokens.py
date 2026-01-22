@@ -5,11 +5,20 @@ Example demonstrating thinking tokens (reasoning) streaming.
 This example shows how to:
 1. Enable thinking tokens with the reasoning parameter
 2. Stream both thinking and content separately
-3. Use models that support reasoning (OpenAI o1/o3, DeepSeek-R1, etc.)
+3. Use DeepSeek-R1 via W&B Inference (which actually returns thinking tokens)
 4. Compare responses with and without thinking tokens
 
 Thinking tokens allow you to see the model's internal reasoning process
 before it generates its final answer.
+
+Requirements:
+    - WANDB_API_KEY: Required for W&B Inference (get from https://wandb.ai/authorize)
+    - WANDB_PROJECT: Optional, for Weave tracing
+
+Usage:
+    export WANDB_API_KEY=your_api_key
+    export WANDB_PROJECT=your_project  # optional
+    python examples/006_thinking_tokens.py
 """
 # Load environment variables and configure logging first
 from dotenv import load_dotenv
@@ -35,18 +44,48 @@ if weave_project:
         logger.warning(f"Failed to initialize weave tracing: {e}. Continuing without weave.")
 
 
+def get_wandb_api_key() -> str:
+    """Get W&B API key from environment, or exit with instructions."""
+    api_key = os.getenv("WANDB_API_KEY")
+    if not api_key:
+        logger.error("WANDB_API_KEY not set!")
+        logger.error("To use this example, you need a W&B API key:")
+        logger.error("  1. Get your API key from: https://wandb.ai/authorize")
+        logger.error("  2. Set it: export WANDB_API_KEY=your_api_key")
+        sys.exit(1)
+    return api_key
+
+
+def create_deepseek_agent(purpose: str, reasoning: str = "low") -> Agent:
+    """Create an agent using DeepSeek-R1 via W&B Inference.
+    
+    DeepSeek-R1 actually returns thinking tokens in the streaming response,
+    unlike GPT models which do reasoning internally.
+    
+    See available models: https://docs.wandb.ai/inference/models
+    """
+    return Agent(
+        model_name="openai/deepseek-ai/DeepSeek-R1-0528",
+        base_url="https://api.inference.wandb.ai/v1",
+        api_key=get_wandb_api_key(),
+        purpose=purpose,
+        reasoning=reasoning,
+        temperature=0.7,
+        drop_params=True
+    )
+
+
 async def demo_thinking_tokens_basic():
     """Basic example: Stream thinking tokens and content separately"""
     logger.info("=" * 70)
     logger.info("Demo 1: Basic Thinking Tokens Streaming")
     logger.info("=" * 70)
     
-    # Create agent with thinking tokens enabled
-    agent = Agent(
-        model_name="gpt-4.1",  # Or use "openai/deepseek-ai/DeepSeek-R1-0528" for W&B Inference
+    # Create agent with thinking tokens enabled using DeepSeek-R1 via W&B Inference
+    # DeepSeek-R1 actually streams back reasoning_content, unlike GPT models
+    agent = create_deepseek_agent(
         purpose="To demonstrate thinking tokens streaming.",
-        reasoning="low",  # Options: "low", "medium", "high" or dict for advanced config
-        temperature=0.7
+        reasoning="low"  # Options: "low", "medium", "high"
     )
     
     # Create a thread with a problem that benefits from reasoning
@@ -96,11 +135,9 @@ async def demo_reasoning_levels():
     for level in ["low", "medium", "high"]:
         logger.info(f"\n--- Testing reasoning='{level}' ---")
         
-        agent = Agent(
-            model_name="gpt-4.1",
+        agent = create_deepseek_agent(
             purpose="To test reasoning levels",
-            reasoning=level,
-            temperature=0.7
+            reasoning=level
         )
         
         thread = Thread()
@@ -128,12 +165,15 @@ async def demo_comparison():
     
     problem = "If you have 8 coins and I have 5 coins, and you give me 3 coins, who has more?"
     
-    # Without thinking tokens
-    logger.info("\n[WITHOUT thinking tokens]")
+    # Without thinking tokens - use a non-reasoning model
+    logger.info("\n[WITHOUT thinking tokens - using Llama 3.3]")
     agent_no_thinking = Agent(
-        model_name="gpt-4.1",
+        model_name="openai/meta-llama/Llama-3.3-70B-Instruct",
+        base_url="https://api.inference.wandb.ai/v1",
+        api_key=get_wandb_api_key(),
         purpose="Standard response",
-        temperature=0.7
+        temperature=0.7,
+        drop_params=True
     )
     
     thread1 = Thread()
@@ -145,13 +185,11 @@ async def demo_comparison():
         elif event.type == EventType.EXECUTION_COMPLETE:
             print("\n")
     
-    # With thinking tokens
-    logger.info("[WITH thinking tokens (reasoning='medium')]")
-    agent_with_thinking = Agent(
-        model_name="gpt-4.1",
+    # With thinking tokens - use DeepSeek-R1
+    logger.info("[WITH thinking tokens (DeepSeek-R1, reasoning='medium')]")
+    agent_with_thinking = create_deepseek_agent(
         purpose="Response with reasoning",
-        reasoning="medium",
-        temperature=0.7
+        reasoning="medium"
     )
     
     thread2 = Thread()
@@ -174,35 +212,21 @@ async def demo_comparison():
 
 
 async def demo_wandb_inference():
-    """Example using W&B Inference with DeepSeek-R1 (thinking model)"""
-    logger.info("\n" + "=" * 70)
-    logger.info("Demo 4: W&B Inference with DeepSeek-R1")
-    logger.info("=" * 70)
+    """Example using W&B Inference with DeepSeek-R1 (thinking model)
     
-    # Check if W&B API key is available
-    wandb_api_key = os.getenv("WANDB_API_KEY")
-    if not wandb_api_key:
-        logger.warning("⚠️  Skipping W&B Inference demo - WANDB_API_KEY not set")
-        logger.info("   To use W&B Inference:")
-        logger.info("   1. Get API key from: https://wandb.ai/authorize")
-        logger.info("   2. Set: export WANDB_API_KEY=<your-wandb-api-key>")
-        return
+    This demo shows a more complex math problem to really exercise the
+    thinking capabilities of DeepSeek-R1.
+    """
+    logger.info("\n" + "=" * 70)
+    logger.info("Demo 4: Complex Problem with DeepSeek-R1")
+    logger.info("=" * 70)
     
     logger.info("Using W&B Inference with DeepSeek-R1-0528...")
     
     # Create agent configured for W&B Inference
-    agent = Agent(
-        model_name="openai/deepseek-ai/DeepSeek-R1-0528",
-        base_url="https://api.inference.wandb.ai/v1",
-        api_key=wandb_api_key,  # Pass W&B API key explicitly
-        extra_headers={
-            "HTTP-Referer": "https://wandb.ai/wandb-designers/slide",
-            "X-Project-Name": "wandb-designers/slide"
-        },
+    agent = create_deepseek_agent(
         purpose="To demonstrate W&B Inference with thinking tokens",
-        reasoning="low",
-        temperature=0.7,
-        drop_params=True
+        reasoning="low"
     )
     
     thread = Thread()
@@ -247,11 +271,9 @@ async def demo_all_events():
     logger.info("Demo 5: All Thinking-Related Events")
     logger.info("=" * 70)
     
-    agent = Agent(
-        model_name="gpt-4.1",
+    agent = create_deepseek_agent(
         purpose="To show all event types",
-        reasoning="low",
-        temperature=0.7
+        reasoning="low"
     )
     
     thread = Thread()
