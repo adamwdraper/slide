@@ -8,7 +8,6 @@ content and thinking tokens across all streaming modes:
 - vercel: SSE-formatted strings
 - vercel_objects: Dict chunks with "type" key
 """
-import pytest
 from types import SimpleNamespace
 from tyler.models.agent import _weave_stream_accumulator
 from tyler.models.execution import ExecutionEvent, EventType
