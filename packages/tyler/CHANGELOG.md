@@ -1,8 +1,10 @@
-## [tyler-v6.2.0] - 2026-01-16
+## [tyler-v6.3.0] - 2026-01-22
 
 ### 🚀 Features
 
 - *(tracing)* Auto-wrap tools with weave.op() for consistent trace trees
+- *(tracing)* Fix weave accumulator for all streaming modes
+- *(tracing)* Add step boundary reset for last-step-only output
 
 ### 🐛 Bug Fixes
 
@@ -13,6 +15,11 @@
 
 - *(tracing)* Add tests for weave.op auto-wrapping
 - *(tracing)* Add regression tests for weave.op signature preservation
+
+### ⚙️ Miscellaneous Tasks
+
+- *(dependencies)* Update package versions in lock and project files
+- Remove unused pytest import in tests
 ## [tyler-v6.1.0] - 2026-01-12
 
 ### 🚀 Features
