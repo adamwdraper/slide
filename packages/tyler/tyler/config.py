@@ -154,7 +154,11 @@ def load_config(config_path: Optional[str] = None) -> Dict[str, Any]:
     # Process tools list (load custom tool files)
     if 'tools' in config and isinstance(config['tools'], list):
         config['tools'] = _process_tools_list(config['tools'], resolved_path.parent)
-    
+
+    # Process skills list (resolve paths)
+    if 'skills' in config and isinstance(config['skills'], list):
+        config['skills'] = _process_skills_list(config['skills'], resolved_path.parent)
+
     return config
 
 
@@ -368,4 +372,36 @@ def _process_tools_list(tools: List[Any], config_dir: Path) -> List[Any]:
             processed_tools.append(tool)
     
     return processed_tools
+
+
+def _process_skills_list(skills: List[str], config_dir: Path) -> List[str]:
+    """Process skills list: resolve paths relative to config directory.
+
+    For each skill path:
+    - If starts with '~': expand user home directory
+    - If absolute: use as-is
+    - Otherwise: resolve relative to config_dir
+
+    Args:
+        skills: List of skill directory paths from config
+        config_dir: Directory containing config file (for relative paths)
+
+    Returns:
+        List of resolved skill directory path strings
+    """
+    resolved = []
+    for skill_path in skills:
+        if not isinstance(skill_path, str):
+            logger.warning(f"Skipping non-string skill path: {skill_path}")
+            continue
+
+        path = Path(skill_path)
+        if skill_path.startswith('~'):
+            path = path.expanduser()
+        elif not path.is_absolute():
+            path = (config_dir / skill_path).resolve()
+
+        resolved.append(str(path))
+
+    return resolved
 
