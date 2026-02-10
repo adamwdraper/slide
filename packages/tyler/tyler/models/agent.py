@@ -452,6 +452,8 @@ class Agent(BaseModel):
     _response_format: Optional[str] = PrivateAttr(default=None)
     _last_step_stream_had_tool_calls: bool = PrivateAttr(default=False)
     _last_step_stream_should_continue: bool = PrivateAttr(default=False)
+    _skills_description: str = PrivateAttr(default="")
+    _skill_tool_defs: List[Dict] = PrivateAttr(default_factory=list)
     step_errors_raise: bool = Field(default=False, description="If True, step() will raise exceptions instead of returning an error message tuple for backward compatibility.")
 
     model_config = {
@@ -508,13 +510,14 @@ class Agent(BaseModel):
         self._processed_tools = tool_manager.register_all_tools()
 
         # Load skills if configured
-        skills_description = ""
+        self._skills_description = ""
+        self._skill_tool_defs = []
         if self.skills:
             skill_manager = SkillManager()
-            loaded_skills, skill_tool_defs = skill_manager.load_skills(self.skills)
-            self._processed_tools.extend(skill_tool_defs)
+            loaded_skills, self._skill_tool_defs = skill_manager.load_skills(self.skills)
+            self._processed_tools.extend(self._skill_tool_defs)
             if loaded_skills:
-                skills_description = skill_manager.format_skills_prompt(loaded_skills)
+                self._skills_description = skill_manager.format_skills_prompt(loaded_skills)
 
         # Create default stores if not provided
         if self.thread_store is None:
@@ -526,15 +529,23 @@ class Agent(BaseModel):
             self.file_store = FileStore()  # Uses default settings
 
         # Now generate the system prompt including the tools
+        self._regenerate_system_prompt()
+
+    def _regenerate_system_prompt(self) -> None:
+        """Regenerate the system prompt from current state.
+
+        Centralizes prompt generation so all callers get a consistent prompt
+        including tools, notes, and skills description.
+        """
         self._system_prompt = self._prompt.system_prompt(
             self.purpose,
             self.name,
             self.model_name,
             self._processed_tools,
             self.notes,
-            skills_description=skills_description
+            skills_description=self._skills_description
         )
-    
+
     def model_post_init(self, __context: Any) -> None:
         """Pydantic v2 hook called after model initialization.
         
@@ -2026,19 +2037,15 @@ class Agent(BaseModel):
             self.tools = list(self.tools) if self.tools else []
         self.tools.extend(mcp_tools)
         
-        # Re-process tools with ToolManager
+        # Re-process tools with ToolManager (preserving skill tool defs)
         from tyler.models.tool_manager import ToolManager
         tool_manager = ToolManager(tools=self.tools, agents=self.agents)
         self._processed_tools = tool_manager.register_all_tools()
-        
-        # Regenerate system prompt with new tools
-        self._system_prompt = self._prompt.system_prompt(
-            self.purpose, 
-            self.name, 
-            self.model_name, 
-            self._processed_tools, 
-            self.notes
-        )
+        if self._skill_tool_defs:
+            self._processed_tools.extend(self._skill_tool_defs)
+
+        # Regenerate system prompt with new tools (includes skills description)
+        self._regenerate_system_prompt()
         
         self._mcp_connected = True
         logging.getLogger(__name__).info(f"MCP connected with {len(mcp_tools)} tools")

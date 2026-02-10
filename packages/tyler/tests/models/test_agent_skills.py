@@ -408,3 +408,54 @@ class TestToolNameCollision:
             # Clean up the pre-registered tool
             if "activate_skill" in tool_runner.tools:
                 del tool_runner.tools["activate_skill"]
+
+
+class TestSkillsSurviveConnectMcp:
+    """Test that skills are preserved when connect_mcp() regenerates the system prompt."""
+
+    @pytest.mark.asyncio
+    async def test_connect_mcp_preserves_skills_in_prompt(self, tmp_path):
+        """Skills description and tool defs survive connect_mcp() prompt regeneration."""
+        skill_dir = _create_skill_dir(
+            tmp_path, name="mcp-test-skill", description="Skill that must survive MCP"
+        )
+
+        agent = Agent(
+            model_name="gpt-4.1",
+            purpose="test",
+            skills=[str(skill_dir)],
+            mcp={"servers": [{"name": "test", "transport": "stdio", "command": "echo"}]},
+        )
+
+        # Before connect_mcp: skills present
+        assert "<available_skills>" in agent._system_prompt
+        assert "mcp-test-skill" in agent._system_prompt
+        tool_names_before = {t["function"]["name"] for t in agent._processed_tools}
+        assert "activate_skill" in tool_names_before
+
+        # Mock MCP connection to add a fake tool
+        mcp_tool_def = {
+            "definition": {
+                "type": "function",
+                "function": {
+                    "name": "mcp_fake_tool",
+                    "description": "A fake MCP tool",
+                    "parameters": {"type": "object", "properties": {}},
+                },
+            },
+            "implementation": lambda: "ok",
+        }
+        with patch(
+            "tyler.mcp.config_loader._load_mcp_config",
+            return_value=([mcp_tool_def], lambda: None),
+        ), patch(
+            "tyler.mcp.config_loader._validate_mcp_config",
+        ):
+            await agent.connect_mcp()
+
+        # After connect_mcp: skills STILL present
+        assert "<available_skills>" in agent._system_prompt
+        assert "mcp-test-skill" in agent._system_prompt
+        assert "Skill that must survive MCP" in agent._system_prompt
+        tool_names_after = {t["function"]["name"] for t in agent._processed_tools}
+        assert "activate_skill" in tool_names_after
