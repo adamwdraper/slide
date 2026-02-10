@@ -20,6 +20,7 @@ from tyler.models.execution import (
 from tyler.models.retry_config import RetryConfig
 from tyler.models.tool_manager import ToolManager
 from tyler.models.skill import SkillManager
+from tyler.models.agents_md import load_agents_md
 from tyler.models.message_factory import MessageFactory
 from tyler.models.completion_handler import CompletionHandler
 import asyncio
@@ -338,7 +339,7 @@ Use: "I've created an audio summary. You can listen to it [here](files/path/to/s
 This ensures the user can access the file correctly.
 </file_handling_instructions>""")
 
-    def system_prompt(self, purpose: Union[str, Prompt], name: str, model_name: str, tools: List[Dict], notes: Union[str, Prompt] = "", skills_description: str = "") -> str:
+    def system_prompt(self, purpose: Union[str, Prompt], name: str, model_name: str, tools: List[Dict], notes: Union[str, Prompt] = "", skills_description: str = "", agents_md_content: str = "") -> str:
         # Use cached tools description if available and tools haven't changed
         cache_key = f"{len(tools)}_{id(tools)}"
         if not hasattr(self, '_tools_cache') or self._tools_cache.get('key') != cache_key:
@@ -375,6 +376,14 @@ This ensures the user can access the file correctly.
             tools_description=tools_description_str,
             notes=formatted_notes
         )
+
+        # Append AGENTS.md project instructions if present
+        if agents_md_content:
+            prompt += """
+
+<project_instructions>
+""" + agents_md_content + """
+</project_instructions>"""
 
         # Append skills section if skills are configured
         if skills_description:
@@ -418,6 +427,7 @@ class Agent(BaseModel):
     version: str = Field(default="1.0.0")
     tools: List[Union[str, Dict, Callable, types.ModuleType]] = Field(default_factory=list, description="List of tools available to the agent. Can include: 1) Direct tool function references (callables), 2) Tool module namespaces (modules like web, files), 3) Built-in tool module names (strings), 4) Custom tool definitions (dicts with 'definition', 'implementation', and optional 'attributes' keys). For module names, you can specify specific tools using 'module:tool1,tool2'.")
     skills: List[str] = Field(default_factory=list, description="List of paths to skill directories containing SKILL.md files.")
+    agents_md: Optional[Union[bool, str, List[str]]] = Field(default=None, description="AGENTS.md project instructions. None=disabled (default), True=auto-discover from CWD upward, False=disabled, str=explicit path, List[str]=multiple paths.")
     max_tool_iterations: int = Field(default=10)
     agents: List["Agent"] = Field(default_factory=list, description="List of agents that this agent can delegate tasks to.")
     thread_store: Optional[ThreadStore] = Field(default=None, description="Thread store instance for managing conversation threads", exclude=True)
@@ -454,6 +464,7 @@ class Agent(BaseModel):
     _last_step_stream_should_continue: bool = PrivateAttr(default=False)
     _skills_description: str = PrivateAttr(default="")
     _skill_tool_defs: List[Dict] = PrivateAttr(default_factory=list)
+    _agents_md_content: str = PrivateAttr(default="")
     step_errors_raise: bool = Field(default=False, description="If True, step() will raise exceptions instead of returning an error message tuple for backward compatibility.")
 
     model_config = {
@@ -519,6 +530,9 @@ class Agent(BaseModel):
             if loaded_skills:
                 self._skills_description = skill_manager.format_skills_prompt(loaded_skills)
 
+        # Load AGENTS.md project instructions
+        self._agents_md_content = load_agents_md(self.agents_md)
+
         # Create default stores if not provided
         if self.thread_store is None:
             logging.getLogger(__name__).info(f"Creating default in-memory thread store for agent {self.name}")
@@ -543,7 +557,8 @@ class Agent(BaseModel):
             self.model_name,
             self._processed_tools,
             self.notes,
-            skills_description=self._skills_description
+            skills_description=self._skills_description,
+            agents_md_content=self._agents_md_content
         )
 
     def model_post_init(self, __context: Any) -> None:
