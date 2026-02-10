@@ -120,6 +120,56 @@ Integrates with the Model Context Protocol for:
 - Dynamic tool invocation
 - Integration with any MCP-compatible tool ecosystem
 
+### Skills
+
+Progressive skill disclosure following the [Agent Skills](https://agentskills.io/specification) open format:
+- Skills are directories containing a `SKILL.md` file with YAML frontmatter (name, description) and markdown instructions
+- Only skill metadata (name + description) appears in the system prompt — keeping context small
+- Full instructions are loaded on-demand via the `activate_skill` tool when the agent decides it needs them
+- Survives `connect_mcp()` prompt regeneration
+
+```python
+agent = Agent(
+    model_name="gpt-4.1",
+    purpose="A helpful assistant",
+    skills=["./skills/code-review", "./skills/testing"],
+)
+```
+
+Each skill directory contains a `SKILL.md`:
+```markdown
+---
+name: code-review
+description: Guidelines for performing thorough code reviews
+---
+# Code Review Skill
+
+Review code for correctness, readability, and performance...
+```
+
+See `examples/108_skills.py` for a complete example.
+
+### AGENTS.md
+
+Project-level instructions following the [AGENTS.md](https://agents.md) open standard:
+- Eagerly loaded into the system prompt at init time (unlike skills which are progressively disclosed)
+- Auto-discovery walks upward from a base directory, collecting all `AGENTS.md` files (root-first ordering)
+- Supports explicit paths, lists of paths, or boolean auto-discovery
+- Content appears in a `<project_instructions>` block in the system prompt
+
+```python
+# Explicit path
+agent = Agent(model_name="gpt-4.1", agents_md="./AGENTS.md")
+
+# Auto-discover from CWD upward
+agent = Agent(model_name="gpt-4.1", agents_md=True)
+
+# Multiple files
+agent = Agent(model_name="gpt-4.1", agents_md=["./AGENTS.md", "./docs/AGENTS.md"])
+```
+
+See `examples/109_agents_md.py` and `examples/sample-project/AGENTS.md` for a complete example.
+
 ### Storage
 
 Storage is handled by the Narrator package, providing:
@@ -348,6 +398,10 @@ purpose: "A helpful AI assistant"
 tools:
   - "web"
   - "slack"
+skills:
+  - "./skills/code-review"
+  - "./skills/testing"
+agents_md: true  # or "./AGENTS.md" or ["./AGENTS.md", "./docs/AGENTS.md"]
 mcp:
   servers:
     - name: "docs"
@@ -384,6 +438,8 @@ The examples directory includes demonstrations of:
 
 - Basic agent conversations
 - Using built-in and custom tools
+- Agent Skills with progressive disclosure (`108_skills.py`)
+- AGENTS.md project instructions (`109_agents_md.py`)
 - Working with file attachments
 - Image and audio processing
 - Streaming responses

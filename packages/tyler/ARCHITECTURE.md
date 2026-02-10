@@ -106,6 +106,41 @@ Handles LLM communication and response processing:
 - Parameter dropping for model compatibility
 - Streaming and non-streaming modes
 
+### SkillManager
+**Location**: `tyler/models/skill.py`
+
+Manages progressive skill disclosure following the [Agent Skills](https://agentskills.io/specification) open format:
+- Loads `SKILL.md` files from skill directories (YAML frontmatter + markdown body)
+- Validates skill names (lowercase alphanumeric + hyphens) and descriptions
+- Registers the `activate_skill` tool with the global ToolRunner
+- Only metadata (name + description) appears in the system prompt
+- Full instructions are returned on-demand when the agent calls `activate_skill`
+
+**Usage**:
+```python
+manager = SkillManager()
+skills, tool_defs = manager.load_skills(["./skills/code-review"])
+# skills: list of Skill dataclasses
+# tool_defs: [activate_skill tool definition] for _processed_tools
+```
+
+### AGENTS.md Loader
+**Location**: `tyler/models/agents_md.py`
+
+Loads project-level instructions following the [AGENTS.md](https://agents.md) open standard:
+- `discover_agents_md(start_dir)` — walks upward from a directory, collecting all `AGENTS.md` files (root-first ordering)
+- `load_agents_md(agents_md, base_dir)` — handles all config variants (None, True, False, str, List[str])
+- Guards against oversized files (`MAX_AGENTS_MD_SIZE = 100,000` chars)
+- Content is eagerly loaded into a `<project_instructions>` block in the system prompt
+
+**Usage**:
+```python
+from tyler.models.agents_md import load_agents_md
+
+content = load_agents_md(True, base_dir=Path("."))  # auto-discover
+content = load_agents_md("./AGENTS.md")              # explicit path
+```
+
 ### ToolRunner
 **Location**: `tyler/utils/tool_runner.py`
 
@@ -189,7 +224,14 @@ Agent.__init__
   │         ├─> StringToolStrategy.register()
   │         ├─> DictToolStrategy.register()
   │         └─> ... (delegates to appropriate strategy)
-  └─> Generate system prompt with tools
+  ├─> SkillManager.load_skills(skill_paths)
+  │    ├─> Parse SKILL.md frontmatter + body
+  │    ├─> Register activate_skill tool
+  │    └─> Return skills metadata for system prompt
+  ├─> load_agents_md(agents_md, base_dir)
+  │    ├─> Auto-discover or load explicit paths
+  │    └─> Return combined content for system prompt
+  └─> Generate system prompt (tools + skills + project_instructions)
 ```
 
 ### 2. Agent Execution (go)
@@ -254,7 +296,9 @@ tyler/
 │   ├── tool_call.py          # ToolCall value object
 │   ├── message_factory.py    # Message creation factory
 │   ├── tool_manager.py       # Tool registration manager
-│   └── completion_handler.py # LLM communication handler
+│   ├── completion_handler.py # LLM communication handler
+│   ├── skill.py              # Skill model and SkillManager
+│   └── agents_md.py          # AGENTS.md loader
 │
 ├── utils/
 │   ├── tool_runner.py        # Global tool executor (singleton)
