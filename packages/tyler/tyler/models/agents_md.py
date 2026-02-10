@@ -88,7 +88,6 @@ def load_agents_md(
         return ""
 
     contents: List[str] = []
-    total_size = 0
 
     for path in paths:
         resolved = path.expanduser().resolve()
@@ -102,17 +101,12 @@ def load_agents_md(
             logger.warning(f"Failed to read {resolved}: {e}, skipping")
             continue
 
-        total_size += len(text)
-        if total_size > MAX_AGENTS_MD_SIZE:
-            logger.warning(
-                f"AGENTS.md content exceeds {MAX_AGENTS_MD_SIZE} chars, truncating"
-            )
-            # Truncate this file's contribution to stay within limit
-            allowed = MAX_AGENTS_MD_SIZE - (total_size - len(text))
-            if allowed > 0:
-                contents.append(text[:allowed])
-            break
-
         contents.append(text)
 
-    return "\n\n---\n\n".join(contents)
+    result = "\n\n---\n\n".join(contents)
+    if len(result) > MAX_AGENTS_MD_SIZE:
+        logger.warning(
+            f"AGENTS.md content exceeds {MAX_AGENTS_MD_SIZE} chars, truncating"
+        )
+        result = result[:MAX_AGENTS_MD_SIZE]
+    return result

@@ -24,6 +24,12 @@ def cleanup_activate_skill():
         del tool_runner.tool_attributes["activate_skill"]
 
 
+def _within(paths, root):
+    """Filter discovered paths to only those within root (for test isolation)."""
+    root = root.resolve()
+    return [p for p in paths if root in p.parents or p.parent == root]
+
+
 class TestDiscovery:
     """Test hierarchical AGENTS.md discovery."""
 
@@ -35,7 +41,7 @@ class TestDiscovery:
         sub.mkdir()
         (sub / "AGENTS.md").write_text("Sub instructions")
 
-        found = discover_agents_md(sub)
+        found = _within(discover_agents_md(sub), tmp_path)
 
         assert len(found) == 2
         # Root-first ordering
@@ -48,17 +54,17 @@ class TestDiscovery:
         sub = tmp_path / "sub"
         sub.mkdir()
 
-        found = discover_agents_md(sub)
+        found = _within(discover_agents_md(sub), tmp_path)
 
         assert len(found) == 1
         assert found[0] == (tmp_path / "AGENTS.md").resolve()
 
     def test_discover_none_found(self, tmp_path):
-        """Returns empty list when no AGENTS.md found anywhere."""
+        """Returns empty list when no AGENTS.md found in tmp_path tree."""
         sub = tmp_path / "sub"
         sub.mkdir()
 
-        found = discover_agents_md(sub)
+        found = _within(discover_agents_md(sub), tmp_path)
 
         assert found == []
 
@@ -73,7 +79,7 @@ class TestDiscovery:
         b.mkdir()
         (b / "AGENTS.md").write_text("3")
 
-        found = discover_agents_md(b)
+        found = _within(discover_agents_md(b), tmp_path)
 
         assert len(found) == 3
         assert found[0] == (tmp_path / "AGENTS.md").resolve()

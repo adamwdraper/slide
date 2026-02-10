@@ -378,40 +378,13 @@ def _process_tools_list(tools: List[Any], config_dir: Path) -> List[Any]:
     return processed_tools
 
 
-def _process_skills_list(skills: List[str], config_dir: Path) -> List[str]:
-    """Process skills list: resolve paths relative to config directory.
+def _resolve_config_dir_path(path_str: str, config_dir: Path) -> str:
+    """Resolve a path relative to config directory.
 
-    For each skill path:
-    - If starts with '~': expand user home directory
-    - If absolute: use as-is
+    Handles three cases:
+    - Starts with '~': expand user home directory
+    - Absolute: use as-is
     - Otherwise: resolve relative to config_dir
-
-    Args:
-        skills: List of skill directory paths from config
-        config_dir: Directory containing config file (for relative paths)
-
-    Returns:
-        List of resolved skill directory path strings
-    """
-    resolved = []
-    for skill_path in skills:
-        if not isinstance(skill_path, str):
-            logger.warning(f"Skipping non-string skill path: {skill_path}")
-            continue
-
-        path = Path(skill_path)
-        if skill_path.startswith('~'):
-            path = path.expanduser()
-        elif not path.is_absolute():
-            path = (config_dir / skill_path).resolve()
-
-        resolved.append(str(path))
-
-    return resolved
-
-
-def _resolve_agents_md_path(path_str: str, config_dir: Path) -> str:
-    """Resolve an agents_md path relative to config directory.
 
     Args:
         path_str: Path string (may be relative, absolute, or use ~)
@@ -426,6 +399,26 @@ def _resolve_agents_md_path(path_str: str, config_dir: Path) -> str:
     elif not path.is_absolute():
         path = (config_dir / path_str).resolve()
     return str(path)
+
+
+def _process_skills_list(skills: List[str], config_dir: Path) -> List[str]:
+    """Process skills list: resolve paths relative to config directory.
+
+    Args:
+        skills: List of skill directory paths from config
+        config_dir: Directory containing config file (for relative paths)
+
+    Returns:
+        List of resolved skill directory path strings
+    """
+    resolved = []
+    for skill_path in skills:
+        if not isinstance(skill_path, str):
+            logger.warning(f"Skipping non-string skill path: {skill_path}")
+            continue
+        resolved.append(_resolve_config_dir_path(skill_path, config_dir))
+
+    return resolved
 
 
 def _process_agents_md(agents_md: Any, config_dir: Path) -> Any:
@@ -448,13 +441,13 @@ def _process_agents_md(agents_md: Any, config_dir: Path) -> Any:
         return agents_md
 
     if isinstance(agents_md, str):
-        return _resolve_agents_md_path(agents_md, config_dir)
+        return _resolve_config_dir_path(agents_md, config_dir)
 
     if isinstance(agents_md, list):
         resolved = []
         for item in agents_md:
             if isinstance(item, str):
-                resolved.append(_resolve_agents_md_path(item, config_dir))
+                resolved.append(_resolve_config_dir_path(item, config_dir))
             else:
                 logger.warning(f"Skipping non-string agents_md path: {item}")
         return resolved
