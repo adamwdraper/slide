@@ -96,6 +96,13 @@ def load_agents_md(
             continue
 
         try:
+            file_size = resolved.stat().st_size
+            if file_size > MAX_AGENTS_MD_SIZE:
+                logger.warning(
+                    f"AGENTS.md file {resolved} is {file_size} bytes, "
+                    f"exceeds {MAX_AGENTS_MD_SIZE} limit, skipping"
+                )
+                continue
             text = resolved.read_text(encoding="utf-8")
         except Exception as e:
             logger.warning(f"Failed to read {resolved}: {e}, skipping")

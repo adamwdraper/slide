@@ -134,13 +134,26 @@ class TestLoading:
 
         assert result == ""
 
-    def test_load_truncation(self, tmp_path):
-        """Content exceeding MAX_AGENTS_MD_SIZE is truncated."""
+    def test_load_oversized_file_skipped(self, tmp_path):
+        """Single file exceeding MAX_AGENTS_MD_SIZE is skipped."""
         big_content = "x" * (MAX_AGENTS_MD_SIZE + 1000)
         agents_file = tmp_path / "AGENTS.md"
         agents_file.write_text(big_content)
 
         result = load_agents_md(str(agents_file))
+
+        assert result == ""
+
+    def test_load_combined_truncation(self, tmp_path):
+        """Combined content from multiple files is truncated at the limit."""
+        # Two files that individually fit but together exceed the limit
+        half = MAX_AGENTS_MD_SIZE // 2 + 100
+        file_a = tmp_path / "A.md"
+        file_b = tmp_path / "B.md"
+        file_a.write_text("a" * half)
+        file_b.write_text("b" * half)
+
+        result = load_agents_md([str(file_a), str(file_b)])
 
         assert len(result) <= MAX_AGENTS_MD_SIZE
 
