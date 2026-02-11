@@ -19,6 +19,8 @@ from tyler.models.execution import (
 )
 from tyler.models.retry_config import RetryConfig
 from tyler.models.tool_manager import ToolManager
+from tyler.models.skill import SkillManager
+from tyler.models.agents_md import load_agents_md
 from tyler.models.message_factory import MessageFactory
 from tyler.models.completion_handler import CompletionHandler
 import asyncio
@@ -337,7 +339,7 @@ Use: "I've created an audio summary. You can listen to it [here](files/path/to/s
 This ensures the user can access the file correctly.
 </file_handling_instructions>""")
 
-    def system_prompt(self, purpose: Union[str, Prompt], name: str, model_name: str, tools: List[Dict], notes: Union[str, Prompt] = "") -> str:
+    def system_prompt(self, purpose: Union[str, Prompt], name: str, model_name: str, tools: List[Dict], notes: Union[str, Prompt] = "", skills_description: str = "", agents_md_content: str = "") -> str:
         # Use cached tools description if available and tools haven't changed
         cache_key = f"{len(tools)}_{id(tools)}"
         if not hasattr(self, '_tools_cache') or self._tools_cache.get('key') != cache_key:
@@ -349,7 +351,7 @@ This ensures the user can access the file correctly.
                     tool_name = tool_func.get('name', 'N/A')
                     description = tool_func.get('description', 'No description available.')
                     tools_description_lines.append(f"- `{tool_name}`: {description}")
-            
+
             tools_description_str = "\n".join(tools_description_lines) if tools_description_lines else "No tools available."
             self._tools_cache = {'key': cache_key, 'description': tools_description_str}
         else:
@@ -360,13 +362,13 @@ This ensures the user can access the file correctly.
             formatted_purpose = str(purpose)  # StringPrompt has __str__ method
         else:
             formatted_purpose = purpose
-            
+
         if isinstance(notes, Prompt):
             formatted_notes = str(notes)  # StringPrompt has __str__ method
         else:
             formatted_notes = notes
 
-        return self.system_template.format(
+        prompt = self.system_template.format(
             current_date=datetime.now().strftime("%Y-%m-%d %A"),
             purpose=formatted_purpose,
             name=name,
@@ -374,6 +376,28 @@ This ensures the user can access the file correctly.
             tools_description=tools_description_str,
             notes=formatted_notes
         )
+
+        # Append AGENTS.md project instructions if present
+        if agents_md_content:
+            prompt += """
+
+<project_instructions>
+""" + agents_md_content + """
+</project_instructions>"""
+
+        # Append skills section if skills are configured
+        if skills_description:
+            prompt += """
+
+<available_skills>
+# Available Skills
+You have access to the following skills. When a task matches a skill's description,
+use the activate_skill tool to load its full instructions before proceeding.
+
+""" + skills_description + """
+</available_skills>"""
+
+        return prompt
 
 class Agent(BaseModel):
     """Tyler Agent model for AI-powered assistants.
@@ -402,6 +426,8 @@ class Agent(BaseModel):
     notes: Union[str, Prompt] = Field(default_factory=lambda: weave.StringPrompt(""))
     version: str = Field(default="1.0.0")
     tools: List[Union[str, Dict, Callable, types.ModuleType]] = Field(default_factory=list, description="List of tools available to the agent. Can include: 1) Direct tool function references (callables), 2) Tool module namespaces (modules like web, files), 3) Built-in tool module names (strings), 4) Custom tool definitions (dicts with 'definition', 'implementation', and optional 'attributes' keys). For module names, you can specify specific tools using 'module:tool1,tool2'.")
+    skills: List[str] = Field(default_factory=list, description="List of paths to skill directories containing SKILL.md files.")
+    agents_md: Optional[Union[bool, str, List[str]]] = Field(default=None, description="AGENTS.md project instructions. None=disabled (default), True=auto-discover from CWD upward, False=disabled, str=explicit path, List[str]=multiple paths.")
     max_tool_iterations: int = Field(default=10)
     agents: List["Agent"] = Field(default_factory=list, description="List of agents that this agent can delegate tasks to.")
     thread_store: Optional[ThreadStore] = Field(default=None, description="Thread store instance for managing conversation threads", exclude=True)
@@ -436,6 +462,9 @@ class Agent(BaseModel):
     _response_format: Optional[str] = PrivateAttr(default=None)
     _last_step_stream_had_tool_calls: bool = PrivateAttr(default=False)
     _last_step_stream_should_continue: bool = PrivateAttr(default=False)
+    _skills_description: str = PrivateAttr(default="")
+    _skill_tool_defs: List[Dict] = PrivateAttr(default_factory=list)
+    _agents_md_content: str = PrivateAttr(default="")
     step_errors_raise: bool = Field(default=False, description="If True, step() will raise exceptions instead of returning an error message tuple for backward compatibility.")
 
     model_config = {
@@ -491,24 +520,47 @@ class Agent(BaseModel):
         tool_manager = ToolManager(tools=self.tools, agents=self.agents)
         self._processed_tools = tool_manager.register_all_tools()
 
+        # Load skills if configured
+        self._skills_description = ""
+        self._skill_tool_defs = []
+        if self.skills:
+            skill_manager = SkillManager()
+            loaded_skills, self._skill_tool_defs = skill_manager.load_skills(self.skills)
+            self._processed_tools.extend(self._skill_tool_defs)
+            if loaded_skills:
+                self._skills_description = skill_manager.format_skills_prompt(loaded_skills)
+
+        # Load AGENTS.md project instructions
+        self._agents_md_content = load_agents_md(self.agents_md)
+
         # Create default stores if not provided
         if self.thread_store is None:
             logging.getLogger(__name__).info(f"Creating default in-memory thread store for agent {self.name}")
             self.thread_store = ThreadStore()  # Uses in-memory backend by default
-            
+
         if self.file_store is None:
             logging.getLogger(__name__).info(f"Creating default file store for agent {self.name}")
             self.file_store = FileStore()  # Uses default settings
 
         # Now generate the system prompt including the tools
+        self._regenerate_system_prompt()
+
+    def _regenerate_system_prompt(self) -> None:
+        """Regenerate the system prompt from current state.
+
+        Centralizes prompt generation so all callers get a consistent prompt
+        including tools, notes, and skills description.
+        """
         self._system_prompt = self._prompt.system_prompt(
-            self.purpose, 
-            self.name, 
-            self.model_name, 
-            self._processed_tools, 
-            self.notes
+            self.purpose,
+            self.name,
+            self.model_name,
+            self._processed_tools,
+            self.notes,
+            skills_description=self._skills_description,
+            agents_md_content=self._agents_md_content
         )
-    
+
     def model_post_init(self, __context: Any) -> None:
         """Pydantic v2 hook called after model initialization.
         
@@ -2000,19 +2052,15 @@ class Agent(BaseModel):
             self.tools = list(self.tools) if self.tools else []
         self.tools.extend(mcp_tools)
         
-        # Re-process tools with ToolManager
+        # Re-process tools with ToolManager (preserving skill tool defs)
         from tyler.models.tool_manager import ToolManager
         tool_manager = ToolManager(tools=self.tools, agents=self.agents)
         self._processed_tools = tool_manager.register_all_tools()
-        
-        # Regenerate system prompt with new tools
-        self._system_prompt = self._prompt.system_prompt(
-            self.purpose, 
-            self.name, 
-            self.model_name, 
-            self._processed_tools, 
-            self.notes
-        )
+        if self._skill_tool_defs:
+            self._processed_tools.extend(self._skill_tool_defs)
+
+        # Regenerate system prompt with new tools (includes skills description)
+        self._regenerate_system_prompt()
         
         self._mcp_connected = True
         logging.getLogger(__name__).info(f"MCP connected with {len(mcp_tools)} tools")

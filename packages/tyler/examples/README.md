@@ -65,6 +65,12 @@ Weights & Biases integration for experiment tracking.
 ### 107_tools_group_import.py
 Importing and using tool groups.
 
+### 108_skills.py
+Agent Skills with progressive disclosure — load reusable SKILL.md instructions on-demand via the `activate_skill` tool.
+
+### 109_agents_md.py
+AGENTS.md project instructions — eagerly load project-level guidelines into the system prompt at init time.
+
 ## Attachment Examples (200-299)
 
 ### 200_attachments.py

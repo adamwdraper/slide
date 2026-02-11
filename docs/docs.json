@@ -22,6 +22,7 @@
         "pages": [
           "guides/your-first-agent",
           "guides/adding-tools",
+          "guides/skills",
           "guides/conversation-persistence",
           "guides/streaming-responses",
           "guides/agent-delegation",

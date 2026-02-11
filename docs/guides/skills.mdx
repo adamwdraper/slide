@@ -1,0 +1,264 @@
+---
+title: 'Skills & AGENTS.md'
+description: 'Give your agents reusable instructions — on-demand or always-on'
+---
+
+Slide supports two complementary ways to inject instructions into your agent's system prompt:
+
+- **Skills** — progressively disclosed on-demand via the `activate_skill` tool
+- **AGENTS.md** — eagerly loaded into the system prompt at init time
+
+Both follow open standards: [Agent Skills](https://agentskills.io/specification) and [AGENTS.md](https://agents.md).
+
+**Code Examples**
+
+<CardGroup cols={2}>
+  <Card
+    title="Skills Example"
+    icon="wand-magic-sparkles"
+    href="https://github.com/adamwdraper/slide/blob/main/packages/tyler/examples/108_skills.py"
+  >
+    Progressive skill disclosure in action
+  </Card>
+  <Card
+    title="AGENTS.md Example"
+    icon="file-lines"
+    href="https://github.com/adamwdraper/slide/blob/main/packages/tyler/examples/109_agents_md.py"
+  >
+    Project instructions in action
+  </Card>
+</CardGroup>
+
+## Skills
+
+Skills let you package reusable instructions that agents load only when they need them. Instead of stuffing everything into the system prompt, skills keep the prompt small and focused — the agent sees a short menu of available skills and activates the ones relevant to the current task.
+
+### How skills work
+
+1. You point the agent at one or more skill directories
+2. At init time, only each skill's **name** and **description** appear in the system prompt
+3. When the agent decides it needs a skill, it calls the `activate_skill` tool
+4. The full instructions from `SKILL.md` are returned to the agent as a tool result
+
+### Creating a skill
+
+A skill is a directory containing a `SKILL.md` file. The file has YAML frontmatter (name + description) followed by markdown instructions:
+
+```
+my-project/
+└── skills/
+    ├── code-review/
+    │   └── SKILL.md
+    └── testing/
+        └── SKILL.md
+```
+
+Example `SKILL.md`:
+
+```markdown
+---
+name: code-review
+description: Guidelines for performing thorough code reviews
+---
+# Code Review Skill
+
+## What to look for
+- Correctness: Does the code do what it's supposed to?
+- Readability: Is the code easy to understand?
+- Performance: Are there unnecessary allocations or O(n²) loops?
+- Security: Are inputs validated? Are there injection risks?
+
+## How to format feedback
+- Use inline comments for specific issues
+- Summarize overall impressions at the top
+- Always mention what was done well
+```
+
+#### Frontmatter requirements
+
+| Field | Rules |
+|-------|-------|
+| `name` | Lowercase alphanumeric + hyphens, max 64 chars (e.g. `code-review`) |
+| `description` | Plain text, max 1024 chars |
+
+### Using skills with an agent
+
+```python
+from tyler import Agent
+
+agent = Agent(
+    model_name="gpt-4.1",
+    purpose="A helpful coding assistant",
+    skills=[
+        "./skills/code-review",
+        "./skills/testing",
+    ],
+)
+```
+
+The agent's system prompt will include something like:
+
+```
+# Available Skills
+Use the `activate_skill` tool to load full instructions for any skill.
+
+- **code-review**: Guidelines for performing thorough code reviews
+- **testing**: Guidelines for writing comprehensive tests
+```
+
+When the agent encounters a task that matches a skill, it will call `activate_skill` with the skill name and receive the full instructions.
+
+### Using skills with config files
+
+```yaml
+name: "MyAgent"
+model_name: "gpt-4.1"
+purpose: "A helpful assistant"
+skills:
+  - "./skills/code-review"
+  - "./skills/testing"
+  - "~/shared-skills/documentation"
+```
+
+Relative paths are resolved relative to the config file's directory.
+
+---
+
+## AGENTS.md
+
+AGENTS.md files provide project-level instructions that are eagerly loaded into the agent's system prompt at init time. Unlike skills (which are progressively disclosed), AGENTS.md content is always present — making it ideal for coding standards, API conventions, and other rules that should always apply.
+
+### How it works
+
+1. You point the agent at one or more `AGENTS.md` files (or enable auto-discovery)
+2. At init time, the file contents are loaded and placed in a `<project_instructions>` block in the system prompt
+3. The agent sees these instructions on every interaction
+
+### Creating an AGENTS.md file
+
+Create an `AGENTS.md` file in your project root (or any directory). No special frontmatter or formatting is required — it's just markdown:
+
+```markdown
+# Project Guidelines
+
+## Code Style
+- Use type hints for all function signatures
+- Follow PEP 8 naming conventions
+- Prefer `async`/`await` over threads for I/O-bound operations
+
+## Error Handling
+- Always use specific exception types (never bare `except:`)
+- Include meaningful error messages with context
+- Use `logging` instead of `print` for diagnostics
+
+## API Conventions
+- Use `httpx` for HTTP requests (async-native)
+- Always set timeouts on external calls
+- Return typed dataclasses or Pydantic models, not raw dicts
+```
+
+### Using AGENTS.md with an agent
+
+#### Explicit path
+
+```python
+from tyler import Agent
+
+agent = Agent(
+    model_name="gpt-4.1",
+    purpose="A helpful coding assistant",
+    agents_md="./AGENTS.md",
+)
+```
+
+#### Auto-discovery
+
+Set `agents_md=True` to automatically discover `AGENTS.md` files by walking upward from the current working directory to the filesystem root:
+
+```python
+agent = Agent(
+    model_name="gpt-4.1",
+    purpose="A helpful coding assistant",
+    agents_md=True,
+)
+```
+
+This is useful in monorepos where you might have:
+```
+project-root/AGENTS.md          # Company-wide rules
+project-root/backend/AGENTS.md  # Backend-specific rules
+```
+
+Files are loaded root-first, so the closest file's instructions appear last (taking natural precedence).
+
+#### Multiple files
+
+```python
+agent = Agent(
+    model_name="gpt-4.1",
+    agents_md=["./AGENTS.md", "./docs/coding-standards.md"],
+)
+```
+
+Multiple files are joined with `---` separators.
+
+### Using AGENTS.md with config files
+
+```yaml
+name: "MyAgent"
+model_name: "gpt-4.1"
+purpose: "A helpful assistant"
+
+# Option 1: Auto-discover
+agents_md: true
+
+# Option 2: Explicit path
+# agents_md: "./AGENTS.md"
+
+# Option 3: Multiple files
+# agents_md:
+#   - "./AGENTS.md"
+#   - "./docs/coding-standards.md"
+```
+
+Relative paths are resolved relative to the config file's directory.
+
+### Size limits
+
+AGENTS.md content is guarded against oversized files:
+- Individual files larger than 100,000 characters are skipped with a warning
+- Combined content from multiple files is truncated at 100,000 characters
+
+If your instructions exceed this limit, consider moving task-specific content into skills instead.
+
+---
+
+## When to use which
+
+| | Skills | AGENTS.md |
+|---|---|---|
+| **Loading** | On-demand (progressive disclosure) | Eager (always in prompt) |
+| **Best for** | Task-specific instructions the agent may or may not need | Project-wide rules that always apply |
+| **Prompt impact** | Minimal — only name + description until activated | Full content always present |
+| **Format** | `SKILL.md` with YAML frontmatter | Plain markdown |
+
+Use **AGENTS.md** for short, universal project rules that should always be in context. Use **skills** for detailed, task-specific instructions that only matter sometimes. You can use both together.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Adding Tools"
+    icon="wrench"
+    href="/guides/adding-tools"
+  >
+    Give your agents more capabilities
+  </Card>
+  <Card
+    title="MCP Integration"
+    icon="plug"
+    href="/guides/mcp-integration"
+  >
+    Connect to external tool servers
+  </Card>
+</CardGroup>
