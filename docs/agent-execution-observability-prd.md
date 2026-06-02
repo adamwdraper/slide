@@ -135,6 +135,9 @@ class AgentResult:
     thread: Thread                    # Updated thread with new messages
     new_messages: List[Message]       # New messages added during execution
     content: Optional[str]            # Final assistant response content
+    structured_data: Optional[Any] = None
+    validation_retries: int = 0
+    retry_history: Optional[List[Dict[str, Any]]] = None
     execution: ExecutionDetails       # Full execution telemetry
     
     @property
@@ -239,8 +242,8 @@ async def _go_complete(self, thread: Union[Thread, str]) -> AgentResult:
     
     return AgentResult(
         thread=thread,
-        messages=new_messages,
-        output=output,
+        new_messages=new_messages,
+        content=output,
         execution=execution
     )
 ```

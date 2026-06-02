@@ -512,11 +512,16 @@ class AgentResult:
     thread: Thread  # Updated thread with all messages
     new_messages: List[Message]  # New messages from this execution
     content: Optional[str]  # The final assistant response
-    execution: ExecutionDetails  # Events, duration, tokens, tool summaries
     structured_data: Optional[BaseModel]  # Validated Pydantic model (if response_type used)
+    validation_retries: int = 0  # Structured output retry count
+    retry_history: Optional[List[Dict[str, Any]]] = None
+    execution: ExecutionDetails  # Events, duration, tokens, tool summaries
 ```
 
-`result.success` is `True` when no `EXECUTION_ERROR` event was emitted. When using `response_type`, the `structured_data` field contains the validated Pydantic model instance.
+`execution` is appended after the existing optional fields to preserve positional
+`AgentResult(...)` compatibility. `result.success` is `True` when no
+`EXECUTION_ERROR` event was emitted. When using `response_type`, the
+`structured_data` field contains the validated Pydantic model instance.
 See [AgentResult](/api-reference/tyler-agentresult) for full documentation.
 
 ### ExecutionEvent (Streaming)

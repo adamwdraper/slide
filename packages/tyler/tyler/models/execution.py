@@ -147,7 +147,6 @@ class AgentResult:
         thread: Updated thread with new messages
         new_messages: New messages added during execution
         content: Final assistant response content (raw text)
-        execution: Execution details, event history, and tool summaries.
         structured_data: Validated Pydantic model when using response_type.
             Only populated when agent.run() is called with a response_type parameter.
         validation_retries: Number of validation retry attempts needed.
@@ -155,14 +154,15 @@ class AgentResult:
         retry_history: Detailed history of validation retry attempts.
             Each entry contains: attempt number, validation errors, and response preview.
             Only populated when validation retries occur during structured output.
+        execution: Execution details, event history, and tool summaries.
     """
     thread: Thread
     new_messages: List[Message]
     content: Optional[str]
-    execution: ExecutionDetails = field(default_factory=ExecutionDetails)
     structured_data: Optional[Any] = None  # Optional[BaseModel] at runtime
     validation_retries: int = 0
     retry_history: Optional[List[Dict[str, Any]]] = None
+    execution: ExecutionDetails = field(default_factory=ExecutionDetails)
 
     @property
     def success(self) -> bool:
@@ -224,4 +224,3 @@ class ToolContextError(Exception):
         ```
     """
     pass
-

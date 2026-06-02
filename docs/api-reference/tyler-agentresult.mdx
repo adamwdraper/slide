@@ -15,9 +15,15 @@ class AgentResult:
     thread: Thread                    # Updated thread with new messages
     new_messages: List[Message]       # New messages added during execution
     content: Optional[str]            # Final assistant response content
-    execution: ExecutionDetails       # Events, duration, tokens, and tool summaries
     structured_data: Optional[BaseModel]  # Validated Pydantic model (if response_type used)
+    validation_retries: int = 0       # Structured output retry count
+    retry_history: Optional[List[Dict[str, Any]]] = None
+    execution: ExecutionDetails       # Events, duration, tokens, and tool summaries
 ```
+
+`execution` is appended after the existing optional fields so existing positional
+`AgentResult(...)` construction keeps the same argument order. In application
+code, prefer reading fields by name from the object returned by `agent.run(...)`.
 
 ## Properties
 
@@ -31,18 +37,6 @@ class AgentResult:
 
 <ParamField path="content" type="Optional[str]">
   The final assistant response content. None if no assistant message was generated
-</ParamField>
-
-<ParamField path="execution" type="ExecutionDetails">
-  Execution telemetry collected during this run, including:
-  - `events`: ordered `ExecutionEvent` objects
-  - `duration_ms`: total execution time
-  - `total_tokens`: total token usage reported by the LLM
-  - `tool_calls`: structured tool call summaries with name, arguments, result or error, duration, and success
-</ParamField>
-
-<ParamField path="success" type="bool">
-  Property that returns `True` when the execution completed without any `EXECUTION_ERROR` events.
 </ParamField>
 
 <ParamField path="structured_data" type="Optional[BaseModel]">
@@ -64,6 +58,27 @@ class AgentResult:
   
   Returns `None` if `response_type` was not provided. See the 
   [Structured Output Guide](/guides/structured-output) for complete usage.
+</ParamField>
+
+<ParamField path="validation_retries" type="int">
+  Number of structured output validation retry attempts. This is only relevant when
+  `response_type` and retry configuration are used.
+</ParamField>
+
+<ParamField path="retry_history" type="Optional[List[Dict[str, Any]]]">
+  Validation retry details, including attempt numbers, validation errors, and response previews.
+</ParamField>
+
+<ParamField path="execution" type="ExecutionDetails">
+  Execution telemetry collected during this run, including:
+  - `events`: ordered `ExecutionEvent` objects
+  - `duration_ms`: total execution time
+  - `total_tokens`: total token usage reported by the LLM
+  - `tool_calls`: structured tool call summaries with name, arguments, result or error, duration, and success
+</ParamField>
+
+<ParamField path="success" type="bool">
+  Property that returns `True` when the execution completed without any `EXECUTION_ERROR` events.
 </ParamField>
 
 

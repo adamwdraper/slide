@@ -10,6 +10,23 @@ from narrator import Message, Thread
 from tyler import Agent, AgentResult, EventType
 
 
+def test_agent_result_positional_args_preserve_pre_execution_order():
+    """Adding execution telemetry does not change existing positional arguments."""
+    thread = Thread()
+    message = Message(role="assistant", content="Done")
+    retry_history = [{"attempt": 1}]
+
+    result = AgentResult(thread, [message], "Done", {"ok": True}, 2, retry_history)
+
+    assert result.thread is thread
+    assert result.new_messages == [message]
+    assert result.content == "Done"
+    assert result.structured_data == {"ok": True}
+    assert result.validation_retries == 2
+    assert result.retry_history == retry_history
+    assert result.execution.events == []
+
+
 class MockChoice:
     def __init__(self, message=None):
         self.message = message
