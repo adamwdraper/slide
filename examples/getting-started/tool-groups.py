@@ -111,7 +111,8 @@ async def main():
     message = Message(role="user", content="What tools do you have available?")
     thread.add_message(message)
     
-    processed_thread, new_messages = await agent1.run(thread)
+    result = await agent1.run(thread)
+    new_messages = result.new_messages
     
     for msg in new_messages:
         if msg.role == "assistant":
@@ -119,4 +120,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main()) 
+    asyncio.run(main())

@@ -80,11 +80,10 @@ async def main():
     logger.info("Assistant: %s", result.content)
 
     # Show tool usage — should include activate_skill
-    tool_usage = result.thread.get_tool_usage()
-    if tool_usage["total_calls"] > 0:
+    if result.execution.tool_calls:
         logger.info("Tools used:")
-        for tool_name, count in tool_usage["tools"].items():
-            logger.info("  %s (%d calls)", tool_name, count)
+        for tool_call in result.execution.tool_calls:
+            logger.info("  %s", tool_call.tool_name)
 
     logger.info("-" * 60)
 

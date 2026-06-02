@@ -303,9 +303,32 @@ agent = Agent(**config)
 
 ## Processing Conversations
 
-The `go()` method is the primary interface for processing conversations. It supports three output modes controlled by the `stream` parameter:
+Use `stream(...)` for interactive agent applications. It yields real-time events while the LLM and tools run, so callers can render partial text, show tool activity, and collect progress metadata as the agent works.
 
-### Non-Streaming Mode (stream=False)
+Use `run(...)` when you want to wait for completion and inspect the final `AgentResult`. The backwards-compatible `go(...)` alias still maps to `run(...)`.
+
+### Event Streaming Mode
+
+Stream responses as high-level `ExecutionEvent` objects with full observability:
+
+```python
+from tyler import EventType
+
+async for event in agent.stream(thread):
+    if event.type == EventType.LLM_STREAM_CHUNK:
+        print(event.data["content_chunk"], end="", flush=True)
+
+    elif event.type == EventType.TOOL_SELECTED:
+        print(f"Using tool: {event.data['tool_name']}")
+
+    elif event.type == EventType.TOOL_RESULT:
+        print(f"Tool result: {event.data['result']}")
+
+    elif event.type == EventType.EXECUTION_COMPLETE:
+        print(f"Done in {event.data['duration_ms']}ms")
+```
+
+### Non-Streaming Mode
 
 ```python
 from tyler import Thread, Message
@@ -321,6 +344,7 @@ result = await agent.run(thread)
 print(result.content)  # The agent's final response
 print(result.thread)  # Updated thread with all messages
 print(result.new_messages)  # New messages added in this turn
+print(result.execution.total_tokens)  # Execution summary
 ```
 
 ### With Structured Output
@@ -384,31 +408,6 @@ result = await agent.run(
 
 See [ToolContext](/api-reference/tyler-toolcontext) for the recommended pattern.
 
-### Event Streaming Mode (stream=True or stream="events")
-
-Stream responses as high-level ExecutionEvent objects with full observability:
-
-```python
-from tyler import EventType
-
-# Stream responses in real-time (both syntaxes work identically)
-async for event in agent.stream(thread):
-    # or: agent.stream(thread)
-    
-    if event.type == EventType.LLM_STREAM_CHUNK:
-        # Content being generated
-        print(event.data["content_chunk"], end="", flush=True)
-    
-    elif event.type == EventType.TOOL_SELECTED:
-        # Tool about to be called
-        print(f"Using tool: {event.data['tool_name']}")
-    
-    elif event.type == EventType.MESSAGE_CREATED:
-        # New message added to thread
-        msg = event.data["message"]
-        print(f"New {msg.role} message")
-```
-
 ### OpenAI Streaming Mode (mode="openai")
 
 <Warning>
@@ -428,7 +427,8 @@ async for chunk in agent.stream(thread, mode="openai"):
         if hasattr(delta, 'content') and delta.content:
             print(delta.content, end="", flush=True)
         
-        # Access tool calls (not executed, just passed through)
+        # Tool call deltas are visible in raw chunks. Tyler executes tools
+        # between LLM iterations, then streams the next LLM response.
         if hasattr(delta, 'tool_calls') and delta.tool_calls:
             print(f"\nTool call delta: {delta.tool_calls}")
     
@@ -512,10 +512,11 @@ class AgentResult:
     thread: Thread  # Updated thread with all messages
     new_messages: List[Message]  # New messages from this execution
     content: Optional[str]  # The final assistant response
+    execution: ExecutionDetails  # Events, duration, tokens, tool summaries
     structured_data: Optional[BaseModel]  # Validated Pydantic model (if response_type used)
 ```
 
-When using `response_type`, the `structured_data` field contains the validated Pydantic model instance.
+`result.success` is `True` when no `EXECUTION_ERROR` event was emitted. When using `response_type`, the `structured_data` field contains the validated Pydantic model instance.
 See [AgentResult](/api-reference/tyler-agentresult) for full documentation.
 
 ### ExecutionEvent (Streaming)
@@ -526,7 +527,7 @@ class ExecutionEvent:
     type: EventType  # Type of event
     timestamp: datetime  # When the event occurred
     data: Dict[str, Any]  # Event-specific data
-    metadata: Optional[Dict[str, Any]]  # Additional metadata
+    attributes: Optional[Dict[str, Any]]  # Additional metadata
 ```
 
 ## Event Types
@@ -545,28 +546,15 @@ class ExecutionEvent:
 
 ## Execution Details
 
-You can access execution information through the thread and messages:
+`AgentResult.execution` provides the full execution summary:
 
 ```python
-# Calculate timing from messages
-if result.new_messages:
-    start_time = min(msg.timestamp for msg in result.new_messages)
-    end_time = max(msg.timestamp for msg in result.new_messages)
-    duration_ms = (end_time - start_time).total_seconds() * 1000
-    print(f"Duration: {duration_ms:.0f}ms")
-    print(f"Started: {start_time}")
-    print(f"Ended: {end_time}")
+print(f"Success: {result.success}")
+print(f"Duration: {result.execution.duration_ms:.0f}ms")
+print(f"Total tokens: {result.execution.total_tokens}")
 
-# Token usage from thread
-token_stats = result.thread.get_total_tokens()
-print(f"Total tokens: {token_stats['overall']['total_tokens']}")
-
-# Tool usage from thread
-tool_usage = result.thread.get_tool_usage()
-if tool_usage['total_calls'] > 0:
-    print(f"\nTools used:")
-    for tool_name, count in tool_usage['tools'].items():
-        print(f"  {tool_name}: {count} calls")
+for tool_call in result.execution.tool_calls:
+    print(f"{tool_call.tool_name}: {tool_call.result or tool_call.error}")
 ```
 
 ## Working with Tools
@@ -585,9 +573,8 @@ agent = Agent(
 result = await agent.run(thread)
 
 # Check which tools were used
-tool_usage = result.thread.get_tool_usage()
-for tool_name, count in tool_usage['tools'].items():
-    print(f"Used {tool_name}: {count} times")
+for tool_call in result.execution.tool_calls:
+    print(f"Used {tool_call.tool_name}: {tool_call.result}")
 ```
 
 ## Agent Delegation
@@ -686,7 +673,9 @@ agent = Agent(
     temperature=0.7
 )
 
-# All calls are automatically traced to Weave!
+# Agent calls and tool calls are traced to Weave. When the installed Weave
+# version supports Agents tracing, Tyler also emits session, turn, LLM, and
+# tool spans.
 result = await agent.run(thread)
 # View traces at: https://wandb.ai/<entity>/my-project/weave
 ```

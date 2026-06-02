@@ -46,14 +46,16 @@ Streaming approach:
 
 ## Streaming Modes
 
-Tyler supports four streaming modes via the `stream` parameter:
+Tyler supports multiple streaming modes through `agent.stream(thread, mode=...)`:
 
 | Mode | Value | Output Type | Use Case |
 |------|-------|-------------|----------|
-| **Non-Streaming** | `False` (default) | `AgentResult` | Simple request/response |
-| **Event Streaming** | `True` or `"events"` | `ExecutionEvent` | Rich observability, tool tracking |
+| **Event Streaming** | `"events"` (default) | `ExecutionEvent` | Rich observability, tool tracking |
 | **OpenAI Streaming** | `"openai"` | Raw LiteLLM chunks | OpenAI compatibility, proxying |
 | **Vercel Streaming** | `"vercel"` | SSE strings | React/Next.js with AI SDK |
+| **Vercel Objects** | `"vercel_objects"` | Vercel protocol objects | Python-native Vercel AI SDK integrations |
+
+Use `await agent.run(thread)` for non-streaming execution when you want a completed `AgentResult`.
 
 ### Event Streaming (Recommended)
 
@@ -61,8 +63,7 @@ The default streaming mode with full observability:
 
 ```python
 import asyncio
-from tyler import Agent, Thread, Message
-from tyler.models.execution import ExecutionEvent, EventType
+from tyler import Agent, Thread, Message, EventType
 
 agent = Agent(
     name="streaming-assistant",
@@ -77,7 +78,6 @@ async def stream_response():
     
     print("🤖 Assistant: ", end="", flush=True)
     
-    # Use stream=True or stream="events" (both work identically)
     async for event in agent.stream(thread):
         if event.type == EventType.LLM_STREAM_CHUNK:
             print(event.data.get("content_chunk", ""), end="", flush=True)
@@ -974,4 +974,4 @@ asyncio.run(main())
   >
     Complex streaming patterns
   </Card>
-</CardGroup> 
+</CardGroup>
