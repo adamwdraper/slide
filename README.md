@@ -49,7 +49,7 @@ Note: This repository uses a uv workspace. Prefer uv commands (uv add, uv sync, 
 
 ```python
 import asyncio
-from tyler import Agent, Thread, Message
+from tyler import Agent, Thread, Message, EventType
 
 async def main():
     # Create an AI agent
@@ -62,12 +62,12 @@ async def main():
     thread = Thread()
     thread.add_message(Message(role="user", content="Hello, how are you?"))
 
-    # Process the thread
-    result = await agent.run(thread)
-    
-    # Print the assistant's response
-    print(f"Assistant: {result.content}")
-    print(f"Tokens: {result.execution.total_tokens}")
+    # Stream the response as it is generated
+    async for event in agent.stream(thread):
+        if event.type == EventType.LLM_STREAM_CHUNK:
+            print(event.data["content_chunk"], end="", flush=True)
+        elif event.type == EventType.EXECUTION_COMPLETE:
+            print(f"\nTokens: {event.data['total_tokens']}")
 
 asyncio.run(main())
 ```
@@ -102,7 +102,7 @@ asyncio.run(main())
 
 ```python
 import asyncio
-from tyler import Agent, Thread, Message
+from tyler import Agent, Thread, Message, EventType
 from narrator import ThreadStore
 
 async def main():
@@ -121,16 +121,18 @@ async def main():
     thread.add_message(Message(role="user", content="Remember this: my name is John"))
     
     # Process the first message
-    result = await agent.run(thread)
+    async for event in agent.stream(thread):
+        if event.type == EventType.LLM_STREAM_CHUNK:
+            print(event.data["content_chunk"], end="", flush=True)
     
     # Add another message to the same thread
     thread.add_message(Message(role="user", content="What's my name?"))
     
     # Process the second message (will remember "John")
-    final_result = await agent.run(thread)
-    
-    # Print the assistant's response
-    print(f"Assistant: {final_result.content}")
+    print("\n")
+    async for event in agent.stream(thread):
+        if event.type == EventType.LLM_STREAM_CHUNK:
+            print(event.data["content_chunk"], end="", flush=True)
 
 asyncio.run(main())
 ```

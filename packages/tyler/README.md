@@ -324,10 +324,9 @@ For a complete list of supported providers and models, see the [LiteLLM document
 This example uses in-memory storage which is perfect for scripts and testing. 
 
 ```python
-from dotenv import load_dotenv 
-from tyler import Agent, Thread, Message
+from dotenv import load_dotenv
+from tyler import Agent, Thread, Message, EventType
 import asyncio
-import os
 
 # Load environment variables from .env file
 load_dotenv()
@@ -349,28 +348,27 @@ async def main():
     )
     thread.add_message(message)
 
-    # Process the thread
-    result = await agent.run(thread)
-
-    # Print the assistant's response
-    print(f"Assistant: {result.content}")
-    
-    # Access additional information if needed
-    print(f"Success: {result.success}")
-    print(f"Execution time: {result.execution.duration_ms}ms")
-    print(f"Tokens used: {result.execution.total_tokens}")
-    for tool_call in result.execution.tool_calls:
-        print(f"Tool: {tool_call.tool_name} -> {tool_call.result}")
+    # Stream the response as it is generated
+    async for event in agent.stream(thread):
+        if event.type == EventType.LLM_STREAM_CHUNK:
+            print(event.data["content_chunk"], end="", flush=True)
+        elif event.type == EventType.TOOL_SELECTED:
+            print(f"\nUsing tool: {event.data['tool_name']}")
+        elif event.type == EventType.TOOL_RESULT:
+            print(f"\nTool result: {event.data['result']}")
+        elif event.type == EventType.EXECUTION_COMPLETE:
+            print(f"\nDone in {event.data['duration_ms']}ms")
+            print(f"Tokens used: {event.data['total_tokens']}")
 
 if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-`agent.go(thread)` remains available as a backwards-compatible alias for `agent.run(thread)`. New code should prefer `run(...)` for full-result execution and `stream(...)` for event streaming.
+`stream(...)` is the primary API for agent applications because it gives users immediate feedback while tools and LLM calls run. Use `run(...)` when you want to wait for completion and inspect the final `AgentResult`. `agent.go(thread)` remains available as a backwards-compatible alias for `agent.run(thread)`.
 
 ### Execution Observability
 
-Every `AgentResult` includes an `execution` summary:
+When you use non-streaming execution, every `AgentResult` includes an `execution` summary:
 
 ```python
 result = await agent.run(thread)
@@ -388,7 +386,7 @@ for event in result.execution.events:
     print(event.type, event.timestamp)
 ```
 
-For real-time interfaces, use the same event model through streaming:
+Streaming uses the same event model in real time:
 
 ```python
 async for event in agent.stream(thread):

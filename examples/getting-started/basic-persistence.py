@@ -40,7 +40,9 @@ async def main():
 
     # 5. Run the agent. It will use the configured stores internally.
     print("Running agent...")
-    final_thread, new_messages = await agent.run(thread)
+    result = await agent.run(thread)
+    final_thread = result.thread
+    new_messages = result.new_messages
     print("Agent finished processing.")
 
     # 6. Print the assistant's response
@@ -82,4 +84,4 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except Exception as e:
-        print(f"An error occurred: {e}") 
+        print(f"An error occurred: {e}")

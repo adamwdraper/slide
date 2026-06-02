@@ -94,7 +94,9 @@ async def example_tool_generated_attachment(thread_store, agent, file_store):
     thread.add_message(message)
 
     # Process the thread - this will trigger image generation
-    processed_thread, new_messages = await agent.run(thread)
+    result = await agent.run(thread)
+    processed_thread = result.thread
+    new_messages = result.new_messages
     
     # The thread is automatically saved by the agent, which processes any attachments
     
@@ -154,4 +156,4 @@ if __name__ == "__main__":
         asyncio.run(main())
     except KeyboardInterrupt:
         logger.warning("Exiting gracefully...")
-        sys.exit(0) 
+        sys.exit(0)
