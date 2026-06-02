@@ -49,8 +49,7 @@ Note: This repository uses a uv workspace. Prefer uv commands (uv add, uv sync, 
 
 ```python
 import asyncio
-from tyler import Agent
-from narrator import Thread, Message
+from tyler import Agent, Thread, Message
 
 async def main():
     # Create an AI agent
@@ -64,10 +63,11 @@ async def main():
     thread.add_message(Message(role="user", content="Hello, how are you?"))
 
     # Process the thread
-    result = await agent.go(thread)
+    result = await agent.run(thread)
     
     # Print the assistant's response
     print(f"Assistant: {result.content}")
+    print(f"Tokens: {result.execution.total_tokens}")
 
 asyncio.run(main())
 ```
@@ -102,8 +102,8 @@ asyncio.run(main())
 
 ```python
 import asyncio
-from tyler import Agent
-from narrator import ThreadStore, Thread, Message
+from tyler import Agent, Thread, Message
+from narrator import ThreadStore
 
 async def main():
     # Create persistent storage
@@ -121,13 +121,13 @@ async def main():
     thread.add_message(Message(role="user", content="Remember this: my name is John"))
     
     # Process the first message
-    result = await agent.go(thread)
+    result = await agent.run(thread)
     
     # Add another message to the same thread
     thread.add_message(Message(role="user", content="What's my name?"))
     
     # Process the second message (will remember "John")
-    final_result = await agent.go(thread)
+    final_result = await agent.run(thread)
     
     # Print the assistant's response
     print(f"Assistant: {final_result.content}")
@@ -353,4 +353,4 @@ uv pip install dist/*.whl --python /tmp/test-env
 
 ---
 
-**Slide** - Building the future of AI agents, one conversation at a time. 🚀 
+**Slide** - Building the future of AI agents, one conversation at a time. 🚀

@@ -84,17 +84,17 @@ Adding reactions to messages.
 ### 300_mcp_basic.py
 Model Context Protocol (MCP) basic usage with declarative config. Connect to Brave Search MCP server using `Agent(mcp={...})`.
 
-### 301_mcp_connect_existing.py
+### 301_mcp_advanced.py
 Multiple MCP servers with advanced config: tool filtering, custom prefixes, authentication headers.
 
-### 302_mcp_config_cli.py
-Loading MCP configuration from YAML files (CLI-style). Shows how tyler-chat works internally.
-
-### 303_mcp_mintlify.py
-Real-world example: Search W&B documentation using Mintlify MCP server. Copy-paste ready!
-
 ### 302_execution_observability.py
-Execution observability and monitoring with ExecutionEvents.
+Execution observability and monitoring with `AgentResult.execution` and `ExecutionEvent` streams.
+
+### 303_mcp_progress_callback.py
+MCP tool progress callbacks with a local example server.
+
+### 304_weave_agents_tracing.py
+Live Weave tracing example that exercises both `Agent.run(...)` and `Agent.stream(...)`.
 
 ## Agent Delegation & A2A Examples (400-499)
 
@@ -144,6 +144,7 @@ OPENAI_API_KEY=<your-wandb-api-key>
 
 # Weights & Biases tracing
 WANDB_API_KEY=...
+WANDB_PROJECT=tyler
 
 # Other integrations
 NOTION_TOKEN=...
@@ -196,7 +197,7 @@ agent = Agent(
     temperature=0.7
 )
 
-async for event in agent.go(thread, stream=True):
+async for event in agent.stream(thread):
     if event.type == EventType.LLM_THINKING_CHUNK:
         # Handle thinking/reasoning tokens
         print(f"💭 {event.data['thinking_chunk']}")
@@ -223,8 +224,8 @@ Multiple agents can work together:
 ### 📊 Observability
 
 Track and debug agent execution:
-- Execution events and metrics
-- Weave integration for tracing
+- `AgentResult.execution` events, token totals, durations, and tool call summaries
+- Weave integration for `weave.op` traces and Weave Agents session/turn/LLM/tool spans
 - W&B experiment tracking
 - MCP for model context
 
@@ -243,4 +244,3 @@ To add a new example:
 - Documentation: https://slide-ai.github.io/docs/
 - Issues: https://github.com/slide-ai/slide/issues
 - Discord: [Join our community](#)
-

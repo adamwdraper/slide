@@ -5,8 +5,7 @@ This example shows how to use both streaming and non-streaming modes
 to get detailed insights into agent execution.
 """
 import asyncio
-from tyler import Agent, Thread, Message
-from tyler.models.agent import EventType
+from tyler import Agent, Thread, Message, EventType
 
 # Example 1: Basic non-streaming usage
 async def basic_usage():
@@ -24,6 +23,7 @@ async def basic_usage():
     print(f"Response: {result.content}")
     
     # But you also have access to detailed execution info
+    print(f"Success: {result.success}")
     print(f"Took {result.execution.duration_ms:.2f}ms")
     print(f"Used {result.execution.total_tokens} tokens")
 
@@ -145,6 +145,7 @@ def main():
     print("To run with actual LLM calls, set OPENAI_API_KEY environment variable.")
     print("\nKey features demonstrated:")
     print("- AgentResult object with execution details")
+    print("- result.success for completion status")
     print("- Streaming ExecutionEvent objects") 
     print("- Token tracking and performance metrics")
     print("- Tool call monitoring")

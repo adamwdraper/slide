@@ -245,6 +245,7 @@ OPENAI_API_KEY=your-openai-api-key
 
 # Logging Configuration
 WANDB_API_KEY=your-wandb-api-key
+WANDB_PROJECT=your-weave-project-name
 
 # Optional Integrations (for Lye tools)
 NOTION_TOKEN=your-notion-token
@@ -261,7 +262,7 @@ LOG_LEVEL=INFO  # DEBUG, INFO, WARNING, ERROR, CRITICAL
 ```
 
 Only the `OPENAI_API_KEY` (or whatever LLM provider you're using) is required for core functionality. Other environment variables are required only when using specific features:
-- For Weave monitoring: `WANDB_API_KEY` is required (You will want to use this for monitoring and debugging) [https://weave-docs.wandb.ai/](Weave Docs)
+- For Weave monitoring: set `WANDB_API_KEY` and call `weave.init(...)`, or set `WANDB_PROJECT` in examples that initialize Weave automatically. Tyler emits standard `weave.op` traces and Weave Agents session/turn/LLM/tool spans when the installed Weave version supports them. See the [Weave docs](https://weave-docs.wandb.ai/).
 - For Slack integration: `SLACK_BOT_TOKEN` is required  
 - For Notion integration: `NOTION_TOKEN` is required
 - For database storage:
@@ -349,17 +350,52 @@ async def main():
     thread.add_message(message)
 
     # Process the thread
-    result = await agent.go(thread)
+    result = await agent.run(thread)
 
     # Print the assistant's response
     print(f"Assistant: {result.content}")
     
     # Access additional information if needed
+    print(f"Success: {result.success}")
     print(f"Execution time: {result.execution.duration_ms}ms")
     print(f"Tokens used: {result.execution.total_tokens}")
+    for tool_call in result.execution.tool_calls:
+        print(f"Tool: {tool_call.tool_name} -> {tool_call.result}")
 
 if __name__ == "__main__":
     asyncio.run(main())
+```
+
+`agent.go(thread)` remains available as a backwards-compatible alias for `agent.run(thread)`. New code should prefer `run(...)` for full-result execution and `stream(...)` for event streaming.
+
+### Execution Observability
+
+Every `AgentResult` includes an `execution` summary:
+
+```python
+result = await agent.run(thread)
+
+print(result.success)
+print(result.execution.duration_ms)
+print(result.execution.total_tokens)
+
+for tool_call in result.execution.tool_calls:
+    print(tool_call.tool_name)
+    print(tool_call.arguments)
+    print(tool_call.result or tool_call.error)
+
+for event in result.execution.events:
+    print(event.type, event.timestamp)
+```
+
+For real-time interfaces, use the same event model through streaming:
+
+```python
+async for event in agent.stream(thread):
+    if event.type == EventType.LLM_STREAM_CHUNK:
+        print(event.data["content_chunk"], end="", flush=True)
+    elif event.type == EventType.TOOL_RESULT:
+        print(event.data["result"])
 ```
 
 ### Using Config Files

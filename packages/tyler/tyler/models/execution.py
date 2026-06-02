@@ -45,6 +45,99 @@ class ExecutionEvent:
     attributes: Optional[Dict[str, Any]] = None
 
 
+@dataclass
+class ToolCallSummary:
+    """Structured summary of one tool call during agent execution."""
+    tool_name: str
+    tool_call_id: Optional[str]
+    arguments: Dict[str, Any] = field(default_factory=dict)
+    result: Optional[str] = None
+    error: Optional[str] = None
+    duration_ms: Optional[float] = None
+    success: bool = False
+
+
+@dataclass
+class ExecutionDetails:
+    """Summary and event history for an agent execution."""
+    events: List[ExecutionEvent] = field(default_factory=list)
+    duration_ms: float = 0.0
+    total_tokens: int = 0
+    tool_calls: List[ToolCallSummary] = field(default_factory=list)
+
+    @classmethod
+    def from_events(cls, events: List[ExecutionEvent]) -> "ExecutionDetails":
+        """Build execution details from ordered execution events."""
+        duration_ms = 0.0
+        complete_tokens: Optional[int] = None
+        summed_tokens = 0
+        tool_calls_by_id: Dict[str, ToolCallSummary] = {}
+        anonymous_tool_calls: List[ToolCallSummary] = []
+
+        def _tool_key(tool_name: str, tool_call_id: Optional[str]) -> str:
+            if tool_call_id:
+                return str(tool_call_id)
+            return f"{tool_name}:{len(tool_calls_by_id)}"
+
+        for event in events:
+            data = event.data or {}
+
+            if event.type == EventType.LLM_RESPONSE:
+                tokens = data.get("tokens") or {}
+                if isinstance(tokens, dict):
+                    summed_tokens += int(tokens.get("total_tokens", 0) or 0)
+
+            elif event.type == EventType.TOOL_SELECTED:
+                tool_name = str(data.get("tool_name") or "")
+                tool_call_id = data.get("tool_call_id")
+                arguments = data.get("arguments") or {}
+                if not isinstance(arguments, dict):
+                    arguments = {"value": arguments}
+                summary = ToolCallSummary(
+                    tool_name=tool_name,
+                    tool_call_id=str(tool_call_id) if tool_call_id is not None else None,
+                    arguments=arguments,
+                )
+                if tool_call_id is None:
+                    anonymous_tool_calls.append(summary)
+                else:
+                    tool_calls_by_id[_tool_key(tool_name, str(tool_call_id))] = summary
+
+            elif event.type in (EventType.TOOL_RESULT, EventType.TOOL_ERROR):
+                tool_name = str(data.get("tool_name") or "")
+                tool_call_id = data.get("tool_call_id")
+                key = _tool_key(tool_name, str(tool_call_id) if tool_call_id is not None else None)
+                summary = tool_calls_by_id.get(key)
+                if summary is None:
+                    summary = ToolCallSummary(
+                        tool_name=tool_name,
+                        tool_call_id=str(tool_call_id) if tool_call_id is not None else None,
+                    )
+                    if tool_call_id is None:
+                        anonymous_tool_calls.append(summary)
+                    else:
+                        tool_calls_by_id[key] = summary
+
+                summary.duration_ms = data.get("duration_ms")
+                if event.type == EventType.TOOL_RESULT:
+                    summary.result = data.get("result")
+                    summary.success = True
+                else:
+                    summary.error = data.get("error")
+                    summary.success = False
+
+            elif event.type == EventType.EXECUTION_COMPLETE:
+                duration_ms = float(data.get("duration_ms", 0.0) or 0.0)
+                if "total_tokens" in data:
+                    complete_tokens = int(data.get("total_tokens") or 0)
+
+        return cls(
+            events=list(events),
+            duration_ms=duration_ms,
+            total_tokens=complete_tokens if complete_tokens is not None else summed_tokens,
+            tool_calls=list(tool_calls_by_id.values()) + anonymous_tool_calls,
+        )
+
 
 @dataclass
 class AgentResult:
@@ -54,6 +147,7 @@ class AgentResult:
         thread: Updated thread with new messages
         new_messages: New messages added during execution
         content: Final assistant response content (raw text)
+        execution: Execution details, event history, and tool summaries.
         structured_data: Validated Pydantic model when using response_type.
             Only populated when agent.run() is called with a response_type parameter.
         validation_retries: Number of validation retry attempts needed.
@@ -65,9 +159,15 @@ class AgentResult:
     thread: Thread
     new_messages: List[Message]
     content: Optional[str]
+    execution: ExecutionDetails = field(default_factory=ExecutionDetails)
     structured_data: Optional[Any] = None  # Optional[BaseModel] at runtime
     validation_retries: int = 0
     retry_history: Optional[List[Dict[str, Any]]] = None
+
+    @property
+    def success(self) -> bool:
+        """Whether execution completed without execution error events."""
+        return not any(event.type == EventType.EXECUTION_ERROR for event in self.execution.events)
 
 
 class StructuredOutputError(Exception):
@@ -124,5 +224,4 @@ class ToolContextError(Exception):
         ```
     """
     pass
-
 

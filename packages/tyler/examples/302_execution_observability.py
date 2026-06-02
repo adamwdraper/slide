@@ -15,7 +15,7 @@ import os
 import asyncio
 import weave
 import sys
-from tyler import Agent, Thread, Message, EventType, ExecutionEvent, AgentResult
+from tyler import Agent, Thread, Message, EventType
 
 # Define a simple tool to demonstrate tool usage tracking
 def calculate(expression: str) -> str:
@@ -81,18 +81,22 @@ async def demo_non_streaming():
     # Display the response
     logger.info("\n📝 Response: %s", result.content)
     
-    # Display new messages
+    # Display new messages and execution summary
     logger.info("\n📊 Result Details:")
+    logger.info("   Success: %s", result.success)
     logger.info("   New messages: %d", len(result.new_messages))
     logger.info("   Thread messages: %d", len(result.thread.messages))
-    
-    # Show tool usage from messages
-    for msg in result.new_messages:
-        if msg.tool_calls:
-            logger.info("\n🔧 Tool Calls:")
-            for tc in msg.tool_calls:
-                logger.info("   Tool: %s", tc.get('function', {}).get('name'))
-                logger.info("   Arguments: %s", tc.get('function', {}).get('arguments'))
+    logger.info("   Duration: %.2fms", result.execution.duration_ms)
+    logger.info("   Total tokens: %d", result.execution.total_tokens)
+
+    # Show structured tool usage summary
+    if result.execution.tool_calls:
+        logger.info("\n🔧 Tool Calls:")
+        for tool_call in result.execution.tool_calls:
+            logger.info("   Tool: %s", tool_call.tool_name)
+            logger.info("   Arguments: %s", tool_call.arguments)
+            logger.info("   Result: %s", tool_call.result)
+            logger.info("   Duration: %.2fms", tool_call.duration_ms or 0)
 
 async def demo_streaming():
     """Demonstrate streaming mode."""
@@ -113,44 +117,38 @@ async def demo_streaming():
     
     logger.info("\n🎯 Streaming events as they happen:\n")
     
-    # NOTE: The streaming API has changed - this is a simplified version
-    # In the current implementation, streaming may return different types of events
-    # or may not be fully supported as before
     try:
         async for event in agent.stream(thread):
             event_count += 1
-            
-            if isinstance(event, ExecutionEvent):
-                if event.type == EventType.LLM_STREAM_CHUNK:
-                    chunk_count += 1
-                    # Print chunks inline for streaming effect
-                    print(event.data.get("content_chunk", ""), end="", flush=True)
-                    
-                elif event.type == EventType.LLM_REQUEST:
-                    logger.info("→ Sending request to LLM...")
-                    
-                elif event.type == EventType.TOOL_SELECTED:
-                    tool_count += 1
-                    print()  # New line before tool info
-                    logger.info("→ Tool selected: %s", event.data.get("tool_name"))
-                    logger.info("  Arguments: %s", event.data.get("arguments"))
-                    
-                elif event.type == EventType.TOOL_RESULT:
-                    logger.info("← Tool result: %s", event.data.get("result"))
-                    print()  # Resume streaming on new line
-                    
-                elif event.type == EventType.EXECUTION_COMPLETE:
-                    print()  # Final newline
-                    logger.info("\n✅ Streaming complete!")
-                    logger.info("   Total events: %d", event_count)
-                    logger.info("   Content chunks: %d", chunk_count)
-                    logger.info("   Tool calls: %d", tool_count)
-            else:
-                # Handle other types of events that might be returned
-                logger.info("Event: %s", type(event).__name__)
+
+            if event.type == EventType.LLM_STREAM_CHUNK:
+                chunk_count += 1
+                # Print chunks inline for streaming effect
+                print(event.data.get("content_chunk", ""), end="", flush=True)
+
+            elif event.type == EventType.LLM_REQUEST:
+                logger.info("→ Sending request to LLM...")
+
+            elif event.type == EventType.TOOL_SELECTED:
+                tool_count += 1
+                print()  # New line before tool info
+                logger.info("→ Tool selected: %s", event.data.get("tool_name"))
+                logger.info("  Arguments: %s", event.data.get("arguments"))
+
+            elif event.type == EventType.TOOL_RESULT:
+                logger.info("← Tool result: %s", event.data.get("result"))
+                print()  # Resume streaming on new line
+
+            elif event.type == EventType.EXECUTION_COMPLETE:
+                print()  # Final newline
+                logger.info("\n✅ Streaming complete!")
+                logger.info("   Total events: %d", event_count)
+                logger.info("   Content chunks: %d", chunk_count)
+                logger.info("   Tool calls: %d", tool_count)
+                logger.info("   Duration: %.2fms", event.data.get("duration_ms", 0))
+                logger.info("   Total tokens: %d", event.data.get("total_tokens", 0))
     except Exception as e:
         logger.error("Streaming error: %s", str(e))
-        logger.info("Note: Streaming functionality may have changed in this version")
 
 async def main():
     """Run both demos."""
