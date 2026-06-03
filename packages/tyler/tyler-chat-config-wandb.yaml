@@ -43,12 +43,21 @@ max_tool_iterations: 10
 # DeepSeek models support thinking tokens when this is enabled
 reasoning: "low"  # Options: "low", "medium", "high" or dict for advanced config
 
+# Instruction Configuration
+# AGENTS.md is auto-discovered by default from this config directory upward.
+# Set agents_md: false to disable. Keep "system" unless the provider supports developer messages.
+instruction_role: "system"
+
 # Tool Configuration
 tools:
   - "web"
   - "slack"
   - "notion"
   - "command_line"
+
+# Skills are explicit and progressively disclosed via activate_skill.
+# skills:
+#   - "./skills/code-review"
 
 # MCP (Model Context Protocol) Server Configuration
 # Connect to external documentation, APIs, databases via MCP servers
@@ -59,4 +68,3 @@ tools:
 #       transport: streamablehttp  # Mintlify uses streamablehttp transport
 #       url: https://slide.mintlify.app/mcp
 #       # Tools will be available as: slide_docs_SearchSlideFramework, etc.
-

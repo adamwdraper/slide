@@ -45,6 +45,18 @@ model_name: "gpt-4.1"
 temperature: 0.7
 max_tool_iterations: 10
 
+# Instruction Configuration
+# AGENTS.md is auto-discovered by default from the config directory upward.
+# Set agents_md: false to disable, or provide explicit path(s).
+# agents_md: false
+# agents_md: "./AGENTS.md"
+# agents_md:
+#   - "./AGENTS.md"
+#   - "./docs/coding-standards.md"
+#
+# Use "developer" only for providers/models that support developer messages.
+instruction_role: "system"  # Options: "system", "developer"
+
 # Tool Configuration
 # List of tools to load. Can be:
 #   - Built-in tool module names (e.g., "web", "files")
@@ -58,6 +70,12 @@ tools:
   # - "notion"        # Notion integration tools
   # - "command_line"  # System command execution tools
   # - "./my_tools.py"  # Example custom tools (uncomment to use)
+
+# Skills are explicit and progressively disclosed via activate_skill.
+# Each path must contain a SKILL.md file.
+# skills:
+#   - "./skills/code-review"
+#   - "./skills/testing"
 
 # MCP (Model Context Protocol) Server Configuration
 # Connect to external documentation, APIs, databases via MCP servers
@@ -453,4 +471,3 @@ def _process_agents_md(agents_md: Any, config_dir: Path) -> Any:
         return resolved
 
     return agents_md
-

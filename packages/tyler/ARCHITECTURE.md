@@ -113,7 +113,7 @@ Handles LLM communication and response processing:
 ### SkillManager
 **Location**: `tyler/models/skill.py`
 
-Manages progressive skill disclosure following the [Agent Skills](https://agentskills.io/specification) open format:
+Manages progressive skill disclosure following the [Open Agent Skills](https://openagentskills.dev/docs/specification) format:
 - Loads `SKILL.md` files from skill directories (YAML frontmatter + markdown body)
 - Validates skill names (lowercase alphanumeric + hyphens) and descriptions
 - Registers the `activate_skill` tool with the owning agent's ToolRunner

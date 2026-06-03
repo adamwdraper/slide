@@ -3,7 +3,7 @@
 This module handles all LLM completion logic, including parameter building,
 model-specific adjustments, and response processing.
 """
-from typing import Dict, List, Any, Tuple, Optional
+from typing import Dict, List, Any, Tuple, Optional, Literal
 from datetime import datetime, UTC
 import copy
 import weave
@@ -38,7 +38,8 @@ class CompletionHandler:
         api_key: Optional[str] = None,
         extra_headers: Optional[Dict[str, str]] = None,
         drop_params: bool = True,
-        reasoning: Optional[Any] = None
+        reasoning: Optional[Any] = None,
+        instruction_role: Literal["system", "developer"] = "system",
     ):
         """Initialize the CompletionHandler.
         
@@ -50,6 +51,7 @@ class CompletionHandler:
             extra_headers: Optional additional headers
             drop_params: Whether to drop unsupported parameters
             reasoning: Unified reasoning config (string or dict)
+            instruction_role: Role used for the generated instruction prompt
         """
         self.model_name = model_name
         self.temperature = temperature
@@ -58,6 +60,7 @@ class CompletionHandler:
         self.extra_headers = extra_headers
         self.drop_params = drop_params
         self.reasoning = reasoning
+        self.instruction_role = instruction_role
     
     async def get_completion(
         self,
@@ -78,7 +81,7 @@ class CompletionHandler:
             Tuple of (response, metrics dict)
         """
         # Create completion messages with system prompt
-        completion_messages = [{"role": "system", "content": system_prompt}] + thread_messages
+        completion_messages = [self.build_instruction_message(system_prompt)] + thread_messages
         
         # Build parameters
         completion_params = self._build_completion_params(
@@ -153,6 +156,10 @@ class CompletionHandler:
             params.update(reasoning_params)
         
         return params
+
+    def build_instruction_message(self, content: str) -> Dict[str, str]:
+        """Build the instruction message prepended to model completion calls."""
+        return {"role": self.instruction_role, "content": content}
     
     def _map_reasoning_to_provider_params(self, reasoning: Any) -> Dict[str, Any]:
         """Map unified reasoning parameter to provider-specific format.
@@ -270,4 +277,3 @@ class CompletionHandler:
             }
         
         return metrics
-

@@ -8,7 +8,7 @@ Slide supports two complementary ways to inject instructions into your agent's s
 - **Skills** — progressively disclosed on-demand via the `activate_skill` tool
 - **AGENTS.md** — eagerly loaded into the system prompt at init time
 
-Both follow open standards: [Agent Skills](https://agentskills.io/specification) and [AGENTS.md](https://agents.md).
+Both follow open standards: [Open Agent Skills](https://openagentskills.dev/docs/specification) and [AGENTS.md](https://agents.md).
 
 **Code Examples**
 
@@ -38,7 +38,7 @@ Skills let you package reusable instructions that agents load only when they nee
 1. You point the agent at one or more skill directories
 2. At init time, only each skill's **name** and **description** appear in the system prompt
 3. When the agent decides it needs a skill, it calls the `activate_skill` tool
-4. The full instructions from `SKILL.md` are returned to the agent as a tool result
+4. The skill root path and full instructions from `SKILL.md` are returned to the agent as a tool result
 
 ### Creating a skill
 
@@ -130,7 +130,7 @@ AGENTS.md files provide project-level instructions that are eagerly loaded into 
 
 ### How it works
 
-1. You point the agent at one or more `AGENTS.md` files (or enable auto-discovery)
+1. Auto-discovery is enabled by default, or you point the agent at one or more `AGENTS.md` files
 2. At init time, the file contents are loaded and placed in a `<project_instructions>` block in the system prompt
 3. The agent sees these instructions on every interaction
 
@@ -159,6 +159,19 @@ Create an `AGENTS.md` file in your project root (or any directory). No special f
 
 ### Using AGENTS.md with an agent
 
+#### Default auto-discovery
+
+By default, Tyler discovers `AGENTS.md` files by walking upward from the current working directory:
+
+```python
+from tyler import Agent
+
+agent = Agent(
+    model_name="gpt-4.1",
+    purpose="A helpful coding assistant",
+)
+```
+
 #### Explicit path
 
 ```python
@@ -173,7 +186,7 @@ agent = Agent(
 
 #### Auto-discovery
 
-Set `agents_md=True` to automatically discover `AGENTS.md` files by walking upward from the current working directory to the filesystem root:
+You can also set `agents_md=True` explicitly. `Agent.from_config()` starts discovery from the config file directory when `agents_md` is omitted or set to `true`:
 
 ```python
 agent = Agent(
@@ -190,6 +203,16 @@ project-root/backend/AGENTS.md  # Backend-specific rules
 ```
 
 Files are loaded root-first, so the closest file's instructions appear last (taking natural precedence).
+
+#### Disable loading
+
+```python
+agent = Agent(
+    model_name="gpt-4.1",
+    purpose="A helpful coding assistant",
+    agents_md=False,
+)
+```
 
 #### Multiple files
 
@@ -209,16 +232,22 @@ name: "MyAgent"
 model_name: "gpt-4.1"
 purpose: "A helpful assistant"
 
-# Option 1: Auto-discover
-agents_md: true
+# Default: auto-discover from this config directory upward
+# agents_md: true
 
-# Option 2: Explicit path
+# Disable loading
+# agents_md: false
+
+# Explicit path
 # agents_md: "./AGENTS.md"
 
-# Option 3: Multiple files
+# Multiple files
 # agents_md:
 #   - "./AGENTS.md"
 #   - "./docs/coding-standards.md"
+
+# Keep "system" unless your provider supports developer messages
+instruction_role: "system"
 ```
 
 Relative paths are resolved relative to the config file's directory.

@@ -8,12 +8,14 @@ See: https://agents.md
 """
 import logging
 from pathlib import Path
-from typing import List, Optional, Union
+from typing import Any, List, Optional, Union
 
 logger = logging.getLogger(__name__)
 
 # Guard against huge files
 MAX_AGENTS_MD_SIZE = 100_000
+
+_AUTO_DISCOVER = object()
 
 
 def discover_agents_md(start_dir: Union[str, Path]) -> List[Path]:
@@ -48,14 +50,15 @@ def discover_agents_md(start_dir: Union[str, Path]) -> List[Path]:
 
 
 def load_agents_md(
-    agents_md: Optional[Union[bool, str, List[str]]] = None,
+    agents_md: Any = _AUTO_DISCOVER,
     base_dir: Optional[Union[str, Path]] = None,
 ) -> str:
     """Load AGENTS.md content based on the configuration value.
 
     Args:
         agents_md: Configuration value controlling AGENTS.md loading:
-            - None (default): no auto-discovery, return ""
+            - Omitted: auto-discover from base_dir (or CWD) upward
+            - None: explicitly disabled, return ""
             - True: auto-discover from base_dir (or CWD) upward
             - False: explicitly disabled, return ""
             - str: explicit path to one file
@@ -72,7 +75,7 @@ def load_agents_md(
 
     paths: List[Path] = []
 
-    if agents_md is True:
+    if agents_md is _AUTO_DISCOVER or agents_md is True:
         dir_to_search = Path(base_dir) if base_dir else Path.cwd()
         paths = discover_agents_md(dir_to_search)
     elif isinstance(agents_md, str):

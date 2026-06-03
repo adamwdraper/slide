@@ -185,6 +185,16 @@ class ChatManager:
             except Exception as e:
                 console.print(f"[red]✗ Failed to connect to MCP servers: {e}[/]")
                 raise  # Fail startup if MCP configured but broken
+
+    def _ensure_agent_system_prompt(self, thread: Thread) -> None:
+        """Ensure a thread carries the current agent system prompt in memory."""
+        if not self.agent:
+            return
+        system_message = thread.get_system_message()
+        if system_message is None:
+            thread.add_message(Message(role="system", content=self.agent._system_prompt))
+        else:
+            system_message.content = self.agent._system_prompt
         
     async def create_thread(self, 
                           title: Optional[str] = None,
@@ -204,19 +214,9 @@ class ChatManager:
             source=source
         )
         
-        # Add the agent's system prompt as the first message
-        if self.agent:
-            system_prompt = self.agent._prompt.system_prompt(
-                self.agent.purpose,
-                self.agent.name,
-                self.agent.model_name,
-                tools=self.agent._processed_tools,
-                notes=self.agent.notes
-            )
-            # Add system message if thread is empty
-            if not thread.messages:
-                system_message = Message(role="system", content=system_prompt)
-                thread.add_message(system_message)
+        # Add the agent's canonical system prompt as the first message.
+        if self.agent and not thread.messages:
+            self._ensure_agent_system_prompt(thread)
             
         await self.thread_store.save(thread)
         self.current_thread = thread
@@ -245,38 +245,26 @@ class ChatManager:
                     
                     # Ensure thread has correct system prompt
                     if self.agent:
-                        system_prompt = self.agent._prompt.system_prompt(
-                            self.agent.purpose,
-                            self.agent.name,
-                            self.agent.model_name,
-                            tools=self.agent._processed_tools,
-                            notes=self.agent.notes
-                        )
-                        thread.ensure_system_prompt(system_prompt)
+                        self._ensure_agent_system_prompt(thread)
                         await self.thread_store.save(thread)
                         
                     return thread
                 else:
                     raise ValueError(f"Thread index {index} is out of range")
-        except ValueError as e:
-            # If not a valid index, try as thread ID
-            thread = await self.thread_store.get(thread_id_or_index)
-            if thread:
-                self.current_thread = thread
-                
-                # Ensure thread has correct system prompt
-                if self.agent:
-                    system_prompt = self.agent._prompt.system_prompt(
-                        self.agent.purpose,
-                        self.agent.name,
-                        self.agent.model_name,
-                        tools=self.agent._processed_tools,
-                        notes=self.agent.notes
-                    )
-                    thread.ensure_system_prompt(system_prompt)
-                    await self.thread_store.save(thread)
-                    
-            return thread
+        except ValueError:
+            pass
+
+        # If not a valid numeric index, try as thread ID.
+        thread = await self.thread_store.get(thread_id_or_index)
+        if thread:
+            self.current_thread = thread
+
+            # Ensure thread has correct system prompt
+            if self.agent:
+                self._ensure_agent_system_prompt(thread)
+                await self.thread_store.save(thread)
+
+        return thread
 
     def format_message(self, message: Message) -> Union[Panel, List[Panel]]:
         """Format a message for display"""

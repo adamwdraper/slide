@@ -92,6 +92,38 @@ async def async_generator(chunks):
     for chunk in chunks:
         yield chunk
 
+
+@pytest.mark.asyncio
+async def test_streaming_completion_uses_canonical_instruction_prompt(tmp_path):
+    """Streaming completion params use agent._system_prompt and instruction_role."""
+    agents_file = tmp_path / "AGENTS.md"
+    agents_file.write_text("Streaming project rule.")
+    agent = Agent(
+        model_name="gpt-4.1",
+        purpose="test streaming",
+        agents_md=str(agents_file),
+        instruction_role="developer",
+    )
+    thread = Thread()
+    thread.add_message(Message(role="user", content="Hello"))
+    captured_params = {}
+
+    async def fake_get_completion(**completion_params):
+        captured_params.update(completion_params)
+        return async_generator([])
+
+    agent._get_completion = fake_get_completion
+
+    await agent._get_streaming_completion(thread)
+
+    first_message = captured_params["messages"][0]
+    assert first_message == {
+        "role": "developer",
+        "content": agent._system_prompt,
+    }
+    assert "Streaming project rule." in first_message["content"]
+
+
 @pytest.mark.asyncio
 async def test_stream_basic_response():
     """Test streaming with basic response (no tool calls)"""

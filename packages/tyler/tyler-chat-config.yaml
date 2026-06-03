@@ -22,6 +22,13 @@ max_tool_iterations: 10
 # Enables thinking tokens to be displayed in the CLI
 reasoning: "low"  # Options: "low", "medium", "high" or dict for advanced config
 
+# Instruction Configuration
+# AGENTS.md is auto-discovered by default from this config directory upward.
+# Set agents_md: false to disable, or provide explicit path(s).
+# agents_md: false
+# agents_md: "./AGENTS.md"
+# instruction_role: "developer"  # Optional; default is "system"
+
 # Tool Configuration
 # List of tools to load. Can be:
 #   - Built-in tool module names (e.g., "web", "slack")
@@ -35,6 +42,12 @@ tools:
   - "notion"        # Notion integration tools
   - "command_line"  # System command execution tools
   # - "./my_tools.py"  # Example custom tools (uncomment to use)
+
+# Skills are explicit and progressively disclosed via activate_skill.
+# Each path must contain a SKILL.md file.
+# skills:
+#   - "./skills/code-review"
+#   - "./skills/testing"
 
 # MCP (Model Context Protocol) Server Configuration
 # Connect to external documentation, APIs, databases via MCP servers

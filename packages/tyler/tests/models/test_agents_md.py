@@ -6,8 +6,10 @@ YAML config processing, and no-regression scenarios.
 import pytest
 import yaml
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
+from narrator import Thread, Message
 from tyler import Agent
 from tyler.models.agents_md import discover_agents_md, load_agents_md, MAX_AGENTS_MD_SIZE
 from tyler.config import load_config
@@ -90,8 +92,16 @@ class TestDiscovery:
 class TestLoading:
     """Test load_agents_md with various config variants."""
 
+    def test_load_default_auto_discovers(self, tmp_path):
+        """Omitting agents_md triggers auto-discovery from base_dir."""
+        (tmp_path / "AGENTS.md").write_text("Default auto-discovered content")
+
+        result = load_agents_md(base_dir=tmp_path)
+
+        assert "Default auto-discovered content" in result
+
     def test_load_none_returns_empty(self):
-        """agents_md=None returns empty string."""
+        """agents_md=None explicitly disables loading."""
         assert load_agents_md(None) == ""
 
     def test_load_false_returns_empty(self):
@@ -170,6 +180,17 @@ class TestLoading:
 class TestSystemPromptInjection:
     """Test that AGENTS.md content appears in the system prompt."""
 
+    def test_agent_default_auto_discovers_agents_md(self, tmp_path, monkeypatch):
+        """Agent without agents_md config auto-discovers AGENTS.md from cwd."""
+        agents_file = tmp_path / "AGENTS.md"
+        agents_file.write_text("# Project Rules\nDefault discovery works.")
+        monkeypatch.chdir(tmp_path)
+
+        agent = Agent(model_name="gpt-4.1", purpose="test")
+
+        assert "<project_instructions>" in agent._system_prompt
+        assert "Default discovery works." in agent._system_prompt
+
     def test_agents_md_in_system_prompt(self, tmp_path):
         """System prompt includes <project_instructions> block."""
         agents_file = tmp_path / "AGENTS.md"
@@ -187,7 +208,7 @@ class TestSystemPromptInjection:
 
     def test_no_agents_md_no_block(self):
         """Agent with agents_md=None has no <project_instructions> block."""
-        agent = Agent(model_name="gpt-4.1", purpose="test")
+        agent = Agent(model_name="gpt-4.1", purpose="test", agents_md=None)
 
         assert "<project_instructions>" not in agent._system_prompt
 
@@ -239,6 +260,50 @@ class TestSystemPromptInjection:
         pi_pos = agent._system_prompt.index("<project_instructions>")
         as_pos = agent._system_prompt.index("<available_skills>")
         assert pi_pos < as_pos
+
+    @pytest.mark.asyncio
+    async def test_step_uses_configured_instruction_role_and_prompt(self, tmp_path):
+        """Completion params include the configured instruction role and full prompt."""
+        agents_file = tmp_path / "AGENTS.md"
+        agents_file.write_text("Completion project rule.")
+
+        skill_dir = tmp_path / "completion-skill"
+        skill_dir.mkdir()
+        frontmatter = {"name": "completion-skill", "description": "Completion skill metadata"}
+        (skill_dir / "SKILL.md").write_text(
+            f"---\n{yaml.dump(frontmatter)}---\nSkill body."
+        )
+
+        agent = Agent(
+            model_name="gpt-4.1",
+            purpose="test",
+            instruction_role="developer",
+            agents_md=str(agents_file),
+            skills=[str(skill_dir)],
+        )
+        thread = Thread()
+        thread.add_message(Message(role="user", content="Hello"))
+        captured_params = {}
+
+        async def fake_get_completion(**completion_params):
+            captured_params.update(completion_params)
+            return SimpleNamespace(
+                choices=[
+                    SimpleNamespace(
+                        message=SimpleNamespace(content="Done", tool_calls=None)
+                    )
+                ]
+            )
+
+        agent._get_completion = fake_get_completion
+
+        await agent.step(thread)
+
+        first_message = captured_params["messages"][0]
+        assert first_message["role"] == "developer"
+        assert "Completion project rule." in first_message["content"]
+        assert "<available_skills>" in first_message["content"]
+        assert "Completion skill metadata" in first_message["content"]
 
 
 class TestSurvivesConnectMcp:
@@ -345,6 +410,24 @@ class TestYamlConfig:
 
         assert result["agents_md"] is True
 
+    def test_from_config_agents_md_true_uses_config_dir(self, tmp_path, monkeypatch):
+        """Agent.from_config discovers AGENTS.md from the config file directory."""
+        config_dir = tmp_path / "config-dir"
+        config_dir.mkdir()
+        other_dir = tmp_path / "other"
+        other_dir.mkdir()
+        (config_dir / "AGENTS.md").write_text("Config directory instructions")
+        (other_dir / "AGENTS.md").write_text("Wrong cwd instructions")
+        config_file = config_dir / "config.yaml"
+        config_file.write_text(yaml.dump({"agents_md": True}))
+        monkeypatch.chdir(other_dir)
+
+        agent = Agent.from_config(str(config_file))
+
+        assert agent.agents_md_base_dir == str(config_dir.resolve())
+        assert "Config directory instructions" in agent._system_prompt
+        assert "Wrong cwd instructions" not in agent._system_prompt
+
     def test_agents_md_disabled_in_config(self, tmp_path):
         """agents_md=false in config passes through as False."""
         config_file = tmp_path / "config.yaml"
@@ -367,10 +450,11 @@ class TestYamlConfig:
 
 
 class TestNoRegression:
-    """Test that agents without agents_md work normally."""
+    """Test that agents without matching AGENTS.md work normally."""
 
-    def test_agent_default_no_project_instructions(self):
-        """Default agent has no <project_instructions> block."""
+    def test_agent_default_no_project_instructions_when_none_found(self, tmp_path, monkeypatch):
+        """Default agent has no <project_instructions> block when no file is found."""
+        monkeypatch.chdir(tmp_path)
         agent = Agent(model_name="gpt-4.1", purpose="test")
 
         assert "<project_instructions>" not in agent._system_prompt
