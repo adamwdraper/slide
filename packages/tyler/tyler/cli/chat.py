@@ -123,7 +123,6 @@ for logger_name in noisy_libraries:
 # Import Tyler modules with suppressed output
 with suppress_output():
     from tyler import Agent, Thread, Message, ThreadStore
-    from tyler.config import load_config, load_custom_tool
     from tyler.models.execution import ExecutionEvent, EventType
 
 # Initialize rich console
@@ -150,6 +149,20 @@ class ChatManager:
         # Create agent with provided config, suppressing initialization errors
         with suppress_output():
             self.agent = Agent(**config)
+
+        await self._connect_mcp_servers()
+
+    async def initialize_agent_from_config(self, config_path: Optional[str] = None) -> None:
+        """Initialize the agent from a Tyler config file."""
+        with suppress_output():
+            self.agent = Agent.from_config(config_path)
+
+        await self._connect_mcp_servers()
+
+    async def _connect_mcp_servers(self) -> None:
+        """Auto-connect configured MCP servers for the current agent."""
+        if self.agent is None:
+            return
         
         # Auto-connect to MCP servers if configured
         if self.agent.mcp:
@@ -512,12 +525,9 @@ def _main_inner(config: Optional[str], title: Optional[str]):
     async def async_main():
         chat_manager = None  # Initialize before try block
         try:
-            # Load configuration
-            config_data = load_config(config)
-            
             # Initialize chat manager
             chat_manager = ChatManager()
-            await chat_manager.initialize_agent(config_data)
+            await chat_manager.initialize_agent_from_config(config)
             
             # Create initial thread
             await chat_manager.create_thread(title=title)

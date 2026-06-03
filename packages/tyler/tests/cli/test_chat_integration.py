@@ -6,6 +6,7 @@ Tests verify that CLI works correctly with and without Weave.
 import os
 from unittest.mock import patch
 import pytest
+import yaml
 from narrator import Message
 
 
@@ -150,3 +151,30 @@ async def test_cli_switch_thread_refreshes_agent_system_prompt(tmp_path):
     assert switched is not None
     assert switched.get_system_message().content == manager.agent._system_prompt
     assert "Switch project instruction." in switched.get_system_message().content
+
+
+@pytest.mark.asyncio
+@patch.dict(os.environ, {}, clear=True)
+async def test_cli_config_discovers_agents_md_from_config_directory(tmp_path, monkeypatch):
+    """CLI config initialization discovers AGENTS.md from the config directory."""
+    from tyler.cli.chat import ChatManager
+
+    config_dir = tmp_path / "config-dir"
+    config_dir.mkdir()
+    cwd_dir = tmp_path / "cwd"
+    cwd_dir.mkdir()
+    (config_dir / "AGENTS.md").write_text("Use config directory instructions.")
+    (cwd_dir / "AGENTS.md").write_text("Wrong cwd instructions.")
+    config_file = config_dir / "tyler-chat-config.yaml"
+    config_file.write_text(yaml.dump({
+        "model_name": "gpt-4.1",
+        "purpose": "CLI config assistant",
+    }))
+    monkeypatch.chdir(cwd_dir)
+
+    manager = ChatManager()
+    await manager.initialize_agent_from_config(str(config_file))
+
+    assert manager.agent.agents_md_base_dir == str(config_dir.resolve())
+    assert "Use config directory instructions." in manager.agent._system_prompt
+    assert "Wrong cwd instructions." not in manager.agent._system_prompt
