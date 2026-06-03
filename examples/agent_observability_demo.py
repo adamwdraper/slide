@@ -59,6 +59,7 @@ async def main():
     
     print(f"Final response: {result.content}")
     print(f"\nExecution details:")
+    print(f"- Success: {result.success}")
     print(f"- Duration: {result.execution.duration_ms:.2f}ms")
     print(f"- Total tokens: {result.execution.total_tokens}")
     print(f"- Tool calls: {len(result.execution.tool_calls)}")

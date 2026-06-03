@@ -218,6 +218,19 @@ async def execute_streaming_step(
     )
 
     # Add assistant message
+    input_messages = accumulator.metrics.pop("_weave_agents_input_messages", None)
+    if input_messages is not None:
+        agent._trace_llm_call(
+            input_messages=input_messages,
+            output_messages=[{
+                "role": "assistant",
+                "content": content,
+                "reasoning_content": reasoning_content,
+                "tool_calls": accumulator.tool_calls if accumulator.has_tool_calls() else None,
+            }],
+            usage=accumulator.metrics.get("usage", {}),
+        )
+
     assistant_message = Message(
         role="assistant",
         content=content,
@@ -370,4 +383,3 @@ async def execute_streaming_step(
         should_break = True
 
     agent._last_step_stream_should_continue = accumulator.has_tool_calls() and not should_break
-

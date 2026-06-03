@@ -59,7 +59,9 @@ async def example_basic_integration():
     
     # 5. Process with agent
     print("🤖 Agent is working...")
-    processed_thread, new_messages = await agent.run(thread)
+    result = await agent.run(thread)
+    processed_thread = result.thread
+    new_messages = result.new_messages
     
     # 6. Show results
     for msg in new_messages:
@@ -96,7 +98,9 @@ async def example_selective_tools():
     )
     thread.add_message(message)
     
-    processed_thread, new_messages = await agent.run(thread)
+    result = await agent.run(thread)
+    processed_thread = result.thread
+    new_messages = result.new_messages
     
     for msg in new_messages:
         if msg.role == "assistant":
@@ -143,7 +147,9 @@ async def example_persistent_storage():
     thread.add_message(message)
     
     # Process and save
-    processed_thread, new_messages = await agent.run(thread)
+    result = await agent.run(thread)
+    processed_thread = result.thread
+    new_messages = result.new_messages
     await thread_store.save_thread(processed_thread)
     
     for msg in new_messages:
@@ -195,7 +201,9 @@ async def example_mixed_storage():
         message = Message(role="user", content="Hello! What's your storage configuration?")
         thread.add_message(message)
         
-        processed_thread, new_messages = await agent.run(thread)
+        result = await agent.run(thread)
+        processed_thread = result.thread
+        new_messages = result.new_messages
         
         result = {
             "agent": config["name"],
@@ -252,7 +260,9 @@ async def example_tool_combinations():
         message = Message(role="user", content=config["task"])
         thread.add_message(message)
         
-        processed_thread, new_messages = await agent.run(thread)
+        result = await agent.run(thread)
+        processed_thread = result.thread
+        new_messages = result.new_messages
         
         for msg in new_messages:
             if msg.role == "assistant":

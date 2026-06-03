@@ -12,10 +12,10 @@ from litellm import acompletion
 # Direct imports to avoid circular dependency
 from narrator import Thread, Message, Attachment, ThreadStore, FileStore
 
-from tyler.utils.tool_runner import tool_runner, ToolContext
+from tyler.utils.tool_runner import tool_runner, ToolContext, ToolRunner
 from tyler.models.execution import (
     EventType, ExecutionEvent,
-    AgentResult, StructuredOutputError, ToolContextError
+    AgentResult, ExecutionDetails, StructuredOutputError, ToolContextError
 )
 from tyler.models.retry_config import RetryConfig
 from tyler.models.tool_manager import ToolManager
@@ -23,6 +23,7 @@ from tyler.models.skill import SkillManager
 from tyler.models.agents_md import load_agents_md
 from tyler.models.message_factory import MessageFactory
 from tyler.models.completion_handler import CompletionHandler
+from tyler.tracing.weave_agents import WeaveAgentsTracer
 import asyncio
 
 
@@ -456,10 +457,14 @@ class Agent(BaseModel):
     _processed_tools: List[Dict] = PrivateAttr(default_factory=list)
     _system_prompt: str = PrivateAttr(default="")
     _tool_attributes_cache: Dict[str, Optional[Dict[str, Any]]] = PrivateAttr(default_factory=dict)
+    _tool_runner: ToolRunner = PrivateAttr(default_factory=ToolRunner)
     _mcp_connected: bool = PrivateAttr(default=False)
     _mcp_disconnect: Optional[Callable[[], Awaitable[None]]] = PrivateAttr(default=None)
     _tool_context: Optional[Dict[str, Any]] = PrivateAttr(default=None)
     _response_format: Optional[str] = PrivateAttr(default=None)
+    _weave_agents_tracer: Optional[WeaveAgentsTracer] = PrivateAttr(default=None)
+    _weave_agents_session: Any = PrivateAttr(default=None)
+    _weave_agents_turn: Any = PrivateAttr(default=None)
     _last_step_stream_had_tool_calls: bool = PrivateAttr(default=False)
     _last_step_stream_should_continue: bool = PrivateAttr(default=False)
     _skills_description: str = PrivateAttr(default="")
@@ -497,6 +502,7 @@ class Agent(BaseModel):
         """
         # Generate system prompt once at initialization
         self._prompt = AgentPrompt()
+        self._tool_runner = ToolRunner()
         # Initialize the tool attributes cache
         self._tool_attributes_cache = {}
         
@@ -517,14 +523,18 @@ class Agent(BaseModel):
             )
         
         # Use ToolManager to register all tools and delegation
-        tool_manager = ToolManager(tools=self.tools, agents=self.agents)
+        tool_manager = ToolManager(
+            tools=self.tools,
+            agents=self.agents,
+            runner=self._tool_runner,
+        )
         self._processed_tools = tool_manager.register_all_tools()
 
         # Load skills if configured
         self._skills_description = ""
         self._skill_tool_defs = []
         if self.skills:
-            skill_manager = SkillManager()
+            skill_manager = SkillManager(runner=self._tool_runner)
             loaded_skills, self._skill_tool_defs = skill_manager.load_skills(self.skills)
             self._processed_tools.extend(self._skill_tool_defs)
             if loaded_skills:
@@ -654,8 +664,26 @@ class Agent(BaseModel):
     def _get_tool_attributes(self, tool_name: str) -> Optional[Dict[str, Any]]:
         """Get tool attributes with caching."""
         if tool_name not in self._tool_attributes_cache:
-            self._tool_attributes_cache[tool_name] = tool_runner.get_tool_attributes(tool_name)
+            attributes = self._tool_runner.get_tool_attributes(tool_name)
+            if attributes is None and self._legacy_tool_runner_method_is_patched("get_tool_attributes"):
+                get_attributes = getattr(tool_runner, "get_tool_attributes", None)
+                if callable(get_attributes):
+                    attributes = get_attributes(tool_name)
+            self._tool_attributes_cache[tool_name] = attributes
         return self._tool_attributes_cache[tool_name]
+
+    def _legacy_tool_runner_method_is_patched(self, method_name: str) -> bool:
+        """Detect tests or legacy callers monkeypatching the module-level runner."""
+        if not isinstance(tool_runner, ToolRunner):
+            return True
+        method = getattr(tool_runner, method_name, None)
+        try:
+            from unittest.mock import Mock
+            if isinstance(method, Mock):
+                return True
+        except Exception:
+            pass
+        return getattr(method, "__self__", None) is not tool_runner
 
     def _normalize_tool_call(self, tool_call):
         """Ensure tool_call has a consistent format for tool_runner without modifying the original."""
@@ -756,7 +784,36 @@ class Agent(BaseModel):
             else:
                 rich_context = None
         
-        return await tool_runner.execute_tool_call(normalized_tool_call, context=rich_context)
+        trace_tool_name = getattr(normalized_tool_call.function, 'name', None)
+        trace_tool_call_id = getattr(normalized_tool_call, 'id', None)
+        trace_arguments_raw = getattr(normalized_tool_call.function, 'arguments', '{}')
+        try:
+            trace_arguments = json.loads(trace_arguments_raw) if isinstance(trace_arguments_raw, str) else trace_arguments_raw
+        except (json.JSONDecodeError, TypeError):
+            trace_arguments = trace_arguments_raw
+
+        trace_span = self._trace_tool_start(
+            tool_name=trace_tool_name or "",
+            arguments=trace_arguments,
+            tool_call_id=str(trace_tool_call_id) if trace_tool_call_id is not None else None,
+        )
+
+        execution_runner = self._tool_runner
+        if self._legacy_tool_runner_method_is_patched("execute_tool_call") or (
+            trace_tool_name
+            and trace_tool_name not in getattr(self._tool_runner, "tools", {})
+            and not isinstance(tool_runner, ToolRunner)
+        ):
+            execution_runner = tool_runner
+
+        try:
+            result = await execution_runner.execute_tool_call(normalized_tool_call, context=rich_context)
+        except Exception as exc:
+            self._trace_tool_finish(trace_span, error=str(exc))
+            raise
+
+        self._trace_tool_finish(trace_span, result=result)
+        return result
     
     async def _get_completion(self, **completion_params) -> Any:
         """Get a completion from the LLM with weave tracing.
@@ -840,6 +897,11 @@ class Agent(BaseModel):
             
             # Use CompletionHandler to build metrics
             metrics = self.completion_handler._build_metrics(api_start_time, response, call)
+            self._trace_llm_call(
+                input_messages=completion_messages,
+                output_messages=self._response_to_trace_messages(response),
+                usage=metrics.get("usage", {}),
+            )
 
             # Optionally execute tool calls
             if execute_tools or getattr(self, "_execute_tools_in_step", False):
@@ -917,6 +979,105 @@ class Agent(BaseModel):
                 raise ValueError(f"Thread with ID {thread_or_id} not found")
             return thread
         return thread_or_id
+
+    def _latest_user_message_content(self, thread: Thread) -> Optional[Any]:
+        """Return the most recent user message content for turn tracing."""
+        for message in reversed(thread.messages):
+            if message.role == "user":
+                return message.content
+        return None
+
+    def _start_weave_agents_trace(self, thread: Thread) -> None:
+        """Start optional Weave Agents session and turn spans."""
+        tracer = WeaveAgentsTracer()
+        self._weave_agents_tracer = tracer
+        if not tracer.active:
+            self._weave_agents_session = None
+            self._weave_agents_turn = None
+            return
+
+        self._weave_agents_session = tracer.start_session(
+            agent_name=self.name,
+            session_id=str(thread.id),
+            model_name=self.model_name,
+        )
+        self._weave_agents_turn = tracer.start_turn(
+            session=self._weave_agents_session,
+            user_content=self._latest_user_message_content(thread),
+        )
+
+    def _finish_weave_agents_trace(self) -> None:
+        """Finish optional Weave Agents turn/session spans."""
+        tracer = self._weave_agents_tracer
+        if tracer is not None:
+            tracer.finish_span(self._weave_agents_turn)
+            tracer.finish_span(self._weave_agents_session)
+        self._weave_agents_tracer = None
+        self._weave_agents_session = None
+        self._weave_agents_turn = None
+
+    def _trace_llm_call(
+        self,
+        *,
+        input_messages: List[Dict[str, Any]],
+        output_messages: List[Dict[str, Any]],
+        usage: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Emit an optional Weave Agents LLM span."""
+        tracer = self._weave_agents_tracer
+        if tracer is None:
+            return
+        span = tracer.start_llm(
+            turn=self._weave_agents_turn,
+            model_name=self.model_name,
+            input_messages=input_messages,
+            output_messages=output_messages,
+            usage=usage or {},
+        )
+        tracer.finish_span(span, output_messages=output_messages, usage=usage or {})
+
+    def _trace_tool_start(
+        self,
+        *,
+        tool_name: str,
+        arguments: Any,
+        tool_call_id: Optional[str],
+    ) -> Any:
+        """Start an optional Weave Agents tool span."""
+        tracer = self._weave_agents_tracer
+        if tracer is None:
+            return None
+        return tracer.start_tool(
+            turn=self._weave_agents_turn,
+            tool_name=tool_name,
+            arguments=arguments,
+            tool_call_id=tool_call_id,
+        )
+
+    def _trace_tool_finish(self, span: Any, *, result: Any = None, error: Optional[str] = None) -> None:
+        """Finish an optional Weave Agents tool span."""
+        tracer = self._weave_agents_tracer
+        if tracer is None:
+            return
+        payload = {"result": result}
+        if error is not None:
+            payload["error"] = error
+        tracer.finish_span(span, **payload)
+
+    def _response_to_trace_messages(self, response: Any) -> List[Dict[str, Any]]:
+        """Serialize a completion response into trace-friendly messages."""
+        if not response or not hasattr(response, "choices") or not response.choices:
+            return []
+        try:
+            assistant_message = response.choices[0].message
+            tool_calls = getattr(assistant_message, "tool_calls", None)
+            return [{
+                "role": "assistant",
+                "content": getattr(assistant_message, "content", None),
+                "tool_calls": self._serialize_tool_calls(tool_calls) if tool_calls else None,
+            }]
+        except Exception:
+            return []
 
     def _serialize_tool_calls(self, tool_calls: Optional[List[Any]]) -> Optional[List[Dict]]:
         """Serialize tool calls to a list of dictionaries.
@@ -1048,11 +1209,14 @@ class Agent(BaseModel):
         self._response_format = response_format
         
         try:
+            thread = await self._get_thread(thread_or_id)
+            self._start_weave_agents_trace(thread)
             if effective_response_type is not None:
-                return await self._run_with_structured_output(thread_or_id, effective_response_type)
+                return await self._run_with_structured_output(thread, effective_response_type)
             else:
-                return await self._run_complete(thread_or_id)
+                return await self._run_complete(thread)
         finally:
+            self._finish_weave_agents_trace()
             # Clear tool context and response_format after execution
             self._tool_context = None
             self._response_format = None
@@ -1149,12 +1313,32 @@ class Agent(BaseModel):
         last_response = None
         retry_history = []
         new_messages = []
+        events: List[ExecutionEvent] = []
+        start_time = datetime.now(timezone.utc)
+
+        def record_event(event_type: EventType, data: Dict[str, Any], attributes=None):
+            events.append(ExecutionEvent(
+                type=event_type,
+                timestamp=datetime.now(timezone.utc),
+                data=data,
+                attributes=attributes,
+            ))
         
         try:
             # Reset iteration count
             self._iteration_count = 0
             
             while self._iteration_count < self.max_tool_iterations:
+                record_event(EventType.ITERATION_START, {
+                    "iteration_number": self._iteration_count,
+                    "max_iterations": self.max_tool_iterations,
+                })
+                record_event(EventType.LLM_REQUEST, {
+                    "message_count": len(thread.messages),
+                    "model": self.model_name,
+                    "temperature": self.temperature,
+                })
+
                 # Get completion with tools, system prompt, and tool_choice overrides
                 # tool_choice="required" forces the model to call a tool (like Pydantic AI does)
                 response, metrics = await self.step(
@@ -1176,6 +1360,13 @@ class Agent(BaseModel):
                 content = assistant_message.content or ""
                 tool_calls = getattr(assistant_message, 'tool_calls', None)
                 has_tool_calls = tool_calls is not None and len(tool_calls) > 0
+
+                record_event(EventType.LLM_RESPONSE, {
+                    "content": content,
+                    "tool_calls": self._serialize_tool_calls(tool_calls) if has_tool_calls else None,
+                    "tokens": metrics.get("usage", {}),
+                    "latency_ms": metrics.get("timing", {}).get("latency", 0),
+                })
                 
                 # Create and add assistant message if there's content or tool calls
                 if content or has_tool_calls:
@@ -1188,6 +1379,7 @@ class Agent(BaseModel):
                     )
                     thread.add_message(message)
                     new_messages.append(message)
+                    record_event(EventType.MESSAGE_CREATED, {"message": message})
                 
                 if has_tool_calls:
                     # Separate output tool call from regular tool calls
@@ -1197,6 +1389,17 @@ class Agent(BaseModel):
                     
                     for tool_call in tool_calls:
                         tool_name = tool_call.function.name if hasattr(tool_call, 'function') else tool_call['function']['name']
+                        tool_id = tool_call.id if hasattr(tool_call, 'id') else tool_call.get('id')
+                        args = tool_call.function.arguments if hasattr(tool_call, 'function') else tool_call['function']['arguments']
+                        try:
+                            parsed_args = json.loads(args) if isinstance(args, str) else args
+                        except (json.JSONDecodeError, TypeError, AttributeError):
+                            parsed_args = {}
+                        record_event(EventType.TOOL_SELECTED, {
+                            "tool_name": tool_name,
+                            "arguments": parsed_args,
+                            "tool_call_id": tool_id,
+                        })
                         if tool_name == output_tool_name:
                             output_tool_call = tool_call
                         else:
@@ -1205,10 +1408,28 @@ class Agent(BaseModel):
                     # Process regular tool calls first
                     should_break = False
                     for tool_call, tool_name in regular_tool_calls:
+                        tool_start = datetime.now(timezone.utc)
                         result = await self._handle_tool_execution(tool_call)
+                        duration_ms = (datetime.now(timezone.utc) - tool_start).total_seconds() * 1000
+                        tool_id = tool_call.id if hasattr(tool_call, 'id') else tool_call.get('id')
                         tool_message, break_iteration = self._process_tool_result(result, tool_call, tool_name)
+                        if isinstance(result, Exception):
+                            record_event(EventType.TOOL_ERROR, {
+                                "tool_name": tool_name,
+                                "error": str(result),
+                                "tool_call_id": tool_id,
+                                "duration_ms": duration_ms,
+                            })
+                        else:
+                            record_event(EventType.TOOL_RESULT, {
+                                "tool_name": tool_name,
+                                "result": tool_message.content,
+                                "tool_call_id": tool_id,
+                                "duration_ms": duration_ms,
+                            })
                         thread.add_message(tool_message)
                         new_messages.append(tool_message)
+                        record_event(EventType.MESSAGE_CREATED, {"message": tool_message})
                         if break_iteration:
                             should_break = True
                     
@@ -1241,6 +1462,13 @@ class Agent(BaseModel):
                             )
                             thread.add_message(tool_message)
                             new_messages.append(tool_message)
+                            record_event(EventType.TOOL_RESULT, {
+                                "tool_name": output_tool_name,
+                                "result": tool_message.content,
+                                "tool_call_id": tool_id,
+                                "duration_ms": 0,
+                            })
+                            record_event(EventType.MESSAGE_CREATED, {"message": tool_message})
                             
                             # Build result metrics
                             result_metrics = {}
@@ -1253,11 +1481,22 @@ class Agent(BaseModel):
                             # Save thread if store is configured
                             if self.thread_store:
                                 await self.thread_store.save(thread)
+
+                            total_tokens = sum(
+                                event.data.get("tokens", {}).get("total_tokens", 0)
+                                for event in events
+                                if event.type == EventType.LLM_RESPONSE
+                            )
+                            record_event(EventType.EXECUTION_COMPLETE, {
+                                "duration_ms": (datetime.now(timezone.utc) - start_time).total_seconds() * 1000,
+                                "total_tokens": total_tokens,
+                            })
                             
                             return AgentResult(
                                 thread=thread,
                                 new_messages=new_messages,
                                 content=json.dumps(raw_json),
+                                execution=ExecutionDetails.from_events(events),
                                 structured_data=validated_data,
                                 validation_retries=retry_count,
                                 retry_history=retry_history if retry_history else None
@@ -1293,6 +1532,13 @@ class Agent(BaseModel):
                             )
                             thread.add_message(error_msg)
                             new_messages.append(error_msg)
+                            record_event(EventType.TOOL_ERROR, {
+                                "tool_name": output_tool_name,
+                                "error": str(e),
+                                "tool_call_id": tool_id,
+                                "duration_ms": 0,
+                            })
+                            record_event(EventType.MESSAGE_CREATED, {"message": error_msg})
                             
                             if self.retry_config:
                                 await asyncio.sleep(self.retry_config.backoff_base_seconds * retry_count)
@@ -1334,6 +1580,13 @@ class Agent(BaseModel):
                             )
                             thread.add_message(error_msg)
                             new_messages.append(error_msg)
+                            record_event(EventType.TOOL_ERROR, {
+                                "tool_name": output_tool_name,
+                                "error": str(e),
+                                "tool_call_id": tool_id,
+                                "duration_ms": 0,
+                            })
+                            record_event(EventType.MESSAGE_CREATED, {"message": error_msg})
                             
                             if self.retry_config:
                                 await asyncio.sleep(self.retry_config.backoff_base_seconds * retry_count)
@@ -1359,6 +1612,7 @@ class Agent(BaseModel):
                     )
                     thread.add_message(reminder)
                     new_messages.append(reminder)
+                    record_event(EventType.MESSAGE_CREATED, {"message": reminder})
                     
                     if self.thread_store:
                         await self.thread_store.save(thread)
@@ -1469,6 +1723,7 @@ class Agent(BaseModel):
         try:
             # Resolve thread from ID if needed
             thread = await self._get_thread(thread_or_id)
+            self._start_weave_agents_trace(thread)
             
             # Get the streaming mode and delegate
             from tyler.streaming import get_stream_mode
@@ -1478,6 +1733,7 @@ class Agent(BaseModel):
             async for item in stream_mode.stream(self, thread):
                 yield item
         finally:
+            self._finish_weave_agents_trace()
             # Clear tool context after execution
             self._tool_context = None
     
@@ -1574,6 +1830,7 @@ class Agent(BaseModel):
             call = None
 
         metrics = self.completion_handler._build_metrics(api_start_time, response, call)
+        metrics["_weave_agents_input_messages"] = completion_messages
         return response, metrics
 
     async def _run_complete(self, thread_or_id: Union[Thread, str]) -> AgentResult:
@@ -1625,10 +1882,15 @@ class Agent(BaseModel):
                 if self.thread_store:
                     await self.thread_store.save(thread)
                 # Nothing else to do; avoid duplicate saves and return immediately.
+                record_event(EventType.EXECUTION_COMPLETE, {
+                    "duration_ms": (datetime.now(timezone.utc) - start_time).total_seconds() * 1000,
+                    "total_tokens": 0,
+                })
                 return AgentResult(
                     thread=thread,
                     new_messages=new_messages,
                     content=message.content,
+                    execution=ExecutionDetails.from_events(events),
                 )
             
             else:
@@ -1770,11 +2032,6 @@ class Agent(BaseModel):
                                 # - Present: tool executed; its return value may legitimately be None
                                 if not key or key not in tool_execution_results:
                                     result = RuntimeError("Tool result missing")
-                                    record_event(EventType.TOOL_ERROR, {
-                                        "tool_name": tool_name,
-                                        "error": "Tool result missing",
-                                        "tool_call_id": tool_id
-                                    })
                                 else:
                                     result = tool_execution_results.get(key)
                                 if isinstance(result, Exception):
@@ -1870,7 +2127,8 @@ class Agent(BaseModel):
             return AgentResult(
                 thread=thread,
                 new_messages=new_messages,
-                content=output
+                content=output,
+                execution=ExecutionDetails.from_events(events),
             )
 
         except ValueError:
@@ -1908,7 +2166,8 @@ class Agent(BaseModel):
             return AgentResult(
                 thread=thread,
                 new_messages=new_messages,
-                content=None
+                content=None,
+                execution=ExecutionDetails.from_events(events),
             )
 
     def _create_tool_source(self, tool_name: str) -> Dict:
@@ -2054,7 +2313,11 @@ class Agent(BaseModel):
         
         # Re-process tools with ToolManager (preserving skill tool defs)
         from tyler.models.tool_manager import ToolManager
-        tool_manager = ToolManager(tools=self.tools, agents=self.agents)
+        tool_manager = ToolManager(
+            tools=self.tools,
+            agents=self.agents,
+            runner=self._tool_runner,
+        )
         self._processed_tools = tool_manager.register_all_tools()
         if self._skill_tool_defs:
             self._processed_tools.extend(self._skill_tool_defs)

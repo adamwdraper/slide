@@ -3,9 +3,9 @@
 This module provides centralized management of tool registration, including
 delegation tools for child agents.
 """
-from typing import List, Dict, Any, TYPE_CHECKING
+from typing import List, Dict, Any, Optional, TYPE_CHECKING
 from narrator import Thread, Message
-from tyler.utils.tool_runner import tool_runner
+from tyler.utils.tool_runner import ToolRunner, tool_runner
 from tyler.utils.tool_strategies import ToolRegistrar
 from tyler.utils.logging import get_logger
 
@@ -27,15 +27,23 @@ class ToolManager:
         registrar: ToolRegistrar instance for strategy-based registration
     """
     
-    def __init__(self, tools: List[Any] = None, agents: List = None):
+    def __init__(
+        self,
+        tools: List[Any] = None,
+        agents: List = None,
+        runner: Optional[ToolRunner] = None,
+    ):
         """Initialize the ToolManager.
         
         Args:
             tools: List of tools in various formats (strings, modules, dicts, callables)
             agents: List of Agent instances that can be delegated to
+            runner: ToolRunner instance to register tools with. Defaults to the
+                module-level runner for legacy direct utility usage.
         """
         self.tools = tools or []
         self.agents = agents or []
+        self.tool_runner = runner or tool_runner
         self.registrar = ToolRegistrar()
     
     def register_all_tools(self) -> List[Dict]:
@@ -55,8 +63,12 @@ class ToolManager:
         # Register regular tools
         if self.tools:
             logger.debug(f"Registering {len(self.tools)} tools")
-            tool_definitions = self.registrar.register_tools(self.tools, tool_runner)
+            tool_definitions = self.registrar.register_tools(self.tools, self.tool_runner)
             processed_tools.extend(tool_definitions)
+            if self.tool_runner is not tool_runner:
+                # Preserve legacy direct access via tyler.utils.tool_runner.tool_runner.
+                # Agent execution still uses the owning runner.
+                self.registrar.register_tools(self.tools, tool_runner)
         
         # Create delegation tools for agents
         if self.agents:
@@ -83,11 +95,17 @@ class ToolManager:
             tool_name = tool_def['function']['name']
             implementation = self._create_delegation_handler(agent)
             
-            tool_runner.register_tool(
+            self.tool_runner.register_tool(
                 name=tool_name,
                 implementation=implementation,
                 definition=tool_def['function']
             )
+            if self.tool_runner is not tool_runner:
+                tool_runner.register_tool(
+                    name=tool_name,
+                    implementation=implementation,
+                    definition=tool_def['function']
+                )
             
             logger.info(f"Registered delegation tool: {tool_name}")
         
@@ -163,7 +181,8 @@ class ToolManager:
             # Execute the child agent directly
             logger.info(f"Delegating task to {agent.name}: {task}")
             try:
-                result_thread, messages = await agent.go(thread)
+                result = await agent.go(thread)
+                messages = result.new_messages
                 
                 # Extract response from assistant messages
                 response = "\n\n".join([
@@ -183,4 +202,3 @@ class ToolManager:
         delegation_handler.__doc__ = f"Delegate tasks to agent: {agent.name}"
         
         return delegation_handler
-

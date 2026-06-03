@@ -77,7 +77,9 @@ class ResearchAssistant:
         print("\n⏳ Researching... This may take a few minutes.")
         start_time = datetime.now()
         
-        processed_thread, new_messages = await self.agent.run(thread)
+        result = await self.agent.run(thread)
+        processed_thread = result.thread
+        new_messages = result.new_messages
         
         # Save thread using Narrator
         await self.thread_store.save_thread(processed_thread)

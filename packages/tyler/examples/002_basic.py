@@ -62,23 +62,14 @@ async def main():
         
         # Show execution metrics
         logger.debug("Execution metrics:")
-        # Calculate duration from message timestamps
-        if result.new_messages:
-            start_time = min(msg.timestamp for msg in result.new_messages)
-            end_time = max(msg.timestamp for msg in result.new_messages)
-            duration_ms = (end_time - start_time).total_seconds() * 1000
-            logger.debug("  - Duration: %.2fms", duration_ms)
-        
-        # Get token usage from thread
-        token_stats = result.thread.get_total_tokens()
-        logger.debug("  - Total tokens: %d", token_stats['overall']['total_tokens'])
+        logger.debug("  - Duration: %.2fms", result.execution.duration_ms)
+        logger.debug("  - Total tokens: %d", result.execution.total_tokens)
         
         # Show any tool usage
-        tool_usage = result.thread.get_tool_usage()
-        if tool_usage['total_calls'] > 0:
+        if result.execution.tool_calls:
             logger.debug("  - Tools used:")
-            for tool_name, count in tool_usage['tools'].items():
-                logger.debug("    * %s (%d calls)", tool_name, count)
+            for tool_call in result.execution.tool_calls:
+                logger.debug("    * %s", tool_call.tool_name)
         
         logger.info("-" * 50)
 
@@ -87,4 +78,4 @@ if __name__ == "__main__":
         asyncio.run(main())
     except KeyboardInterrupt:
         logger.warning("Exiting gracefully...")
-        sys.exit(0) 
+        sys.exit(0)

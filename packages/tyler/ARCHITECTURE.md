@@ -11,16 +11,20 @@ Tyler is built on a modular architecture with clear separation of concerns. The 
 
 The main `Agent` class orchestrates the execution of AI agents:
 - Coordinates all components
-- Implements the public `go()` API
+- Implements the public `run()`, `stream()`, `step()`, and `step_stream()` APIs
 - Manages iteration loops
 - Handles thread and file stores
 - Inherits from `pydantic.BaseModel` for serialization
 - Uses `@weave.op()` decorators for observability/tracing
+- Adds optional Weave Agents session, turn, LLM, and tool spans when Weave is initialized
 - Automatically wraps all registered tools with `weave.op()` for consistent trace trees
 
 **Key Methods**:
-- `go(thread, stream=False)` - Main entry point for agent execution
-- `step(thread, stream=False)` - Execute one LLM interaction step
+- `run(thread)` - Execute until completion and return `AgentResult`
+- `stream(thread, mode="events")` - Execute until completion and yield streaming events or provider-compatible chunks
+- `step(thread)` - Execute one LLM/tool interaction step
+- `step_stream(thread, mode="events")` - Stream one LLM/tool interaction step
+- `go(thread)` - Backwards-compatible alias for `run(thread)`
 
 ### ToolCall
 **Location**: `tyler/models/tool_call.py`
@@ -112,7 +116,7 @@ Handles LLM communication and response processing:
 Manages progressive skill disclosure following the [Agent Skills](https://agentskills.io/specification) open format:
 - Loads `SKILL.md` files from skill directories (YAML frontmatter + markdown body)
 - Validates skill names (lowercase alphanumeric + hyphens) and descriptions
-- Registers the `activate_skill` tool with the global ToolRunner
+- Registers the `activate_skill` tool with the owning agent's ToolRunner
 - Only metadata (name + description) appears in the system prompt
 - Full instructions are returned on-demand when the agent calls `activate_skill`
 
@@ -144,11 +148,14 @@ content = load_agents_md("./AGENTS.md")              # explicit path
 ### ToolRunner
 **Location**: `tyler/utils/tool_runner.py`
 
-Global singleton for tool execution:
-- Registers tool implementations
+Tool executor used by each `Agent` instance:
+- Registers tool implementations for that agent
 - Executes tools (sync and async)
 - Caches loaded modules
 - Manages tool attributes
+- Keeps same-name tools isolated across agents
+
+The module-level `tool_runner` singleton remains available for legacy/direct utility use, but agent execution uses the runner owned by the active `Agent`.
 
 **Usage**:
 ```python
@@ -204,7 +211,7 @@ result = await tool_runner.run_tool_async("my_tool", {"param": "value"})
               ▼
     ┌──────────────────┐
     │   ToolRunner     │
-    │   (Singleton)    │
+    │   (Per Agent)    │
     │                  │
     │ - Execute tools  │
     │ - Cache modules  │
@@ -236,19 +243,22 @@ Agent.__init__
 
 ### 2. Agent Execution (go)
 ```
-agent.go(thread)
+agent.run(thread)
   ├─> Get thread from store
   ├─> Reset iteration count
+  ├─> Start optional Weave Agents session/turn spans
   └─> Main loop:
-       ├─> step(thread, stream)
+       ├─> step(thread)
        │    ├─> CompletionHandler.get_completion()
+       │    ├─> Record optional Weave Agents LLM span
        │    └─> Return (response, metrics)
        ├─> Process response
        ├─> If tool_calls:
-       │    ├─> Execute tools in parallel
+       │    ├─> Execute tools through the agent ToolRunner
+       │    ├─> Record optional Weave Agents tool spans
        │    ├─> Create tool messages via MessageFactory
        │    └─> Add to thread
-       └─> Return AgentResult or yield ExecutionEvents
+       └─> Return AgentResult with ExecutionDetails
 ```
 
 ### 3. Tool Execution
@@ -256,7 +266,7 @@ agent.go(thread)
 Tool Call Received
   ├─> ToolCall.from_llm_response(raw_tool_call)
   │    └─> Normalize to consistent format
-  ├─> ToolRunner.execute_tool_call(tool_call)
+  ├─> Agent ToolRunner.execute_tool_call(tool_call)
   │    ├─> Look up registered implementation
   │    ├─> Parse arguments
   │    └─> Execute (async or sync)
@@ -292,7 +302,7 @@ Tool Call Received
 tyler/
 ├── models/
 │   ├── agent.py              # Main Agent orchestrator
-│   ├── execution.py          # ExecutionEvent, AgentResult
+    │   ├── execution.py          # ExecutionEvent, ExecutionDetails, AgentResult
 │   ├── tool_call.py          # ToolCall value object
 │   ├── message_factory.py    # Message creation factory
 │   ├── tool_manager.py       # Tool registration manager
@@ -301,7 +311,7 @@ tyler/
 │   └── agents_md.py          # AGENTS.md loader
 │
 ├── utils/
-│   ├── tool_runner.py        # Global tool executor (singleton)
+│   ├── tool_runner.py        # Tool executor used per agent plus legacy singleton
 │   ├── tool_strategies.py    # Tool registration strategies
 │   ├── logging.py            # Logger configuration
 │   └── files.py              # File utilities
@@ -364,9 +374,9 @@ MessageFactory ensures all messages have:
 ### 5. Backward Compatibility
 All changes are internal - public APIs unchanged:
 ```python
-# This still works identically
+# This still works identically; run() is the preferred spelling for new code
 agent = Agent(model_name="gpt-4.1", tools=["web"])
-result = await agent.go(thread)
+result = await agent.run(thread)
 ```
 
 ## Performance Characteristics
@@ -443,4 +453,3 @@ class CustomCompletionHandler(CompletionHandler):
 **Last Updated**: 2025-01-11  
 **Version**: 2.0.6+refactor  
 **Status**: Production Ready ✅
-

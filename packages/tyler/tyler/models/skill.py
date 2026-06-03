@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 
-from tyler.utils.tool_runner import tool_runner
+from tyler.utils.tool_runner import ToolRunner, tool_runner
 
 logger = logging.getLogger(__name__)
 
@@ -36,8 +36,15 @@ class Skill:
 class SkillManager:
     """Manages skill discovery, loading, and tool registration."""
 
-    def __init__(self):
+    def __init__(self, runner: Optional[ToolRunner] = None):
+        """Initialize a skill manager.
+
+        Args:
+            runner: ToolRunner to register skill tools with. Defaults to the
+                module-level runner for direct SkillManager usage.
+        """
         self._skills: Dict[str, Skill] = {}
+        self.tool_runner = runner or tool_runner
 
     def load_skills(self, skill_paths: List[str]) -> Tuple[List[Skill], List[Dict]]:
         """Load skills from directories and register the activate_skill tool.
@@ -70,7 +77,7 @@ class SkillManager:
             return [], []
 
         # Check for tool name collision before registering
-        if "activate_skill" in tool_runner.tools:
+        if "activate_skill" in self.tool_runner.tools:
             raise ValueError(
                 "Cannot register skill tools: a tool named 'activate_skill' is already "
                 "registered. Please rename your tool to avoid collision."
@@ -80,14 +87,14 @@ class SkillManager:
         tool_def = self._build_activate_skill_definition()
         implementation = self._build_activate_skill_implementation()
 
-        tool_runner.register_tool(
+        self.tool_runner.register_tool(
             name="activate_skill",
             implementation=implementation,
             definition=tool_def["function"],
         )
 
         # Register tool attributes
-        tool_runner.register_tool_attributes(
+        self.tool_runner.register_tool_attributes(
             "activate_skill", {"source": "skills"}
         )
 

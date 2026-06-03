@@ -463,7 +463,7 @@ async def test_process_pdf_with_vision_directly(sample_pdf_content):
     # Create a mock buffer for the image
     mock_buffer = io.BytesIO()
     
-    with patch('pdf2image.convert_from_bytes', return_value=mock_images), \
+    with patch('lye.files.convert_from_bytes', return_value=mock_images), \
          patch('lye.files.completion') as mock_completion:
         # Mock PIL Image save method to capture the image data
         saved_data = []
@@ -485,4 +485,4 @@ async def test_process_pdf_with_vision_directly(sample_pdf_content):
         assert result["success"] is True
         assert result["processing_method"] == "vision"
         assert "Extracted text from image" in result["text"]
-        assert len(files) == 1 
+        assert len(files) == 1

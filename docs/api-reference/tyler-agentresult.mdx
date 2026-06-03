@@ -5,7 +5,7 @@ description: 'Result object from non-streaming agent execution'
 
 ## Overview
 
-The `AgentResult` class encapsulates the complete result of an agent's execution in non-streaming mode. It provides access to the updated thread, new messages, and the final output.
+The `AgentResult` class encapsulates the complete result of an agent's execution in non-streaming mode. It provides access to the updated thread, new messages, final output, structured output data, and execution telemetry.
 
 ## Class Definition
 
@@ -16,7 +16,14 @@ class AgentResult:
     new_messages: List[Message]       # New messages added during execution
     content: Optional[str]            # Final assistant response content
     structured_data: Optional[BaseModel]  # Validated Pydantic model (if response_type used)
+    validation_retries: int = 0       # Structured output retry count
+    retry_history: Optional[List[Dict[str, Any]]] = None
+    execution: ExecutionDetails       # Events, duration, tokens, and tool summaries
 ```
+
+`execution` is appended after the existing optional fields so existing positional
+`AgentResult(...)` construction keeps the same argument order. In application
+code, prefer reading fields by name from the object returned by `agent.run(...)`.
 
 ## Properties
 
@@ -53,6 +60,27 @@ class AgentResult:
   [Structured Output Guide](/guides/structured-output) for complete usage.
 </ParamField>
 
+<ParamField path="validation_retries" type="int">
+  Number of structured output validation retry attempts. This is only relevant when
+  `response_type` and retry configuration are used.
+</ParamField>
+
+<ParamField path="retry_history" type="Optional[List[Dict[str, Any]]]">
+  Validation retry details, including attempt numbers, validation errors, and response previews.
+</ParamField>
+
+<ParamField path="execution" type="ExecutionDetails">
+  Execution telemetry collected during this run, including:
+  - `events`: ordered `ExecutionEvent` objects
+  - `duration_ms`: total execution time
+  - `total_tokens`: total token usage reported by the LLM
+  - `tool_calls`: structured tool call summaries with name, arguments, result or error, duration, and success
+</ParamField>
+
+<ParamField path="success" type="bool">
+  Property that returns `True` when the execution completed without any `EXECUTION_ERROR` events.
+</ParamField>
+
 
 
 ## Usage Examples
@@ -76,23 +104,12 @@ print(f"Response: {result.content}")
 ### Accessing Metrics
 
 ```python
-# Get token usage from thread
-token_stats = result.thread.get_total_tokens()
-print(f"Tokens used: {token_stats['overall']['total_tokens']}")
+print(f"Success: {result.success}")
+print(f"Tokens used: {result.execution.total_tokens}")
+print(f"Duration: {result.execution.duration_ms:.0f}ms")
 
-# Calculate duration from message timestamps
-if result.new_messages:
-    start_time = min(msg.timestamp for msg in result.new_messages)
-    end_time = max(msg.timestamp for msg in result.new_messages)
-    duration_ms = (end_time - start_time).total_seconds() * 1000
-    print(f"Duration: {duration_ms:.0f}ms")
-
-# Check tool usage
-tool_usage = result.thread.get_tool_usage()
-if tool_usage['total_calls'] > 0:
-    print(f"\nTools used:")
-    for tool_name, count in tool_usage['tools'].items():
-        print(f"  {tool_name}: {count} calls")
+for tool_call in result.execution.tool_calls:
+    print(f"{tool_call.tool_name}: {tool_call.result or tool_call.error}")
 ```
 
 ### Working with Messages
@@ -155,13 +172,7 @@ async def chat_loop(agent: Agent, thread: Thread):
         result = await agent.run(thread)
         
         print(f"Assistant: {result.content}")
-        
-        # Calculate duration
-        if result.new_messages:
-            start = min(msg.timestamp for msg in result.new_messages)
-            end = max(msg.timestamp for msg in result.new_messages)
-            duration_ms = (end - start).total_seconds() * 1000
-            print(f"(Took {duration_ms:.0f}ms)")
+        print(f"(Took {result.execution.duration_ms:.0f}ms)")
 ```
 
 ### Result Analysis
@@ -169,26 +180,14 @@ async def chat_loop(agent: Agent, thread: Thread):
 ```python
 def analyze_result(result: AgentResult):
     """Analyze agent execution results"""
-    # Get token usage
-    token_stats = result.thread.get_total_tokens()
-    
-    # Calculate duration
-    duration_ms = 0
-    if result.new_messages:
-        start = min(msg.timestamp for msg in result.new_messages)
-        end = max(msg.timestamp for msg in result.new_messages)
-        duration_ms = (end - start).total_seconds() * 1000
-    
-    # Get tool usage
-    tool_usage = result.thread.get_tool_usage()
-    
     stats = {
-        "duration_ms": duration_ms,
-        "tokens": token_stats['overall']['total_tokens'],
-        "tool_calls": tool_usage['total_calls'],
+        "success": result.success,
+        "duration_ms": result.execution.duration_ms,
+        "tokens": result.execution.total_tokens,
+        "tool_calls": len(result.execution.tool_calls),
         "messages_added": len(result.new_messages),
         "has_content": result.content is not None,
-        "used_tools": tool_usage['total_calls'] > 0
+        "used_tools": bool(result.execution.tool_calls),
     }
     
     return stats
@@ -207,20 +206,13 @@ result = await agent.run(thread)
 # Save the updated thread
 await store.save(result.thread)
 
-# Store execution metadata
-token_stats = result.thread.get_total_tokens()
-duration_ms = 0
-if result.new_messages:
-    start = min(msg.timestamp for msg in result.new_messages)
-    end = max(msg.timestamp for msg in result.new_messages)
-    duration_ms = (end - start).total_seconds() * 1000
-
 await store.update_metadata(
     thread_id=result.thread.id,
     metadata={
-        "last_execution_ms": duration_ms,
-        "last_tokens_used": token_stats['overall']['total_tokens'],
-        "last_response": result.content
+        "last_execution_ms": result.execution.duration_ms,
+        "last_tokens_used": result.execution.total_tokens,
+        "last_response": result.content,
+        "last_success": result.success,
     }
 )
 ```
@@ -276,4 +268,4 @@ See the [Structured Output Guide](/guides/structured-output) for complete docume
 - [Agent](/api-reference/tyler-agent) - The main agent class
 - [RetryConfig](/api-reference/tyler-retryconfig) - Retry configuration for structured output
 - [StructuredOutputError](/api-reference/tyler-structuredoutputerror) - Error when validation fails
-- [ExecutionEvent](/api-reference/tyler-executionevent) - Individual execution events (for streaming mode)
+- [ExecutionEvent](/api-reference/tyler-executionevent) - Individual execution events used by streaming and `AgentResult.execution.events`
