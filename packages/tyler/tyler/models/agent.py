@@ -2032,11 +2032,6 @@ class Agent(BaseModel):
                                 # - Present: tool executed; its return value may legitimately be None
                                 if not key or key not in tool_execution_results:
                                     result = RuntimeError("Tool result missing")
-                                    record_event(EventType.TOOL_ERROR, {
-                                        "tool_name": tool_name,
-                                        "error": "Tool result missing",
-                                        "tool_call_id": tool_id
-                                    })
                                 else:
                                     result = tool_execution_results.get(key)
                                 if isinstance(result, Exception):

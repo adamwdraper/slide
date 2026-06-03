@@ -133,6 +133,40 @@ async def test_agent_result_execution_contract_with_tool_call():
 
 
 @pytest.mark.asyncio
+async def test_missing_tool_result_records_one_error_event():
+    """Missing tool results produce one TOOL_ERROR event for the affected call."""
+    tool_call = _tool_call("missing_result", call_id=None)
+    mock_completion = AsyncMock(
+        side_effect=[
+            MockResponse("Trying a tool", tool_calls=[tool_call], total_tokens=12),
+            MockResponse("Finished", total_tokens=10),
+        ]
+    )
+
+    with patch("tyler.models.agent.acompletion", mock_completion):
+        agent = Agent(
+            model_name="gpt-4o-mini",
+            purpose="Test agent",
+            tools=[_tool_definition("missing_result", lambda: "not used")],
+        )
+        thread = Thread()
+        thread.add_message(Message(role="user", content="Use the tool"))
+
+        result = await agent.run(thread)
+
+    error_events = [
+        event for event in result.execution.events
+        if event.type == EventType.TOOL_ERROR
+    ]
+    assert len(error_events) == 1
+    assert error_events[0].data == {
+        "tool_name": "missing_result",
+        "error": "Tool result missing",
+        "tool_call_id": None,
+    }
+
+
+@pytest.mark.asyncio
 async def test_same_name_custom_tools_are_isolated_per_agent():
     """Two agents can own different implementations for the same tool name."""
     agent_a = Agent(

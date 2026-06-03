@@ -121,9 +121,9 @@ async def main():
     ))
     
     print("🤖 Testing agent...")
-    processed_thread, new_messages = await agent.go(thread)
+    result = await agent.run(thread)
     
-    for msg in new_messages:
+    for msg in result.new_messages:
         if msg.role == "assistant":
             print(f"\\n💬 {{msg.content}}")
 
