@@ -1,3 +1,25 @@
+## [tyler-v6.4.0] - 2026-06-03
+
+### 🚀 Features
+
+- Add execution details and Weave Agents tracing
+- Add Agent Skills support for progressive skill disclosure
+- Add skills example with sample SKILL.md files
+- Add AGENTS.md support for project-level instructions
+
+### 🐛 Bug Fixes
+
+- Preserve AgentResult positional order
+- Address AgentResult review findings
+- Preserve skills state during connect_mcp() prompt regeneration
+- Address code review findings for AGENTS.md support
+- Skip oversized AGENTS.md files before reading into memory
+
+### 📚 Documentation
+
+- Make streaming the primary agent example
+- Align agent API docs with streaming-first usage
+- Add Skills and AGENTS.md documentation
 ## [tyler-v6.3.0] - 2026-01-22
 
 ### 🚀 Features
