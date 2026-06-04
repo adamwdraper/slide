@@ -428,7 +428,9 @@ class Agent(BaseModel):
     version: str = Field(default="1.0.0")
     tools: List[Union[str, Dict, Callable, types.ModuleType]] = Field(default_factory=list, description="List of tools available to the agent. Can include: 1) Direct tool function references (callables), 2) Tool module namespaces (modules like web, files), 3) Built-in tool module names (strings), 4) Custom tool definitions (dicts with 'definition', 'implementation', and optional 'attributes' keys). For module names, you can specify specific tools using 'module:tool1,tool2'.")
     skills: List[str] = Field(default_factory=list, description="List of paths to skill directories containing SKILL.md files.")
-    agents_md: Optional[Union[bool, str, List[str]]] = Field(default=None, description="AGENTS.md project instructions. None=disabled (default), True=auto-discover from CWD upward, False=disabled, str=explicit path, List[str]=multiple paths.")
+    agents_md: Optional[Union[bool, str, List[str]]] = Field(default=True, description="AGENTS.md project instructions. Default/True=auto-discover from base dir or CWD upward, None/False=disabled, str=explicit path, List[str]=multiple paths.")
+    agents_md_base_dir: Optional[str] = Field(default=None, description="Base directory for AGENTS.md auto-discovery. Defaults to current working directory.")
+    instruction_role: Literal["system", "developer"] = Field(default="system", description="Role used for the generated instruction prompt in LiteLLM chat completion messages.")
     max_tool_iterations: int = Field(default=10)
     agents: List["Agent"] = Field(default_factory=list, description="List of agents that this agent can delegate tasks to.")
     thread_store: Optional[ThreadStore] = Field(default=None, description="Thread store instance for managing conversation threads", exclude=True)
@@ -519,8 +521,11 @@ class Agent(BaseModel):
                 api_key=self.api_key,
                 extra_headers=self.extra_headers,
                 drop_params=self.drop_params,
-                reasoning=self.reasoning
+                reasoning=self.reasoning,
+                instruction_role=self.instruction_role
             )
+        elif hasattr(self.completion_handler, "instruction_role"):
+            self.completion_handler.instruction_role = self.instruction_role
         
         # Use ToolManager to register all tools and delegation
         tool_manager = ToolManager(
@@ -541,7 +546,10 @@ class Agent(BaseModel):
                 self._skills_description = skill_manager.format_skills_prompt(loaded_skills)
 
         # Load AGENTS.md project instructions
-        self._agents_md_content = load_agents_md(self.agents_md)
+        self._agents_md_content = load_agents_md(
+            self.agents_md,
+            base_dir=self.agents_md_base_dir,
+        )
 
         # Create default stores if not provided
         if self.thread_store is None:
@@ -570,6 +578,10 @@ class Agent(BaseModel):
             skills_description=self._skills_description,
             agents_md_content=self._agents_md_content
         )
+
+    def _build_instruction_message(self, content: str) -> Dict[str, str]:
+        """Build the instruction message prepended to model completion calls."""
+        return {"role": self.instruction_role, "content": content}
 
     def model_post_init(self, __context: Any) -> None:
         """Pydantic v2 hook called after model initialization.
@@ -643,16 +655,20 @@ class Agent(BaseModel):
             >>> await agent.connect_mcp()  # If MCP servers configured
             >>> result = await agent.go(thread)
         """
-        from tyler.config import load_config
+        from tyler.config import load_config, _resolve_config_path
         
         # Load config from file
         logging.getLogger(__name__).info(f"Creating agent from config: {config_path or 'auto-discovered'}")
-        config = load_config(config_path)
+        resolved_config_path = _resolve_config_path(config_path)
+        config = load_config(str(resolved_config_path))
         
         # Apply overrides (replacement semantics - dict.update replaces)
         if overrides:
             logging.getLogger(__name__).debug(f"Config overrides: {list(overrides.keys())}")
             config.update(overrides)
+
+        if config.get("agents_md", True) is True and "agents_md_base_dir" not in config:
+            config["agents_md_base_dir"] = str(resolved_config_path.parent.resolve())
         
         # Create agent using standard __init__
         return cls(**config)
@@ -866,7 +882,7 @@ class Agent(BaseModel):
         effective_system_prompt = system_prompt if system_prompt is not None else self._system_prompt
         
         # Use CompletionHandler to build parameters
-        completion_messages = [{"role": "system", "content": effective_system_prompt}] + thread_messages
+        completion_messages = [self._build_instruction_message(effective_system_prompt)] + thread_messages
         completion_params = self.completion_handler._build_completion_params(
             messages=completion_messages,
             tools=effective_tools,
@@ -1807,7 +1823,7 @@ class Agent(BaseModel):
         effective_tools = tools if tools is not None else self._processed_tools
         effective_system_prompt = system_prompt if system_prompt is not None else self._system_prompt
 
-        completion_messages = [{"role": "system", "content": effective_system_prompt}] + thread_messages
+        completion_messages = [self._build_instruction_message(effective_system_prompt)] + thread_messages
         completion_params = self.completion_handler._build_completion_params(
             messages=completion_messages,
             tools=effective_tools,

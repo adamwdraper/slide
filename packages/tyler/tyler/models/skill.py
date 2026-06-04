@@ -1,6 +1,6 @@
 """Skill model and manager for Agent Skills support.
 
-Implements the Agent Skills open format (https://agentskills.io/specification).
+Implements the Open Agent Skills format (https://openagentskills.dev/docs/specification).
 Skills are directories containing a SKILL.md file with YAML frontmatter
 (name, description) and markdown instructions. Skills are progressively
 disclosed - only metadata appears in the system prompt, and full instructions
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 # Validation constraints per the Agent Skills spec
 MAX_NAME_LENGTH = 64
 MAX_DESCRIPTION_LENGTH = 1024
-NAME_PATTERN = re.compile(r'^[a-z0-9][a-z0-9-]*$')
+NAME_PATTERN = re.compile(r'^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$')
 
 
 @dataclass
@@ -193,7 +193,12 @@ class SkillManager:
             if skill is None:
                 available = ", ".join(sorted(skills.keys()))
                 return f"Unknown skill '{name}'. Available skills: {available}"
-            return skill.content
+            return (
+                f"Skill root: {skill.path}\n\n"
+                f"<skill_instructions name=\"{skill.name}\">\n"
+                f"{skill.content}\n"
+                f"</skill_instructions>"
+            )
 
         return activate_skill
 

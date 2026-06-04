@@ -88,6 +88,11 @@ model_name: "gpt-4o"  # or any LiteLLM-compatible model
 temperature: 0.7
 max_tool_iterations: 10
 
+# Instruction Configuration
+# AGENTS.md is auto-discovered by default from this config directory upward.
+# agents_md: false
+# instruction_role: "developer"  # optional; default is "system"
+
 # Tool Configuration
 tools:
   # Built-in tool modules
@@ -102,6 +107,10 @@ tools:
   # Custom tool files
   - "./my_custom_tools.py"
   - "~/tools/special_tool.py"
+
+# Skills are explicit and each path must contain SKILL.md
+skills:
+  - "./skills/code-review"
 
 # MCP Server Configuration (optional)
 # Connect to external docs, APIs, databases

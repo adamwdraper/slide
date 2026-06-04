@@ -122,10 +122,11 @@ Integrates with the Model Context Protocol for:
 
 ### Skills
 
-Progressive skill disclosure following the [Agent Skills](https://agentskills.io/specification) open format:
+Progressive skill disclosure following the [Open Agent Skills](https://openagentskills.dev/docs/specification) format:
 - Skills are directories containing a `SKILL.md` file with YAML frontmatter (name, description) and markdown instructions
 - Only skill metadata (name + description) appears in the system prompt — keeping context small
 - Full instructions are loaded on-demand via the `activate_skill` tool when the agent decides it needs them
+- Activated skill output includes the skill root path so relative `scripts/`, `references/`, and `assets/` are actionable
 - Survives `connect_mcp()` prompt regeneration
 
 ```python
@@ -153,19 +154,22 @@ See `examples/108_skills.py` for a complete example.
 
 Project-level instructions following the [AGENTS.md](https://agents.md) open standard:
 - Eagerly loaded into the system prompt at init time (unlike skills which are progressively disclosed)
-- Auto-discovery walks upward from a base directory, collecting all `AGENTS.md` files (root-first ordering)
-- Supports explicit paths, lists of paths, or boolean auto-discovery
+- Auto-discovery is enabled by default and walks upward from a base directory, collecting all `AGENTS.md` files (root-first ordering)
+- Supports explicit paths, lists of paths, boolean auto-discovery, or explicit disable with `agents_md=False` / `agents_md=None`
 - Content appears in a `<project_instructions>` block in the system prompt
 
 ```python
+# Default: auto-discover from CWD upward
+agent = Agent(model_name="gpt-4.1")
+
 # Explicit path
 agent = Agent(model_name="gpt-4.1", agents_md="./AGENTS.md")
 
-# Auto-discover from CWD upward
-agent = Agent(model_name="gpt-4.1", agents_md=True)
-
 # Multiple files
 agent = Agent(model_name="gpt-4.1", agents_md=["./AGENTS.md", "./docs/AGENTS.md"])
+
+# Disable AGENTS.md loading
+agent = Agent(model_name="gpt-4.1", agents_md=False)
 ```
 
 See `examples/109_agents_md.py` and `examples/sample-project/AGENTS.md` for a complete example.
@@ -435,7 +439,9 @@ tools:
 skills:
   - "./skills/code-review"
   - "./skills/testing"
-agents_md: true  # or "./AGENTS.md" or ["./AGENTS.md", "./docs/AGENTS.md"]
+# AGENTS.md is auto-discovered by default from the config directory upward.
+# agents_md: false  # disable, or use "./AGENTS.md" / ["./AGENTS.md", "./docs/AGENTS.md"]
+instruction_role: "system"  # or "developer" for providers that support it
 mcp:
   servers:
     - name: "docs"

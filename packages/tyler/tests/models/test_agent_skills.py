@@ -116,6 +116,14 @@ class TestSkillValidation:
         with pytest.raises(ValueError, match="invalid"):
             manager.load_skills([str(skill_dir)])
 
+    def test_invalid_name_trailing_hyphen(self, tmp_path):
+        """Name ending with a hyphen is rejected."""
+        skill_dir = _create_skill_dir(tmp_path, name="bad-name-", description="test")
+
+        manager = SkillManager()
+        with pytest.raises(ValueError, match="invalid"):
+            manager.load_skills([str(skill_dir)])
+
     def test_invalid_name_too_long(self, tmp_path):
         """Name exceeding 64 chars is rejected."""
         long_name = "a" * 65
@@ -180,7 +188,7 @@ class TestActivateSkill:
 
     @pytest.mark.asyncio
     async def test_activate_skill_returns_content(self, tmp_path):
-        """activate_skill tool returns the full SKILL.md body."""
+        """activate_skill tool returns the skill root path and full SKILL.md body."""
         body = "# Step 1\nDo this.\n\n# Step 2\nDo that."
         skill_dir = _create_skill_dir(
             tmp_path, name="my-skill", description="A skill", body=body
@@ -191,7 +199,8 @@ class TestActivateSkill:
 
         # Execute via tool_runner
         result = await tool_runner.run_tool_async("activate_skill", {"name": "my-skill"})
-        assert result == body
+        assert f"Skill root: {skill_dir.resolve()}" in result
+        assert body in result
 
     @pytest.mark.asyncio
     async def test_activate_skill_unknown_name(self, tmp_path):

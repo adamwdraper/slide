@@ -471,6 +471,34 @@ class TestStructuredOutputWithTools:
             assert len(captured_tool_choice) > 0
             assert captured_tool_choice[0] == "required"
 
+    @pytest.mark.asyncio
+    async def test_structured_output_uses_canonical_instruction_prompt(self, tmp_path, thread):
+        """Structured output appends its instruction to the canonical prompt."""
+        agents_file = tmp_path / "AGENTS.md"
+        agents_file.write_text("Structured project rule.")
+        agent = Agent(
+            name="test-agent",
+            model_name="gpt-4.1",
+            purpose="Test structured prompt",
+            agents_md=str(agents_file),
+        )
+
+        valid_data = {"invoice_id": "INV-001", "total": 50.0, "items": ["Test"], "paid": True}
+        output_response = create_output_tool_response("Invoice", valid_data)
+        captured_system_prompt = []
+
+        async def capture_step(thread_arg, stream=False, tools=None, system_prompt=None, tool_choice=None):
+            captured_system_prompt.append(system_prompt)
+            return (output_response, {"usage": {}})
+
+        with patch.object(agent, 'step', side_effect=capture_step):
+            await agent.run(thread, response_type=Invoice)
+
+        assert captured_system_prompt
+        assert captured_system_prompt[0].startswith(agent._system_prompt)
+        assert "Structured project rule." in captured_system_prompt[0]
+        assert "structured_output_instruction" in captured_system_prompt[0]
+
 
 class TestStructuredOutputValidation:
     """Tests for validation and edge cases."""
@@ -669,4 +697,3 @@ class TestRetryConfig:
         config = RetryConfig()
         with pytest.raises(ValidationError):
             config.max_retries = 5
-

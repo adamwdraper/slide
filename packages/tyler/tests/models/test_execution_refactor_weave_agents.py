@@ -197,7 +197,8 @@ async def test_skill_tools_register_on_owning_agent_runner(tmp_path):
     result = await agent._tool_runner.run_tool_async(
         "activate_skill", {"name": "summary-skill"}
     )
-    assert result == "Use bullets."
+    assert f"Skill root: {skill_dir.resolve()}" in result
+    assert "Use bullets." in result
 
 
 @pytest.mark.asyncio
