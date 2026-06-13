@@ -200,6 +200,11 @@ class ToolRunner:
             attributes: Dictionary of tool-specific attributes
         """
         self.tool_attributes[name] = attributes
+
+    def unregister_tool(self, name: str) -> None:
+        """Remove a registered tool and its attributes if present."""
+        self.tools.pop(name, None)
+        self.tool_attributes.pop(name, None)
         
     def get_tool_attributes(self, name: str) -> Optional[Dict[str, Any]]:
         """

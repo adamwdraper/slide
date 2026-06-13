@@ -35,6 +35,8 @@ The Model Context Protocol (MCP) is an open standard that enables seamless commu
 - Share context across applications
 - Build interoperable AI systems
 
+Tyler follows the MCP `2025-11-25` stable transport framing: Streamable HTTP is the default for remote servers, `stdio` is for local subprocess servers, and SSE is legacy compatibility.
+
 ## MCP Architecture in Slide
 
 ```mermaid
@@ -54,7 +56,7 @@ Tyler uses the official MCP SDK's `ClientSessionGroup` to manage connections to 
 - Automatic session lifecycle management
 - Tool discovery and aggregation across servers
 - Tool execution routing to the correct server
-- Support for all SDK transport types (stdio, SSE, StreamableHTTP)
+- Standard MCP transports (`stdio`, Streamable HTTP) plus legacy SSE compatibility
 
 ## Quick Start
 
@@ -79,21 +81,21 @@ async def main():
         }
     )
 
-    # Connect to MCP servers (fail fast!)
-    await agent.connect_mcp()
-    
-    # Use the agent - MCP tools are now available
-    thread = Thread()
-    thread.add_message(Message(
-        role="user",
-        content="How do I create a Tyler agent?"
-    ))
-    
-    result = await agent.run(thread)
-    print(result.content)
-    
-    # Cleanup MCP connections
-    await agent.cleanup()
+    try:
+        # Connect to MCP servers (fail fast!)
+        await agent.connect_mcp()
+        
+        # Use the agent - MCP tools are now available
+        thread = Thread()
+        thread.add_message(Message(
+            role="user",
+            content="How do I create a Tyler agent?"
+        ))
+        
+        result = await agent.run(thread)
+        print(result.content)
+    finally:
+        await agent.cleanup()
 
 if __name__ == "__main__":
     asyncio.run(main())
@@ -137,9 +139,9 @@ mcp={
 }
 ```
 
-### 2. StreamableHTTP Servers
+### 2. Streamable HTTP Servers
 
-HTTP-based servers using the newer streaming protocol. Recommended for hosted MCP servers:
+HTTP-based servers using the current remote transport. Recommended for hosted MCP servers:
 
 ```python
 mcp={
@@ -154,7 +156,7 @@ mcp={
 
 ### 3. SSE (Server-Sent Events) Servers
 
-Legacy HTTP transport for streaming connections:
+Legacy HTTP transport for backward compatibility with older MCP servers:
 
 ```python
 mcp={
@@ -237,12 +239,15 @@ agent = Agent(
     }
 )
 
-await agent.connect_mcp()
+try:
+    await agent.connect_mcp()
 
-# Agent now has tools from all servers:
-# - slide_SearchSlideFramework
-# - gh_search_repos
-# - filesystem_read_file, filesystem_list_directory
+    # Agent now has tools from all servers:
+    # - slide_SearchSlideFramework
+    # - gh_search_repos
+    # - filesystem_read_file, filesystem_list_directory
+finally:
+    await agent.cleanup()
 ```
 
 ### Tool Filtering
@@ -316,7 +321,7 @@ Control failure behavior per server:
 
 <AccordionGroup>
   <Accordion title="1. Connection Management">
-    Always cleanup MCP connections in long-running applications:
+    Always cleanup MCP connections:
     ```python
     agent = Agent(mcp={...})
     try:
@@ -324,15 +329,6 @@ Control failure behavior per server:
         # Use agent
     finally:
         await agent.cleanup()
-    ```
-    
-    For short scripts with `streamablehttp` transport, cleanup is required:
-    ```python
-    async def main():
-        agent = Agent(mcp={"servers": [{"transport": "streamablehttp", ...}]})
-        await agent.connect_mcp()
-        result = await agent.run(thread)
-        await agent.cleanup()  # Required for streamablehttp
     ```
   </Accordion>
 
@@ -346,7 +342,7 @@ Control failure behavior per server:
     "headers": {"Authorization": "Bearer sk-1234567890"}
     ```
     
-    Only connect to trusted MCP servers - they execute with your agent's permissions.
+    Only connect to reviewed MCP servers. MCP tools execute with your agent's permissions, local `stdio` servers run with the same privileges as Tyler, and tool annotations/metadata are advisory unless the server is trusted.
   </Accordion>
 
   <Accordion title="3. Tool Organization">

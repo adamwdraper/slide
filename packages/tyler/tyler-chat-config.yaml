@@ -50,13 +50,16 @@ tools:
 #   - "./skills/testing"
 
 # MCP (Model Context Protocol) Server Configuration
-# Connect to external documentation, APIs, databases via MCP servers
+# Connect to reviewed external documentation, APIs, databases via MCP servers.
+# Use streamablehttp for remote servers, stdio for local servers, and sse only
+# for legacy compatibility. Treat MCP tools and annotations as untrusted unless
+# you explicitly trust the server.
 # Uncomment to enable:
 mcp:
   servers:
     # Example: Mintlify documentation server (like Slide docs)
     - name: docs
-      transport: streamablehttp   # Transports: streamablehttp (Mintlify), stdio, sse, websocket
+      transport: streamablehttp   # Transports: streamablehttp, stdio, sse (legacy)
       url: https://slide.mintlify.app/mcp
       # fail_silent: true  # Default - continues if server unavailable (recommended)
 #       # Optional: Custom headers for authentication
@@ -65,5 +68,9 @@ mcp:
 #       # Optional: Filter tools
 #       # include_tools: ["search", "query"]
 #       # exclude_tools: ["delete"]
+#       # Optional: Connection/read/tool timeouts
+#       # timeout_seconds: 10
+#       # sse_read_timeout_seconds: 300
+#       # tool_timeout_seconds: 30
 #       # Optional: Custom namespace prefix (default: server name)
 #       # prefix: "docs"

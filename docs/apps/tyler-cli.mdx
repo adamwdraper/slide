@@ -113,12 +113,15 @@ skills:
   - "./skills/code-review"
 
 # MCP Server Configuration (optional)
-# Connect to external docs, APIs, databases
+# Connect to reviewed external docs, APIs, databases.
+# Use streamablehttp for remote servers, stdio for local servers,
+# and sse only for legacy compatibility.
 # mcp:
 #   servers:
 #     - name: docs
-#       transport: sse
+#       transport: streamablehttp
 #       url: https://docs.example.com/mcp
+#       include_tools: ["search"]
 ```
 
 See the [MCP Integration Guide](/guides/mcp-integration) for full MCP configuration options.

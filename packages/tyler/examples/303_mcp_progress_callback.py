@@ -90,6 +90,7 @@ async def example_with_real_progress():
         f.write(MCP_SERVER_CODE)
         server_script = f.name
     
+    agent = None
     try:
         # Create agent connected to our progress-enabled server
         # Using gpt-4o for more reliable tool calling
@@ -171,10 +172,10 @@ async def example_with_real_progress():
                     print(f"\n  Progress event details:")
                     for i, pe in enumerate(progress_events):
                         print(f"    {i+1}. {pe['progress']}/{pe['total']} - {pe['message']}")
-        
-        await agent.cleanup()
-        
     finally:
+        if agent is not None:
+            await agent.cleanup()
+
         # Clean up temp file
         try:
             os.unlink(server_script)
@@ -200,6 +201,7 @@ async def example_custom_callback():
         f.write(MCP_SERVER_CODE)
         server_script = f.name
     
+    agent = None
     try:
         # Custom progress tracking
         progress_log = []
@@ -260,10 +262,10 @@ async def example_custom_callback():
             print("  Progress log:")
             for entry in progress_log:
                 print(f"    - {entry['progress']}/{entry['total']} - {entry['message']}")
-        
-        await agent.cleanup()
-        
     finally:
+        if agent is not None:
+            await agent.cleanup()
+
         try:
             os.unlink(server_script)
         except OSError as e:

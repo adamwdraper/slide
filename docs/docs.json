@@ -22,12 +22,12 @@
         "pages": [
           "guides/your-first-agent",
           "guides/adding-tools",
+          "guides/mcp-integration",
           "guides/skills",
           "guides/conversation-persistence",
           "guides/streaming-responses",
           "guides/agent-delegation",
           "guides/structured-output",
-          "guides/mcp-integration",
           "guides/a2a-integration",
           "guides/patterns",
           "guides/testing-agents"
