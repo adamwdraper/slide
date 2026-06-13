@@ -6,6 +6,7 @@ and the SDK-based ClientSessionGroup integration.
 import pytest
 import os
 import re
+import asyncio
 from datetime import timedelta
 from types import SimpleNamespace
 from unittest.mock import patch, AsyncMock, MagicMock
@@ -17,6 +18,7 @@ from tyler.mcp.config_loader import (
     _build_server_params,
     _create_tool_implementation,
     _convert_tools_for_agent,
+    _json_safe,
 )
 from mcp.client.session_group import (
     StdioServerParameters,
@@ -342,6 +344,10 @@ class TestBuildServerParams:
 
 class TestToolConversion:
     """Test tool conversion to Tyler format."""
+
+    def test_json_safe_ignores_unittest_mock_values(self):
+        """Test mock-only dynamic attributes are not serialized as MCP metadata."""
+        assert _json_safe(MagicMock()) is None
     
     def test_convert_tools_with_prefix(self):
         """Test tools are converted with prefix."""
@@ -727,6 +733,38 @@ class TestLoadMCPConfig:
         
         assert tools == []
         await disconnect()  # Should not raise
+
+    async def test_disconnect_ignores_sdk_internal_cancelled_error(self):
+        """Test MCP cleanup ignores CancelledError when the current task is not cancelling."""
+        config = {"servers": []}
+
+        with patch('tyler.mcp.config_loader.AsyncExitStack') as mock_stack_class:
+            mock_stack = MagicMock()
+            mock_stack.__aenter__ = AsyncMock()
+            mock_stack.aclose = AsyncMock(side_effect=asyncio.CancelledError())
+            mock_stack_class.return_value = mock_stack
+
+            tools, disconnect = await _load_mcp_config(config)
+
+            assert tools == []
+            await disconnect()
+            mock_stack.aclose.assert_called_once()
+
+    async def test_disconnect_reraises_real_task_cancellation(self):
+        """Test MCP cleanup does not swallow cancellation of the running task."""
+        config = {"servers": []}
+
+        with patch('tyler.mcp.config_loader.AsyncExitStack') as mock_stack_class:
+            mock_stack = MagicMock()
+            mock_stack.__aenter__ = AsyncMock()
+            mock_stack.aclose = AsyncMock(side_effect=asyncio.CancelledError())
+            mock_stack_class.return_value = mock_stack
+
+            _, disconnect = await _load_mcp_config(config)
+
+            with patch('tyler.mcp.config_loader._current_task_is_cancelling', return_value=True):
+                with pytest.raises(asyncio.CancelledError):
+                    await disconnect()
     
     async def test_load_mcp_config_connection_success(self):
         """Test loading config with successful connection."""

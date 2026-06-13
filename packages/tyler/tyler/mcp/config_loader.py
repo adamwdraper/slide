@@ -289,6 +289,24 @@ def _supported_kwargs(callable_obj: Callable[..., Any], kwargs: Dict[str, Any]) 
     return {key: value for key, value in kwargs.items() if key in supported}
 
 
+def _current_task_is_cancelling() -> bool:
+    """Return True when the current asyncio task is being externally cancelled."""
+    current_task = asyncio.current_task()
+    return bool(current_task and current_task.cancelling())
+
+
+async def _close_exit_stack(exit_stack: AsyncExitStack, context: str) -> None:
+    """Close an MCP exit stack while ignoring SDK-internal cancellation noise."""
+    try:
+        await exit_stack.aclose()
+    except asyncio.CancelledError:
+        if _current_task_is_cancelling():
+            raise
+        logger.warning(f"MCP {context} was cancelled during cleanup; treating resources as closed")
+    except Exception as e:
+        logger.warning(f"Error during MCP {context}: {e}")
+
+
 def _sanitize_tool_name(name: str) -> str:
     """Sanitize a Tyler-exposed MCP tool name for OpenAI function-name constraints."""
     sanitized = re.sub(OPENAI_FUNCTION_NAME_PATTERN, "_", str(name))
@@ -306,12 +324,8 @@ def _sanitize_tool_name(name: str) -> str:
 
 def _json_safe(value: Any) -> Any:
     """Convert SDK/Pydantic/dataclass-like values to JSON-serializable structures."""
-    try:
-        from unittest.mock import Mock
-        if isinstance(value, Mock):
-            return None
-    except Exception:
-        pass
+    if type(value).__module__ == "unittest.mock":
+        return None
 
     if value is None or isinstance(value, (str, int, float, bool)):
         return value
@@ -682,10 +696,7 @@ async def _load_mcp_config(
         # Create disconnect callback that closes the exit stack
         async def disconnect_callback():
             """Disconnect from all MCP servers."""
-            try:
-                await exit_stack.aclose()
-            except Exception as e:
-                logger.warning(f"Error during MCP disconnect: {e}")
+            await _close_exit_stack(exit_stack, "disconnect")
         
         returned_successfully = True
         return all_tools, disconnect_callback
@@ -694,7 +705,4 @@ async def _load_mcp_config(
         # If we didn't return successfully, clean up the exit stack
         # (on success, the caller is responsible for calling disconnect_callback)
         if not returned_successfully:
-            try:
-                await exit_stack.aclose()
-            except Exception as e:
-                logger.warning(f"Error cleaning up exit stack after failure: {e}")
+            await _close_exit_stack(exit_stack, "cleanup after failure")
