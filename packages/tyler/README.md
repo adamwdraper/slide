@@ -115,10 +115,11 @@ Tyler's tools are provided by the `slide-lye` package. Extend agent capabilities
 Integrates with the Model Context Protocol for:
 - Seamless connection to MCP-compatible servers
 - Automatic tool discovery from MCP servers
-- Support for multiple transport protocols (WebSocket, SSE, STDIO)
+- Streamable HTTP for remote servers, stdio for local servers, and legacy SSE compatibility
 - Server lifecycle management
 - Dynamic tool invocation
 - Integration with any MCP-compatible tool ecosystem
+- Tool filtering and env-var based secrets for safer privileged integrations
 
 ### Skills
 

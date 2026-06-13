@@ -66,41 +66,38 @@ async def example_multiple_servers():
         }
     )
     
-    # Connect to all servers
-    print("\nConnecting to MCP servers...")
-    await agent.connect_mcp()
-    
-    # Show connected tools
-    print(f"✓ Agent has {len(agent._processed_tools)} tools total")
-    
-    # Show MCP tools grouped by server
-    slide_tools = [t["function"]["name"] for t in agent._processed_tools if "slide_" in t["function"]["name"]]
-    gh_tools = [t["function"]["name"] for t in agent._processed_tools if "gh_" in t["function"]["name"]]
-    
-    print(f"  Slide docs tools ({len(slide_tools)}): {slide_tools}")
-    print(f"  GitHub tools ({len(gh_tools)}): {gh_tools}")
-    
-    # Use the agent
-    thread = Thread()
-    thread.add_message(Message(
-        role="user",
-        content="Search the Slide docs for information about MCP"
-    ))
-    
-    print("\n💬 User: Search the Slide docs for information about MCP")
-    print("🤖 Tyler: ", end="", flush=True)
-    
-    async for event in agent.stream(thread):
-        if event.type.name == "LLM_STREAM_CHUNK":
-            print(event.data.get("content_chunk", ""), end="", flush=True)
-        elif event.type.name == "EXECUTION_COMPLETE":
-            print("\n")
-    
-    # Cleanup MCP connections (stdio connections may raise CancelledError)
     try:
+        # Connect to all servers
+        print("\nConnecting to MCP servers...")
+        await agent.connect_mcp()
+        
+        # Show connected tools
+        print(f"✓ Agent has {len(agent._processed_tools)} tools total")
+        
+        # Show MCP tools grouped by server
+        slide_tools = [t["function"]["name"] for t in agent._processed_tools if "slide_" in t["function"]["name"]]
+        gh_tools = [t["function"]["name"] for t in agent._processed_tools if "gh_" in t["function"]["name"]]
+        
+        print(f"  Slide docs tools ({len(slide_tools)}): {slide_tools}")
+        print(f"  GitHub tools ({len(gh_tools)}): {gh_tools}")
+        
+        # Use the agent
+        thread = Thread()
+        thread.add_message(Message(
+            role="user",
+            content="Search the Slide docs for information about MCP"
+        ))
+        
+        print("\n💬 User: Search the Slide docs for information about MCP")
+        print("🤖 Tyler: ", end="", flush=True)
+        
+        async for event in agent.stream(thread):
+            if event.type.name == "LLM_STREAM_CHUNK":
+                print(event.data.get("content_chunk", ""), end="", flush=True)
+            elif event.type.name == "EXECUTION_COMPLETE":
+                print("\n")
+    finally:
         await agent.cleanup()
-    except asyncio.CancelledError:
-        pass  # Expected for stdio connections during cleanup
 
 
 async def example_tool_filtering():
@@ -125,7 +122,7 @@ async def example_tool_filtering():
             },
             {
                 "name": "api",
-                "transport": "sse",
+                "transport": "streamablehttp",
                 "url": "https://api.example.com/mcp",
                 "include_tools": ["search", "query"],  # Whitelist specific tools
                 "fail_silent": True
@@ -152,7 +149,7 @@ async def example_authentication():
     config = {
         "servers": [{
             "name": "private_api",
-            "transport": "sse",
+            "transport": "streamablehttp",
             "url": "https://api.example.com/mcp",
             "headers": {
                 # Always use environment variables for secrets!
@@ -210,7 +207,10 @@ mcp:
     print("  import yaml")
     print("  config = yaml.safe_load(open('tyler-config.yaml'))")
     print("  agent = Agent(**config)")
-    print("  await agent.connect_mcp()")
+    print("  try:")
+    print("      await agent.connect_mcp()")
+    print("  finally:")
+    print("      await agent.cleanup()")
 
 
 async def main():
@@ -241,4 +241,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-

@@ -462,6 +462,7 @@ class Agent(BaseModel):
     _tool_runner: ToolRunner = PrivateAttr(default_factory=ToolRunner)
     _mcp_connected: bool = PrivateAttr(default=False)
     _mcp_disconnect: Optional[Callable[[], Awaitable[None]]] = PrivateAttr(default=None)
+    _mcp_tool_names: set[str] = PrivateAttr(default_factory=set)
     _tool_context: Optional[Dict[str, Any]] = PrivateAttr(default=None)
     _response_format: Optional[str] = PrivateAttr(default=None)
     _weave_agents_tracer: Optional[WeaveAgentsTracer] = PrivateAttr(default=None)
@@ -578,6 +579,50 @@ class Agent(BaseModel):
             skills_description=self._skills_description,
             agents_md_content=self._agents_md_content
         )
+
+    def _tool_name_from_definition(self, tool: Any) -> Optional[str]:
+        """Return a tool function name from Tyler tool dict shapes."""
+        if not isinstance(tool, dict):
+            return None
+
+        definition = tool.get("definition", tool)
+        if not isinstance(definition, dict):
+            return None
+
+        function = definition.get("function")
+        if not isinstance(function, dict):
+            return None
+
+        name = function.get("name")
+        return name if isinstance(name, str) else None
+
+    def _remove_mcp_tools_from_state(self) -> None:
+        """Remove dynamically registered MCP tools from agent and runner state."""
+        if not self._mcp_tool_names:
+            return
+
+        mcp_tool_names = set(self._mcp_tool_names)
+
+        if isinstance(self.tools, list):
+            self.tools = [
+                tool
+                for tool in self.tools
+                if self._tool_name_from_definition(tool) not in mcp_tool_names
+            ]
+
+        self._processed_tools = [
+            tool
+            for tool in self._processed_tools
+            if self._tool_name_from_definition(tool) not in mcp_tool_names
+        ]
+
+        for tool_name in mcp_tool_names:
+            self._tool_runner.unregister_tool(tool_name)
+            if self._tool_runner is not tool_runner:
+                tool_runner.unregister_tool(tool_name)
+            self._tool_attributes_cache.pop(tool_name, None)
+
+        self._mcp_tool_names.clear()
 
     def _build_instruction_message(self, content: str) -> Dict[str, str]:
         """Build the instruction message prepended to model completion calls."""
@@ -2311,6 +2356,9 @@ class Agent(BaseModel):
         if self._mcp_connected:
             logging.getLogger(__name__).debug("MCP already connected, skipping")
             return
+
+        # Clear any stale MCP tools left after a previous partial lifecycle before reconnecting.
+        self._remove_mcp_tools_from_state()
         
         logging.getLogger(__name__).info("Connecting to MCP servers...")
         
@@ -2318,9 +2366,14 @@ class Agent(BaseModel):
         
         # Connect and get tools (fails fast if server unreachable)
         mcp_tools, disconnect_callback = await _load_mcp_config(self.mcp)
+        mcp_tool_names = {
+            name for name in (self._tool_name_from_definition(tool) for tool in mcp_tools)
+            if name
+        }
         
         # Store disconnect callback
         self._mcp_disconnect = disconnect_callback
+        self._mcp_tool_names = mcp_tool_names
         
         # Merge MCP tools
         if not isinstance(self.tools, list):
@@ -2352,6 +2405,14 @@ class Agent(BaseModel):
         Agent can be reused by calling connect_mcp() again if needed.
         """
         if self._mcp_disconnect:
-            await self._mcp_disconnect()
-            self._mcp_disconnect = None
-            self._mcp_connected = False 
+            try:
+                await self._mcp_disconnect()
+            finally:
+                self._mcp_disconnect = None
+                self._mcp_connected = False
+                self._remove_mcp_tools_from_state()
+                self._regenerate_system_prompt()
+        elif self._mcp_tool_names:
+            self._mcp_connected = False
+            self._remove_mcp_tools_from_state()
+            self._regenerate_system_prompt()

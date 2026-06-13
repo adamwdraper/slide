@@ -273,6 +273,18 @@ mcp:
     - name: "docs"
       transport: "streamablehttp"
       url: "https://example.com/mcp"
+      timeout_seconds: 10
+      sse_read_timeout_seconds: 300
+      tool_timeout_seconds: 30
+      include_tools: ["search"]
+      headers:
+        Authorization: "Bearer ${MCP_TOKEN}"
+    - name: "local_files"
+      transport: "stdio"
+      command: "npx"
+      args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+      cwd: "/tmp"
+      encoding: "utf-8"
 
 # Environment variables (keeps secrets safe)
 api_key: "${OPENAI_API_KEY}"  # Reads from environment

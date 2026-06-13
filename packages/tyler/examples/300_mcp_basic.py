@@ -57,38 +57,40 @@ async def main():
     print("Connecting to MCP server...")
     try:
         await agent.connect_mcp()
+    except Exception as e:
+        print(f"✗ Failed to connect: {e}")
+        await agent.cleanup()
+        return
+    
+    try:
         print(f"✓ Connected! Tools available: {len(agent._processed_tools)}")
         
         # Show MCP tools
         mcp_tools = [t["function"]["name"] for t in agent._processed_tools if "docs_" in t["function"]["name"]]
         print(f"  MCP tools: {mcp_tools}\n")
-    except Exception as e:
-        print(f"✗ Failed to connect: {e}")
-        return
-    
-    # Create a thread with a question
-    thread = Thread()
-    thread.add_message(Message(
-        role="user",
-        content="How do I create my first Tyler agent? Give me a quick example."
-    ))
-    
-    # Process with streaming
-    print("💬 User: How do I create my first Tyler agent? Give me a quick example.")
-    print("\n🤖 DocsBot: ", end="", flush=True)
-    
-    async for event in agent.stream(thread):
-        if event.type.name == "LLM_STREAM_CHUNK":
-            print(event.data.get("content_chunk", ""), end="", flush=True)
-        elif event.type.name == "TOOL_SELECTED":
-            tool_name = event.data.get("tool_name")
-            print(f"\n\n  [Using tool: {tool_name}]", flush=True)
-            print("\n🤖 DocsBot: ", end="", flush=True)
-        elif event.type.name == "EXECUTION_COMPLETE":
-            print("\n\n✓ Complete!")
-    
-    # Cleanup MCP connections
-    await agent.cleanup()
+        
+        # Create a thread with a question
+        thread = Thread()
+        thread.add_message(Message(
+            role="user",
+            content="How do I create my first Tyler agent? Give me a quick example."
+        ))
+        
+        # Process with streaming
+        print("💬 User: How do I create my first Tyler agent? Give me a quick example.")
+        print("\n🤖 DocsBot: ", end="", flush=True)
+        
+        async for event in agent.stream(thread):
+            if event.type.name == "LLM_STREAM_CHUNK":
+                print(event.data.get("content_chunk", ""), end="", flush=True)
+            elif event.type.name == "TOOL_SELECTED":
+                tool_name = event.data.get("tool_name")
+                print(f"\n\n  [Using tool: {tool_name}]", flush=True)
+                print("\n🤖 DocsBot: ", end="", flush=True)
+            elif event.type.name == "EXECUTION_COMPLETE":
+                print("\n\n✓ Complete!")
+    finally:
+        await agent.cleanup()
     
     print("\n" + "=" * 70)
     print("Example complete!")
@@ -124,18 +126,19 @@ async def brave_search_example():
         }
     )
     
-    await agent.connect_mcp()
-    
-    thread = Thread()
-    thread.add_message(Message(
-        role="user",
-        content="What's the latest news about AI?"
-    ))
-    
-    result = await agent.run(thread)
-    print(f"\nBrave Search Response:\n{result.content}")
-    
-    await agent.cleanup()
+    try:
+        await agent.connect_mcp()
+        
+        thread = Thread()
+        thread.add_message(Message(
+            role="user",
+            content="What's the latest news about AI?"
+        ))
+        
+        result = await agent.run(thread)
+        print(f"\nBrave Search Response:\n{result.content}")
+    finally:
+        await agent.cleanup()
 
 
 if __name__ == "__main__":

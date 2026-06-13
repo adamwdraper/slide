@@ -60,11 +60,12 @@ tools:
 #   - "./skills/code-review"
 
 # MCP (Model Context Protocol) Server Configuration
-# Connect to external documentation, APIs, databases via MCP servers
+# Use streamablehttp for remote servers, stdio for local servers, and sse only
+# for legacy compatibility. Treat MCP servers as privileged integrations.
 # Example: Slide documentation via Mintlify MCP
 # mcp:
 #   servers:
 #     - name: slide_docs
-#       transport: streamablehttp  # Mintlify uses streamablehttp transport
+#       transport: streamablehttp  # Remote MCP servers should use Streamable HTTP
 #       url: https://slide.mintlify.app/mcp
 #       # Tools will be available as: slide_docs_SearchSlideFramework, etc.

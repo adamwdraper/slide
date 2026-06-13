@@ -3,7 +3,7 @@ title: 'MCP Integration'
 description: 'Connect your agents to Model Context Protocol servers using declarative config'
 ---
 
-Model Context Protocol (MCP) is an open standard for connecting AI applications to external data sources and tools. Tyler has first-class support for MCP through declarative configuration—no boilerplate code needed!
+Model Context Protocol (MCP) is an open standard for connecting AI applications to external data sources and tools. Tyler has first-class support for MCP through declarative configuration based on the MCP `2025-11-25` stable framing: Streamable HTTP for remote servers, `stdio` for local servers, and SSE only for legacy compatibility.
 
 **💻 Code Examples**
 
@@ -29,7 +29,7 @@ Model Context Protocol (MCP) is an open standard for connecting AI applications 
 ### Python API
 
 ```python
-from tyler import Agent
+from tyler import Agent, Thread, Message
 
 # Create agent with MCP config
 agent = Agent(
@@ -45,17 +45,16 @@ agent = Agent(
     }
 )
 
-# Connect to MCP servers (fail fast!)
-await agent.connect_mcp()
+try:
+    # Connect to MCP servers (fail fast!)
+    await agent.connect_mcp()
 
-# Use normally - MCP tools are now available
-thread = Thread()
-thread.add_message(Message(role="user", content="How do I create a Tyler agent?"))
-result = await agent.run(thread)
-
-# Optional: Cleanup MCP connections (not needed for scripts)
-# Useful for long-running apps or when creating many agents
-# await agent.cleanup()
+    # Use normally - MCP tools are now available
+    thread = Thread()
+    thread.add_message(Message(role="user", content="How do I create a Tyler agent?"))
+    result = await agent.run(thread)
+finally:
+    await agent.cleanup()
 ```
 
 ### CLI (tyler-chat)
@@ -105,13 +104,21 @@ Each MCP server requires:
     "command": str,     # Required for stdio
     "args": List[str],  # Optional for stdio
     "env": Dict,        # Optional for stdio
+    "cwd": str,         # Optional for stdio
+    "encoding": str,    # Optional for stdio
+    "encoding_error_handler": str,  # Optional for stdio: strict, ignore, replace
     
     # Optional fields:
     "headers": Dict,           # Custom HTTP headers (for streamablehttp/sse)
     "include_tools": List[str],  # Whitelist specific tools
     "exclude_tools": List[str],  # Blacklist specific tools
     "prefix": str,             # Custom namespace (default: server name)
-    "fail_silent": bool        # Continue if connection fails (default: true)
+    "fail_silent": bool,       # Continue if connection fails (default: true)
+    "max_retries": int,        # Positive retry count (default: 3)
+    "timeout_seconds": float,  # Connection/request timeout
+    "sse_read_timeout_seconds": float,  # Stream read timeout
+    "terminate_on_close": bool,  # Streamable HTTP session termination (default: true)
+    "tool_timeout_seconds": float  # Per-tool execution/read timeout
 }
 ```
 
@@ -136,7 +143,7 @@ Each MCP server requires:
 }
 ```
 
-**SSE (Server-Sent Events)** - Legacy HTTP transport (for backward compatibility):
+**SSE (Server-Sent Events)** - Legacy HTTP transport for backward compatibility:
 ```python
 {
     "name": "legacy_server",
@@ -155,14 +162,17 @@ Connect to multiple MCP servers simultaneously:
 agent = Agent(
     mcp={
         "servers": [
-            {"name": "docs", "transport": "sse", "url": "https://docs.example.com/mcp"},
-            {"name": "db", "transport": "sse", "url": "https://db.example.com/mcp"},
+            {"name": "docs", "transport": "streamablehttp", "url": "https://docs.example.com/mcp"},
+            {"name": "db", "transport": "streamablehttp", "url": "https://db.example.com/mcp"},
             {"name": "files", "transport": "stdio", "command": "mcp-server-files"}
         ]
     }
 )
 
-await agent.connect_mcp()  # Connects to all servers in parallel
+try:
+    await agent.connect_mcp()
+finally:
+    await agent.cleanup()
 ```
 
 ### Tool Filtering
@@ -187,7 +197,7 @@ Override the default namespace prefix:
 {
     "name": "wandb_documentation_server",  # Long name
     "prefix": "docs",  # Short, clean prefix
-    "transport": "sse",
+    "transport": "streamablehttp",
     "url": "https://docs.wandb.ai/mcp"
 }
 # Tools: docs_search, docs_query (instead of wandb_documentation_server_search)
@@ -238,7 +248,7 @@ Control failure behavior per server:
 
 ### When to Use `cleanup()`
 
-**MCP connections are automatically cleaned up** when your process ends. You only need explicit cleanup in:
+Use `try/finally` and call `await agent.cleanup()` whenever an agent connects to MCP servers. Cleanup disconnects SDK sessions and removes dynamically registered MCP tools from the agent so reconnects do not duplicate definitions.
 
 **Long-running applications:**
 ```python
@@ -246,10 +256,12 @@ Control failure behavior per server:
 @app.post("/chat")
 async def chat_endpoint(request):
     agent = Agent(mcp={...})
-    await agent.connect_mcp()
-    result = await agent.run(thread)
-    await agent.cleanup()  # ← Important! Free connection
-    return result
+    try:
+        await agent.connect_mcp()
+        result = await agent.run(thread)
+        return result
+    finally:
+        await agent.cleanup()
 ```
 
 **Testing or batch processing:**
@@ -257,40 +269,15 @@ async def chat_endpoint(request):
 # Creating/destroying many agents
 for task in tasks:
     agent = Agent(mcp={...})
-    await agent.connect_mcp()
-    await agent.run(thread)
-    await agent.cleanup()  # ← Prevent connection leak
-```
-
-**Short scripts DON'T need cleanup** (except streamablehttp):
-```python
-async def main():
-    agent = Agent(
-        mcp={"servers": [{"transport": "stdio", ...}]}  # stdio, sse, streamablehttp
-    )
-    await agent.connect_mcp()
-    result = await agent.run(thread)
-    # Done - no cleanup needed!
-
-asyncio.run(main())  # Connections close when process ends
-```
-
-**Exception: streamablehttp transport requires cleanup:**
-```python
-async def main():
-    agent = Agent(
-        mcp={"servers": [{"transport": "streamablehttp", ...}]}  # Mintlify
-    )
-    await agent.connect_mcp()
-    result = await agent.run(thread)
-    await agent.cleanup()  # ← Required for streamablehttp to avoid asyncio errors
-
-asyncio.run(main())
+    try:
+        await agent.connect_mcp()
+        await agent.run(thread)
+    finally:
+        await agent.cleanup()
 ```
 
 <Note>
-The `streamablehttp` transport uses asyncio task groups that require explicit cleanup,
-even in simple scripts. Other transports (stdio, sse) clean up automatically.
+Streamable HTTP uses asyncio task groups and remote sessions that especially need explicit cleanup. Using the same pattern for `stdio` and legacy `sse` keeps scripts and tests predictable.
 </Note>
 
 ## Security Best Practices
@@ -320,10 +307,12 @@ mcp:
         Authorization: "Bearer sk-1234567890"  # ✗ Bad - secret exposed!
 ```
 
-**Trust only verified MCP servers:**
-- Only connect to MCP servers you trust
-- MCP tools execute with your agent's permissions
-- Review tool capabilities before enabling
+**Harden MCP usage:**
+- Trust only reviewed MCP servers; local `stdio` servers run with the same privileges as the Tyler process.
+- Treat MCP tool descriptions, annotations, icons, and `_meta` as advisory/untrusted unless the server is trusted.
+- Prefer `include_tools` and `exclude_tools` so agents only see the tools they need.
+- Avoid always-on large MCP server catalogs; connect narrow server sets per agent or workflow.
+- Keep secrets in environment variables and use `${VAR}` substitution in config.
 
 ## Troubleshooting
 
@@ -342,7 +331,7 @@ mcp:
 **Error:** `Server 'xyz' with transport 'sse' requires 'url' field`
 
 **Solution:** Ensure required fields are present for the transport type:
-- SSE/Streamablehttp: `url` required
+- streamablehttp/SSE: `url` required
 - stdio: `command` required
 
 ### Tools not discovered

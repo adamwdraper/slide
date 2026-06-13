@@ -169,7 +169,8 @@ class DictToolStrategy(ToolRegistrationStrategy):
         tool_runner.register_tool(
             name=tool_name,
             implementation=tool['implementation'],
-            definition=tool['definition']['function']
+            definition=tool['definition']['function'],
+            timeout=tool.get('timeout')
         )
         
         # Register any attributes
@@ -338,4 +339,3 @@ class ToolRegistrar:
                 return strategy
         
         return None
-
