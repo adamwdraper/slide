@@ -255,7 +255,8 @@ class CompletionHandler:
                 "started_at": api_start_time.isoformat(),
                 "ended_at": datetime.now(UTC).isoformat(),
                 "latency": (datetime.now(UTC) - api_start_time).total_seconds() * 1000
-            }
+            },
+            "usage": {},
         }
         
         # Add weave-specific metrics if available

@@ -7,7 +7,7 @@ name = "slide-narrator"
 version = "6.4.0"
 description = "Thread and file storage components for conversational AI - the companion to Tyler AI framework"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.14"
 license = {text = "MIT"}
 authors = [
     {name = "adamwdraper"}
