@@ -242,6 +242,16 @@ class TestAgentCleanup:
             # Verify disconnect was called
             mock_disconnect.assert_called_once()
             assert not agent._mcp_connected
+
+            tool_names = [t["function"]["name"] for t in agent._processed_tools]
+            assert "test_tool" not in tool_names
+            assert "test_tool" not in agent._tool_runner.tools
+            assert all(
+                tool.get("definition", {}).get("function", {}).get("name") != "test_tool"
+                for tool in agent.tools
+                if isinstance(tool, dict)
+            )
+            assert "test_tool" not in agent._system_prompt
     
     async def test_cleanup_without_mcp_connection(self):
         """Test cleanup() works even if MCP never connected."""
@@ -285,3 +295,57 @@ class TestAgentCleanup:
             # Should have called _load_mcp_config twice
             assert mock_load.call_count == 2
 
+            tool_names = [t["function"]["name"] for t in agent._processed_tools]
+            assert tool_names.count("test_tool") == 1
+
+    async def test_cleanup_regenerates_prompt_preserving_skills_and_agents_md(self, tmp_path):
+        """Test cleanup removes MCP tools while preserving skills and AGENTS.md prompt content."""
+        agents_file = tmp_path / "AGENTS.md"
+        agents_file.write_text("MCP lifecycle project instruction.")
+        skill_dir = tmp_path / "skill"
+        skill_dir.mkdir()
+        (skill_dir / "SKILL.md").write_text(
+            "---\nname: lifecycle-skill\ndescription: Lifecycle skill metadata\n---\nSkill body."
+        )
+
+        agent = Agent(
+            name="TestAgent",
+            model_name="gpt-4o-mini",
+            agents_md=str(agents_file),
+            skills=[str(skill_dir)],
+            mcp={
+                "servers": [{
+                    "name": "test",
+                    "transport": "streamablehttp",
+                    "url": "https://example.com/mcp",
+                }]
+            },
+        )
+
+        with patch('tyler.mcp.config_loader._load_mcp_config') as mock_load:
+            mock_load.return_value = (
+                [{
+                    "definition": {
+                        "type": "function",
+                        "function": {
+                            "name": "mcp_search",
+                            "description": "MCP Search",
+                            "parameters": {},
+                        },
+                    },
+                    "implementation": AsyncMock(),
+                    "attributes": {"source": "mcp"},
+                }],
+                AsyncMock(),
+            )
+
+            await agent.connect_mcp()
+            assert "mcp_search" in agent._system_prompt
+            assert "MCP lifecycle project instruction." in agent._system_prompt
+            assert "Lifecycle skill metadata" in agent._system_prompt
+
+            await agent.cleanup()
+
+            assert "mcp_search" not in agent._system_prompt
+            assert "MCP lifecycle project instruction." in agent._system_prompt
+            assert "Lifecycle skill metadata" in agent._system_prompt

@@ -5,6 +5,9 @@ and the SDK-based ClientSessionGroup integration.
 """
 import pytest
 import os
+import re
+from datetime import timedelta
+from types import SimpleNamespace
 from unittest.mock import patch, AsyncMock, MagicMock
 from tyler.mcp.config_loader import (
     _validate_mcp_config,
@@ -37,6 +40,13 @@ class TestValidation:
         config = {"servers": "not-a-list"}
         
         with pytest.raises(ValueError, match="must be a list"):
+            _validate_mcp_config(config)
+
+    def test_validate_mcp_config_server_not_dict(self):
+        """Test validation fails when a server entry is not a dict."""
+        config = {"servers": ["not-a-dict"]}
+
+        with pytest.raises(ValueError, match="must be a dict"):
             _validate_mcp_config(config)
     
     def test_validate_mcp_config_valid(self):
@@ -75,6 +85,48 @@ class TestValidation:
         }
         
         with pytest.raises(ValueError, match="Invalid transport 'http'"):
+            _validate_server_config(server)
+
+    @pytest.mark.parametrize("transport", ["sse", "streamablehttp"])
+    def test_validate_server_config_rejects_non_http_url_scheme(self, transport):
+        """Test HTTP transports require http or https URL schemes."""
+        server = {
+            "name": "test",
+            "transport": transport,
+            "url": "ftp://example.com/mcp",
+        }
+
+        with pytest.raises(ValueError, match="must use http or https URL scheme"):
+            _validate_server_config(server)
+
+    @pytest.mark.parametrize(
+        "field,value,match",
+        [
+            ("args", "not-a-list", "must be a list"),
+            ("include_tools", "search", "must be a list"),
+            ("exclude_tools", "delete", "must be a list"),
+            ("env", ["KEY=value"], "must be a dict"),
+            ("headers", ["Authorization"], "must be a dict"),
+            ("max_retries", 0, "must be a positive integer"),
+            ("timeout_seconds", 0, "must be a positive number"),
+            ("sse_read_timeout_seconds", -1, "must be a positive number"),
+            ("tool_timeout_seconds", 0, "must be a positive number"),
+            ("terminate_on_close", "false", "must be a boolean"),
+            ("cwd", 123, "must be a string"),
+            ("encoding", 123, "must be a string"),
+            ("encoding_error_handler", "explode", "must be one of"),
+        ],
+    )
+    def test_validate_server_config_rejects_invalid_option_types(self, field, value, match):
+        """Test optional MCP config fields are type-checked."""
+        server = {
+            "name": "test",
+            "transport": "stdio",
+            "command": "npx",
+            field: value,
+        }
+
+        with pytest.raises(ValueError, match=match):
             _validate_server_config(server)
     
     def test_validate_server_config_sse_missing_url(self):
@@ -139,7 +191,15 @@ class TestValidation:
         server = {
             "name": "mintlify",
             "transport": "streamablehttp",
-            "url": "https://slide.mintlify.app/mcp"
+            "url": "https://slide.mintlify.app/mcp",
+            "headers": {"Authorization": "Bearer ${MCP_TOKEN}"},
+            "timeout_seconds": 10,
+            "sse_read_timeout_seconds": 300,
+            "tool_timeout_seconds": 30,
+            "terminate_on_close": True,
+            "include_tools": ["search"],
+            "exclude_tools": ["delete"],
+            "max_retries": 2,
         }
         
         # Should not raise
@@ -223,7 +283,10 @@ class TestBuildServerParams:
             "transport": "stdio",
             "command": "npx",
             "args": ["-y", "server"],
-            "env": {"NODE_ENV": "production"}
+            "env": {"NODE_ENV": "production"},
+            "cwd": "/tmp",
+            "encoding": "utf-8",
+            "encoding_error_handler": "replace",
         }
         
         params = _build_server_params(server)
@@ -232,6 +295,9 @@ class TestBuildServerParams:
         assert params.command == "npx"
         assert params.args == ["-y", "server"]
         assert params.env == {"NODE_ENV": "production"}
+        assert str(params.cwd) == "/tmp"
+        assert params.encoding == "utf-8"
+        assert params.encoding_error_handler == "replace"
     
     def test_build_sse_params(self):
         """Test building SseServerParameters."""
@@ -239,7 +305,9 @@ class TestBuildServerParams:
             "name": "test",
             "transport": "sse",
             "url": "https://example.com/mcp",
-            "headers": {"Authorization": "Bearer token"}
+            "headers": {"Authorization": "Bearer token"},
+            "timeout_seconds": 7.5,
+            "sse_read_timeout_seconds": 120,
         }
         
         params = _build_server_params(server)
@@ -247,6 +315,8 @@ class TestBuildServerParams:
         assert isinstance(params, SseServerParameters)
         assert params.url == "https://example.com/mcp"
         assert params.headers == {"Authorization": "Bearer token"}
+        assert params.timeout == 7.5
+        assert params.sse_read_timeout == 120
     
     def test_build_streamablehttp_params(self):
         """Test building StreamableHttpParameters."""
@@ -254,7 +324,10 @@ class TestBuildServerParams:
             "name": "test",
             "transport": "streamablehttp",
             "url": "https://example.com/mcp",
-            "headers": {"X-API-Key": "key123"}
+            "headers": {"X-API-Key": "key123"},
+            "timeout_seconds": 12,
+            "sse_read_timeout_seconds": 240,
+            "terminate_on_close": False,
         }
         
         params = _build_server_params(server)
@@ -262,6 +335,9 @@ class TestBuildServerParams:
         assert isinstance(params, StreamableHttpParameters)
         assert params.url == "https://example.com/mcp"
         assert params.headers == {"X-API-Key": "key123"}
+        assert params.timeout == timedelta(seconds=12)
+        assert params.sse_read_timeout == timedelta(seconds=240)
+        assert params.terminate_on_close is False
 
 
 class TestToolConversion:
@@ -355,6 +431,80 @@ class TestToolConversion:
         
         assert tools[0]["definition"]["function"]["name"] == "my_server_name_search"
 
+    def test_convert_tools_sanitizes_full_exposed_name(self):
+        """Test prefix and original MCP name are sanitized as one exposed tool name."""
+        mock_group = MagicMock()
+        mock_tool = MagicMock()
+        mock_tool.name = "search.documents/v1"
+        mock_tool.description = "Test"
+        mock_tool.inputSchema = {}
+        mock_group.tools = {"_0_search.documents/v1": mock_tool}
+
+        tools = _convert_tools_for_agent(
+            mock_group, {"_0_search.documents/v1"}, "docs.example", None, []
+        )
+
+        exposed_name = tools[0]["definition"]["function"]["name"]
+        assert exposed_name == "docs_example_search_documents_v1"
+        assert re.fullmatch(r"[A-Za-z0-9_-]{1,64}", exposed_name)
+        assert tools[0]["attributes"]["mcp_original_name"] == "search.documents/v1"
+
+    def test_convert_tools_truncates_openai_function_names(self):
+        """Test long exposed names are truncated to OpenAI's 64-character limit."""
+        mock_group = MagicMock()
+        mock_tool = MagicMock()
+        mock_tool.name = "tool-" + ("x" * 80)
+        mock_tool.description = "Test"
+        mock_tool.inputSchema = {}
+        mock_group.tools = {"_0_long": mock_tool}
+
+        tools = _convert_tools_for_agent(
+            mock_group, {"_0_long"}, "server-" + ("y" * 80), None, []
+        )
+
+        exposed_name = tools[0]["definition"]["function"]["name"]
+        assert re.fullmatch(r"[A-Za-z0-9_-]{1,64}", exposed_name)
+        assert len(exposed_name) <= 64
+        assert tools[0]["attributes"]["mcp_original_name"] == mock_tool.name
+
+    def test_convert_tools_preserves_mcp_metadata(self):
+        """Test MCP tool metadata is preserved in Tyler tool attributes."""
+        mock_group = MagicMock()
+        mock_tool = SimpleNamespace(
+            name="search",
+            description="Search",
+            inputSchema={"type": "object", "properties": {}},
+            outputSchema={"type": "object", "properties": {"answer": {"type": "string"}}},
+            annotations={"readOnlyHint": True},
+            icons=[{"src": "https://example.com/icon.png", "mimeType": "image/png"}],
+            execution={"timeout": 30},
+            meta={"vendor": "example"},
+        )
+        mock_group.tools = {"_0_search": mock_tool}
+
+        tools = _convert_tools_for_agent(
+            mock_group,
+            {"_0_search"},
+            "docs",
+            None,
+            [],
+            server_name="docs-server",
+            tool_timeout_seconds=45,
+        )
+
+        attrs = tools[0]["attributes"]
+        assert attrs["mcp_server_name"] == "docs-server"
+        assert attrs["mcp_original_name"] == "search"
+        assert attrs["mcp_sdk_name"] == "_0_search"
+        assert attrs["mcp_exposed_name"] == "docs_search"
+        assert attrs["mcp_output_schema"] == mock_tool.outputSchema
+        assert attrs["mcp_annotations"] == {"readOnlyHint": True}
+        assert attrs["mcp_icons"] == mock_tool.icons
+        assert attrs["mcp_execution"] == mock_tool.execution
+        assert attrs["mcp_meta"] == {"vendor": "example"}
+        assert attrs["mcp_tool_timeout_seconds"] == 45
+        assert tools[0]["timeout"] == 45
+
 
 class TestToolImplementation:
     """Test tool implementation creation."""
@@ -410,6 +560,66 @@ class TestToolImplementation:
         result = await impl()
         
         assert result == ["Result 1", "Result 2"]
+
+    @pytest.mark.asyncio
+    async def test_tool_implementation_serializes_non_text_content(self):
+        """Test non-text MCP content is returned as JSON-serializable dictionaries."""
+        from mcp.types import ImageContent
+
+        mock_group = MagicMock()
+        mock_result = MagicMock()
+        mock_result.structuredContent = None
+        mock_result.isError = False
+        mock_result.content = [
+            ImageContent(type="image", data="abc123", mimeType="image/png")
+        ]
+        mock_group.call_tool = AsyncMock(return_value=mock_result)
+
+        impl = _create_tool_implementation(mock_group, "_0_test_tool", "test_tool")
+        result = await impl()
+
+        assert result == {"type": "image", "data": "abc123", "mimeType": "image/png"}
+
+    @pytest.mark.asyncio
+    async def test_tool_implementation_raises_on_mcp_error_result(self):
+        """Test MCP isError results raise instead of returning error content."""
+        mock_group = MagicMock()
+        mock_result = MagicMock()
+        mock_result.structuredContent = None
+        mock_result.isError = True
+        mock_result.content = [MagicMock(text="permission denied")]
+        mock_group.call_tool = AsyncMock(return_value=mock_result)
+
+        impl = _create_tool_implementation(mock_group, "_0_test_tool", "test_tool")
+
+        with pytest.raises(ValueError, match="permission denied"):
+            await impl()
+
+    @pytest.mark.asyncio
+    async def test_tool_implementation_passes_read_timeout(self):
+        """Test tool_timeout_seconds propagates to MCP SDK read_timeout_seconds."""
+        mock_group = MagicMock()
+        mock_result = MagicMock()
+        mock_result.structuredContent = None
+        mock_result.isError = False
+        mock_result.content = [MagicMock(text="Result text")]
+        mock_group.call_tool = AsyncMock(return_value=mock_result)
+
+        impl = _create_tool_implementation(
+            mock_group,
+            "_0_test_tool",
+            "test_tool",
+            tool_timeout_seconds=9,
+        )
+        result = await impl(arg1="value")
+
+        assert result == "Result text"
+        mock_group.call_tool.assert_called_once_with(
+            "_0_test_tool",
+            {"arg1": "value"},
+            progress_callback=None,
+            read_timeout_seconds=timedelta(seconds=9),
+        )
     
     @pytest.mark.asyncio
     async def test_tool_implementation_passes_progress_callback(self):
